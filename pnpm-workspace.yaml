@@ -2,6 +2,3 @@ packages:
   - 'shared'
   - 'server'
   - 'client'
-
-allowBuilds:
-  esbuild: false
