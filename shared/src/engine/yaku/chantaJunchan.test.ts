@@ -67,9 +67,12 @@ describe('detectChanta', () => {
     expect(detectChanta(standardHand(melds, pair))).toBeNull();
   });
 
-  it('accepts a chiitoitsu-shaped hand where every pair contains a terminal or honor', () => {
+  it('is absent for a chiitoitsu-shaped hand (Chiitoitsu is scored on its own, never stacked with Chanta)', () => {
+    // These pairs all contain a terminal or honor, so the hand structurally "looks like" it
+    // should satisfy Chanta's rule — but Chanta is defined over "every meld and the pair", a
+    // structure Chiitoitsu does not have, so the shape gate correctly returns null.
     const tiles = [suited('man', 1), suited('man', 1), wind('east'), wind('east')];
-    expect(detectChanta(chiitoitsuHand(tiles))).toEqual({ name: 'Chanta', han: 2 });
+    expect(detectChanta(chiitoitsuHand(tiles))).toBeNull();
   });
 });
 

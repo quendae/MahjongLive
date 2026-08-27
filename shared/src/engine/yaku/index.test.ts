@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { detectAllYaku } from './index';
-import { suited, wind } from '../tiles/tiles';
+import { suited } from '../tiles/tiles';
 import type { StandardWinningHand } from './context';
 import type { Meld } from '../hand/decompose';
 
@@ -45,7 +45,7 @@ describe('detectAllYaku', () => {
     // 456m 333p 123s 789p + 77s pair, won by Ron on the 4m. A triplet rules out Pinfu/Toitoi
     // (only one triplet, so also not Sanankou); the 9p terminal rules out Tanyao; three suits
     // are present (rules out Honitsu/Chinitsu, and no suit alone carries a 1-4-7 run so Ittsuu is
-    // out too); no meld+pair pair all contain a terminal/honor (rules out Chanta/Junchan); no two
+    // out too); not every group contains a terminal/honor (rules out Chanta/Junchan); no two
     // sequences match (rules out Iipeikou); no matching low rank across all three suits (rules
     // out Sanshoku); no honor tile exists at all (rules out Yakuhai).
     const winningTile = suited('man', 4);

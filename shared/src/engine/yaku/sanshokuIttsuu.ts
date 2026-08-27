@@ -1,6 +1,11 @@
 import { YakuDetector } from './context';
 import { Tile, Suit } from '../tiles/types';
 
+// OPEN-HAND NOTE: Sanshoku Doujun and Ittsuu both lose a han when the hand is open — 2 han
+// closed, 1 han open. Both detectors below return only the closed-hand value (2). This plan
+// never constructs an open WinningHand (see the plan's "Open Hands" section), so no closed-hand
+// check appears here — add one, and the reduced open-hand value, when open melds exist.
+
 function sequenceLowRank(tiles: readonly Tile[]): number {
   const ranks = tiles
     .filter((t): t is Extract<Tile, { kind: 'suited' }> => t.kind === 'suited')
@@ -22,7 +27,8 @@ export const detectSanshokuDoujun: YakuDetector = (hand) => {
     const suits = new Set(
       sequences
         .filter((m) => sequenceLowRank(m.tiles) === lowRank)
-        .map((m) => sequenceSuit(m.tiles)),
+        .map((m) => sequenceSuit(m.tiles))
+        .filter((s): s is Suit => s !== null),
     );
     if (suits.size === 3) return { name: 'Sanshoku Doujun', han: 2 };
   }

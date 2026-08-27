@@ -3,6 +3,11 @@ import { tileTypeKey } from '../tiles/tiles';
 import { Tile } from '../tiles/types';
 import { Meld } from '../hand/decompose';
 
+// OPEN-HAND NOTE: Pinfu and Iipeikou both require a closed (menzen) hand — unlike Chanta or
+// Honitsu they have no reduced open-hand value, they simply do not apply once the hand is open.
+// This plan never constructs an open WinningHand (see the plan's "Open Hands" section), so no
+// closed-hand check appears here — add one when open melds exist.
+
 /**
  * Whether the winning tile completed `meld` from a two-sided (ryanmen) wait — the only wait shape
  * Pinfu allows. The two tiles held before the win are the run's other two tiles:
@@ -29,6 +34,7 @@ function isRyanmenWait(meld: Meld, winningTile: Tile): boolean {
 
 export const detectPinfu: YakuDetector = (hand) => {
   if (hand.shape !== 'standard') return null;
+  if (hand.pair.length !== 2) return null;
   if (hand.melds.some((m) => m.type !== 'sequence')) return null;
   if (isYakuhaiTile(hand.pair[0], hand)) return null;
 
