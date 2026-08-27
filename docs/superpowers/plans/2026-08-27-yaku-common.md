@@ -717,13 +717,14 @@ where the other completing rank would fall outside 1..9: run `1,2,3` won on the 
 import { describe, it, expect } from 'vitest';
 import { detectPinfu, detectIipeikou } from './pinfuIipeikou';
 import { suited, wind } from '../tiles/tiles';
+import type { Tile } from '../tiles/types';
 import type { StandardWinningHand } from './context';
 import type { Meld } from '../hand/decompose';
 
 function standardHand(
   melds: Meld[],
-  pair: ReturnType<typeof suited>[],
-  winningTile: ReturnType<typeof suited>,
+  pair: Tile[],
+  winningTile: Tile,
   overrides: Partial<StandardWinningHand> = {},
 ): StandardWinningHand {
   return {
@@ -1101,10 +1102,11 @@ git commit -m "feat: add Sanshoku Doujun and Ittsuu yaku detectors"
 import { describe, it, expect } from 'vitest';
 import { detectChanta, detectJunchan } from './chantaJunchan';
 import { suited, wind } from '../tiles/tiles';
+import type { Tile } from '../tiles/types';
 import type { StandardWinningHand, ChiitoitsuWinningHand } from './context';
 import type { Meld } from '../hand/decompose';
 
-function standardHand(melds: Meld[], pair: ReturnType<typeof suited>[]): StandardWinningHand {
+function standardHand(melds: Meld[], pair: Tile[]): StandardWinningHand {
   // allTiles is derived from melds+pair (not hardcoded) because detectJunchan reads allTiles
   // directly to check for honors — a fixture that doesn't reflect the melds would let that check
   // silently pass for the wrong reason.
@@ -1127,7 +1129,7 @@ function standardHand(melds: Meld[], pair: ReturnType<typeof suited>[]): Standar
   };
 }
 
-function chiitoitsuHand(allTiles: ReturnType<typeof suited>[]): ChiitoitsuWinningHand {
+function chiitoitsuHand(allTiles: Tile[]): ChiitoitsuWinningHand {
   return {
     shape: 'chiitoitsu',
     allTiles,
@@ -1424,9 +1426,10 @@ git commit -m "feat: add Toitoi and Sanankou yaku detectors"
 import { describe, it, expect } from 'vitest';
 import { detectHonitsu, detectChinitsu } from './honitsuChinitsu';
 import { suited, wind } from '../tiles/tiles';
+import type { Tile } from '../tiles/types';
 import type { StandardWinningHand } from './context';
 
-function standardHand(allTiles: ReturnType<typeof suited>[]): StandardWinningHand {
+function standardHand(allTiles: Tile[]): StandardWinningHand {
   return {
     shape: 'standard',
     allTiles,
