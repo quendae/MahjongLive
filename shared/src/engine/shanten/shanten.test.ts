@@ -145,6 +145,20 @@ describe('shanten (combined minimum)', () => {
     expect(shanten(tiles)).toBe(chiitoitsuShanten(tiles));
     expect(shanten(tiles)).toBeLessThanOrEqual(standardShanten(tiles));
   });
+
+  it('picks the kokushi reading when it is better than the standard/chiitoitsu ones', () => {
+    const tiles = [
+      suited('man', 1), suited('man', 9),
+      suited('pin', 1), suited('pin', 9),
+      suited('sou', 1), suited('sou', 9),
+      wind('east'), wind('south'), wind('west'), wind('north'),
+      dragon('white'), dragon('green'), dragon('red'),
+    ];
+    expect(shanten(tiles)).toBe(0);
+    expect(shanten(tiles)).toBe(kokushiShanten(tiles));
+    expect(shanten(tiles)).toBeLessThanOrEqual(standardShanten(tiles));
+    expect(shanten(tiles)).toBeLessThanOrEqual(chiitoitsuShanten(tiles));
+  });
 });
 
 describe('the 13-tile precondition', () => {
@@ -163,5 +177,9 @@ describe('the 13-tile precondition', () => {
     expect(() => shanten([...twelve, suited('sou', 2), suited('sou', 3)])).toThrow(
       /exactly 13 tiles/,
     );
+  });
+
+  it('reports the error as coming from shanten, not standardShanten, when called directly', () => {
+    expect(() => shanten(twelve)).toThrow(/shanten requires exactly 13 tiles/);
   });
 });

@@ -14,12 +14,13 @@ export function build136Tiles(): Tile[] {
   const tiles: Tile[] = [];
   for (const type of allTileTypes()) {
     for (let copy = 0; copy < 4; copy++) {
-      const isRedFive =
-        type.kind === 'suited' &&
-        type.rank === 5 &&
-        copy === 0 &&
-        (RED_FIVE_SUITS as readonly string[]).includes(type.suit);
-      tiles.push({ ...type, isRed: isRedFive } as Tile);
+      if (type.kind === 'suited') {
+        const isRedFive =
+          type.rank === 5 && copy === 0 && (RED_FIVE_SUITS as readonly string[]).includes(type.suit);
+        tiles.push({ ...type, isRed: isRedFive });
+      } else {
+        tiles.push({ ...type });
+      }
     }
   }
   return tiles;

@@ -3,12 +3,12 @@ import { tileTypeKey, sortTiles, suited } from '../tiles/tiles';
 
 export interface Meld {
   type: 'sequence' | 'triplet';
-  tiles: Tile[];
+  tiles: readonly Tile[];
 }
 
 export interface StandardDecomposition {
-  pair: Tile[];
-  melds: Meld[];
+  pair: readonly Tile[];
+  melds: readonly Meld[];
 }
 
 function groupByType(tiles: Tile[]): Map<string, Tile[]> {

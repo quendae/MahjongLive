@@ -17,7 +17,10 @@ import { tileTypeKey, allTileTypes, suited, isTerminalOrHonor } from '../tiles/t
  * correction formula" heuristic keeps two things automatically right that the heuristic gets
  * wrong: how many blocks a hand may usefully count, and the fact that no complete hand can use
  * more than four copies of a tile type (so a hand already holding all four copies of a tile
- * cannot count a block that would need a fifth).
+ * cannot count a block that would need a fifth). Most reference shanten calculators use a
+ * closed-form block-counting formula that does not account for this limit and will report a
+ * lower (looser) value on hands holding all four copies of some tile; the divergence here is
+ * intentional and was verified correct against the exchange-distance definition above.
  */
 
 const TILE_TYPES = allTileTypes();
@@ -156,5 +159,6 @@ export function kokushiShanten(tiles: Tile[]): number {
 
 /** How far the hand is from tenpai, reading it as whichever of the three shapes is closest. */
 export function shanten(tiles: Tile[]): number {
+  requireThirteenTiles(tiles, 'shanten');
   return Math.min(standardShanten(tiles), chiitoitsuShanten(tiles), kokushiShanten(tiles));
 }

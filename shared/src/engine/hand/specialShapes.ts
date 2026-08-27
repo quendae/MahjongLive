@@ -1,5 +1,5 @@
 import { Tile } from '../tiles/types';
-import { tileTypeKey, isTerminal, isHonor } from '../tiles/tiles';
+import { tileTypeKey, isTerminalOrHonor } from '../tiles/tiles';
 
 function countByType(tiles: Tile[]): Map<string, number> {
   const map = new Map<string, number>();
@@ -20,7 +20,7 @@ export function isKokushi(tiles: Tile[]): boolean {
   let pairSeen = false;
   for (const [key, count] of counts) {
     const tile = tiles.find((t) => tileTypeKey(t) === key)!;
-    if (!(isTerminal(tile) || isHonor(tile))) return false;
+    if (!isTerminalOrHonor(tile)) return false;
     if (count === 2) {
       if (pairSeen) return false;
       pairSeen = true;
