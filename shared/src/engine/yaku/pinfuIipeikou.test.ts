@@ -43,6 +43,30 @@ describe('detectPinfu', () => {
     expect(detectPinfu(standardHand(melds, pair, winningTile))).toEqual({ name: 'Pinfu', han: 1 });
   });
 
+  it('awards 1 han for a 1-2-3 run won on the 1 (held 2,3 -> waits 1 or 4, still two-sided)', () => {
+    const winningTile = suited('man', 1);
+    const melds: Meld[] = [
+      { type: 'sequence', tiles: [winningTile, suited('man', 2), suited('man', 3)] },
+      { type: 'sequence', tiles: [suited('pin', 1), suited('pin', 2), suited('pin', 3)] },
+      { type: 'sequence', tiles: [suited('pin', 4), suited('pin', 5), suited('pin', 6)] },
+      { type: 'sequence', tiles: [suited('sou', 7), suited('sou', 8), suited('sou', 9)] },
+    ];
+    const pair = [suited('sou', 2), suited('sou', 2)];
+    expect(detectPinfu(standardHand(melds, pair, winningTile))).toEqual({ name: 'Pinfu', han: 1 });
+  });
+
+  it('awards 1 han for a 7-8-9 run won on the 9 (held 7,8 -> waits 6 or 9, still two-sided)', () => {
+    const winningTile = suited('man', 9);
+    const melds: Meld[] = [
+      { type: 'sequence', tiles: [suited('man', 7), suited('man', 8), winningTile] },
+      { type: 'sequence', tiles: [suited('pin', 1), suited('pin', 2), suited('pin', 3)] },
+      { type: 'sequence', tiles: [suited('pin', 4), suited('pin', 5), suited('pin', 6)] },
+      { type: 'sequence', tiles: [suited('sou', 7), suited('sou', 8), suited('sou', 9)] },
+    ];
+    const pair = [suited('sou', 2), suited('sou', 2)];
+    expect(detectPinfu(standardHand(melds, pair, winningTile))).toEqual({ name: 'Pinfu', han: 1 });
+  });
+
   it('is absent when any meld is a triplet', () => {
     const winningTile = suited('man', 4);
     const melds: Meld[] = [
