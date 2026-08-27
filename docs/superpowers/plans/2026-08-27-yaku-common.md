@@ -1537,7 +1537,8 @@ git commit -m "feat: add Honitsu and Chinitsu yaku detectors"
 - Consumes: every detector from Tasks 2-9, `WinningHand`, `YakuResult`, `YakuDetector` (Task 1).
 - Produces: `ALL_YAKU_DETECTORS: readonly YakuDetector[]`,
   `detectAllYaku(hand: WinningHand): YakuResult[]`. The later Scoring plan consumes
-  `detectAllYaku` to get every matched yaku and sum `han` across the results.
+  `detectAllYaku` to get every matched yaku; it MUST resolve yaku-family exclusivity itself (e.g.
+  Junchan supersedes Chanta rather than stacking with it) before summing `han` across the results.
 
 - [ ] **Step 1: Write the failing tests**
 
