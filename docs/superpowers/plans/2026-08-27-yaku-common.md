@@ -1168,9 +1168,9 @@ describe('detectChanta', () => {
     expect(detectChanta(standardHand(melds, pair))).toBeNull();
   });
 
-  it('accepts a chiitoitsu-shaped hand where every pair contains a terminal or honor', () => {
+  it('is absent for a chiitoitsu-shaped hand (Chiitoitsu is scored on its own, never stacked with Chanta)', () => {
     const tiles = [suited('man', 1), suited('man', 1), wind('east'), wind('east')];
-    expect(detectChanta(chiitoitsuHand(tiles))).toEqual({ name: 'Chanta', han: 2 });
+    expect(detectChanta(chiitoitsuHand(tiles))).toBeNull();
   });
 });
 
@@ -1204,33 +1204,38 @@ Expected: FAIL — `./chantaJunchan` module does not exist yet.
 
 `shared/src/engine/yaku/chantaJunchan.ts`:
 ```typescript
-import { YakuDetector, WinningHand } from './context';
-import { isTerminal, isTerminalOrHonor, tileTypeKey } from '../tiles/tiles';
+import { YakuDetector, StandardWinningHand } from './context';
+import { isTerminal, isTerminalOrHonor } from '../tiles/tiles';
 import { Tile } from '../tiles/types';
 import { Meld } from '../hand/decompose';
 
-function groupsOf(hand: WinningHand): (readonly Tile[])[] {
-  if (hand.shape === 'standard') {
-    return [...hand.melds.map((m: Meld) => m.tiles), hand.pair];
-  }
-  // Chiitoitsu: reconstruct the 7 pairs from allTiles, grouped by tile type.
-  const seen = new Map<string, Tile[]>();
-  for (const tile of hand.allTiles) {
-    const key = tileTypeKey(tile);
-    const list = seen.get(key) ?? [];
-    list.push(tile);
-    seen.set(key, list);
-  }
-  return [...seen.values()];
+// OPEN-HAND NOTE: Chanta and Junchan both lose a han when the hand is open — Chanta is 2 han
+// closed / 1 han open, Junchan is 3 han closed / 2 han open. Both detectors below return only
+// the closed-hand value (2 and 3). This plan never constructs an open WinningHand (see the
+// plan's "Open Hands" section), so no closed-hand check appears here — add one, and the reduced
+// open-hand values, when open melds exist.
+
+// SHAPE NOTE: both detectors are gated to standard-shape hands. Standard Riichi/Tenhou rules do
+// not award Chanta to a seven-pairs (Chiitoitsu) hand: Chanta's rule is defined over "every meld
+// and the pair", a structure Chiitoitsu does not have, and Chiitoitsu is scored on its own (or
+// with Honroutou when the hand is all terminals/honors), never stacked with Chanta. Junchan can
+// never structurally fire on Chiitoitsu anyway — only 6 terminal tile types exist across the
+// three suits while Chiitoitsu needs 7 distinct pair types — but it is gated too so the rule is
+// explicit in code rather than an implicit consequence of arithmetic.
+
+function groupsOf(hand: StandardWinningHand): (readonly Tile[])[] {
+  return [...hand.melds.map((m: Meld) => m.tiles), hand.pair];
 }
 
 export const detectChanta: YakuDetector = (hand) => {
+  if (hand.shape !== 'standard') return null;
   const groups = groupsOf(hand);
   const allQualify = groups.every((group) => group.some(isTerminalOrHonor));
   return allQualify ? { name: 'Chanta', han: 2 } : null;
 };
 
 export const detectJunchan: YakuDetector = (hand) => {
+  if (hand.shape !== 'standard') return null;
   const groups = groupsOf(hand);
   const anyHonor = hand.allTiles.some((t) => t.kind === 'honor');
   if (anyHonor) return null;
@@ -1238,6 +1243,8 @@ export const detectJunchan: YakuDetector = (hand) => {
   return allQualify ? { name: 'Junchan', han: 3 } : null;
 };
 ```
+
+Note (added after this plan's final whole-branch review): the original version of this task shipped `detectChanta` firing on chiitoitsu-shaped hands, matched by a test asserting that as correct. That was a domain-rules error caught only in final review — standard rules never stack Chanta on Chiitoitsu — and was corrected on the branch to the version above (shape-gated, with `groupsOf` simplified since its chiitoitsu-reconstruction branch became dead code once both detectors are gated). This plan text reflects the corrected version.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1546,7 +1553,7 @@ git commit -m "feat: add Honitsu and Chinitsu yaku detectors"
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { detectAllYaku } from './index';
-import { suited, wind } from '../tiles/tiles';
+import { suited } from '../tiles/tiles';
 import type { StandardWinningHand } from './context';
 import type { Meld } from '../hand/decompose';
 
@@ -1591,7 +1598,7 @@ describe('detectAllYaku', () => {
     // 456m 333p 123s 789p + 77s pair, won by Ron on the 4m. A triplet rules out Pinfu/Toitoi
     // (only one triplet, so also not Sanankou); the 9p terminal rules out Tanyao; three suits
     // are present (rules out Honitsu/Chinitsu, and no suit alone carries a 1-4-7 run so Ittsuu is
-    // out too); no meld+pair pair all contain a terminal/honor (rules out Chanta/Junchan); no two
+    // out too); not every group contains a terminal/honor (rules out Chanta/Junchan); no two
     // sequences match (rules out Iipeikou); no matching low rank across all three suits (rules
     // out Sanshoku); no honor tile exists at all (rules out Yakuhai).
     const winningTile = suited('man', 4);
