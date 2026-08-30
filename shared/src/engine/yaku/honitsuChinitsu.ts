@@ -1,11 +1,5 @@
-import { YakuDetector, WinningHand } from './context';
+import { YakuDetector, WinningHand, isClosedHand } from './context';
 import { Tile, Suit } from '../tiles/types';
-
-// OPEN-HAND NOTE: Honitsu and Chinitsu both lose a han when the hand is open — Honitsu is 3 han
-// closed / 2 han open, Chinitsu is 6 han closed / 5 han open. Both detectors below return only
-// the closed-hand value (3 and 6). This plan never constructs an open WinningHand (see the
-// plan's "Open Hands" section), so no closed-hand check appears here — add one, and the reduced
-// open-hand values, when open melds exist.
 
 function suitsPresent(hand: WinningHand): Set<Suit> {
   return new Set(
@@ -18,11 +12,15 @@ function suitsPresent(hand: WinningHand): Set<Suit> {
 export const detectHonitsu: YakuDetector = (hand) => {
   const suits = suitsPresent(hand);
   const hasHonor = hand.allTiles.some((t) => t.kind === 'honor');
-  return suits.size === 1 && hasHonor ? { name: 'Honitsu', han: 3 } : null;
+  return suits.size === 1 && hasHonor
+    ? { name: 'Honitsu', han: isClosedHand(hand) ? 3 : 2 }
+    : null;
 };
 
 export const detectChinitsu: YakuDetector = (hand) => {
   const suits = suitsPresent(hand);
   const hasHonor = hand.allTiles.some((t) => t.kind === 'honor');
-  return suits.size === 1 && !hasHonor ? { name: 'Chinitsu', han: 6 } : null;
+  return suits.size === 1 && !hasHonor
+    ? { name: 'Chinitsu', han: isClosedHand(hand) ? 6 : 5 }
+    : null;
 };
