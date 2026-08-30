@@ -167,6 +167,33 @@ describe('dealer repeat and honba', () => {
     expect(advanced.state.round.dealer).toBe(1);
     expect(advanced.state.round.honba).toBe(0);
   });
+
+  it('carries riichi sticks through an exhaustive draw', () => {
+    const rng = createRNG(31);
+    const state = createMatch(rng);
+    const ended = withEndedRound(state, exhaustive([]), undefined, 2);
+    const advanced = advanceMatch(ended, rng);
+    expect(advanced.ok).toBe(true);
+    if (!advanced.ok) return;
+    expect(advanced.state.round.riichiSticks).toBe(2);
+  });
+
+  it('does not repeat solely because the dealer qualified for Nagashi Mangan', () => {
+    const rng = createRNG(32);
+    const state = createMatch(rng);
+    const result: RoundEndResult = {
+      type: 'exhaustive-draw',
+      tenpaiPlayers: [1],
+      notenPayments: [0, 0, 0, 0],
+      nagashiPlayers: [0],
+      nagashiPayments: [12_000, -4_000, -4_000, -4_000],
+    };
+    const advanced = advanceMatch(withEndedRound(state, result), rng);
+    expect(advanced.ok).toBe(true);
+    if (!advanced.ok) return;
+    expect(advanced.state.round.dealer).toBe(1);
+    expect(advanced.state.hand).toBe(2);
+  });
 });
 
 describe('end conditions and ranking', () => {
