@@ -4,6 +4,17 @@ import { sortTiles, tileTypeKey } from '../tiles/tiles';
 import type { Tile, Wind } from '../tiles/types';
 import { buildWall, drawTile, uraIndicators } from '../wall/wall';
 import type { RNG } from '../wall/prng';
+import { detectNagashiMangan } from '../yaku/nagashi';
+import {
+  beginShouminkan,
+  completeShouminkan,
+  executeAnkan,
+  executeDaiminkan,
+  flushPendingKanDora,
+  legalAnkanOptions,
+  legalDaiminkanOptions,
+  legalShouminkanOptions,
+} from './kan';
 import { completesHandOnTile, isRonFuriten, winningTileTypeKeys } from './waits';
 import { resolveWinningHands } from './winning';
 import type {
@@ -15,8 +26,10 @@ import type {
   PendingRiichi,
   PlayerIndex,
   PlayerMeld,
+  PointDeltaTuple,
   RonClaim,
   RoundAction,
+  RoundDiscard,
   RoundEndResult,
   RoundEvent,
   RoundOptions,
@@ -152,7 +165,8 @@ function scoreTsumo(state: RoundState, playerIndex: PlayerIndex): ScoredHand | n
     isRiichi: player.riichi !== 'none',
     isDoubleRiichi: player.riichi === 'double-riichi',
     isIppatsu: player.ippatsuEligible,
-    isHaitei: phase.wasLastLiveDraw,
+    isRinshan: phase.isRinshan === true,
+    isHaitei: phase.isRinshan !== true && phase.wasLastLiveDraw,
     isTenhou:
       playerIndex === state.dealer && totalDiscards(state) === 0 && state.callsMade === 0,
     isChiihou:
@@ -169,7 +183,7 @@ function scoreTsumo(state: RoundState, playerIndex: PlayerIndex): ScoredHand | n
   return score?.status === 'scored' ? score : null;
 }
 
-function reactionDiscard(state: RoundState) {
+function reactionDiscard(state: RoundState): RoundDiscard | null {
   if (state.phase.kind !== 'reactions') return null;
   const discarder = state.players[state.phase.discarder];
   return discarder.discards[state.phase.discardIndex] ?? null;
@@ -206,6 +220,34 @@ function scoreRon(state: RoundState, playerIndex: PlayerIndex): ScoredHand | nul
   const player = state.players[playerIndex];
   if (isRonFuriten(player)) return null;
   return scoreRonIgnoringFuriten(state, playerIndex);
+}
+
+function scoreChankanIgnoringFuriten(state: RoundState, playerIndex: PlayerIndex): ScoredHand | null {
+  if (state.phase.kind !== 'kan-reactions' || playerIndex === state.phase.declarer) return null;
+  const player = state.players[playerIndex];
+  const hands = resolveWinningHands({
+    concealedBeforeWin: player.concealed,
+    winningTile: state.phase.addedTile,
+    fixedMelds: player.melds,
+    winCondition: 'ron',
+    seatWind: seatWindFor(playerIndex, state.dealer),
+    roundWind: state.roundWind,
+    isRiichi: player.riichi !== 'none',
+    isDoubleRiichi: player.riichi === 'double-riichi',
+    isIppatsu: player.ippatsuEligible,
+    isChankan: true,
+  });
+  const score = scoreBestCandidate(
+    hands,
+    doraContext(state),
+    { honba: state.honba, riichiSticks: 0 },
+  );
+  return score?.status === 'scored' ? score : null;
+}
+
+function scoreChankan(state: RoundState, playerIndex: PlayerIndex): ScoredHand | null {
+  if (isRonFuriten(state.players[playerIndex])) return null;
+  return scoreChankanIgnoringFuriten(state, playerIndex);
 }
 
 function settleTsumo(
@@ -372,8 +414,11 @@ function chiOptions(state: RoundState, playerIndex: PlayerIndex): Array<readonly
   return options;
 }
 
-function sameOption(a: readonly [number, number], b: readonly [number, number]): boolean {
-  return (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
+function sameIds(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort((x, y) => x - y);
+  const right = [...b].sort((x, y) => x - y);
+  return left.every((id, index) => id === right[index]);
 }
 
 function performDiscard(
@@ -388,8 +433,14 @@ function performDiscard(
   if (state.phase.player !== playerIndex) {
     return error('NOT_YOUR_TURN', 'Only the current player may discard');
   }
-  const phase = state.phase;
-  const player = state.players[playerIndex];
+
+  const flushed = flushPendingKanDora(state);
+  const working = flushed.state;
+  if (working.phase.kind !== 'awaiting-discard') {
+    return error('WRONG_PHASE', 'Kan-Dora flush did not preserve discard phase');
+  }
+  const phase = working.phase;
+  const player = working.players[playerIndex];
   if (player.riichi !== 'none' && tileId !== phase.drawnTileId) {
     return error('ILLEGAL_RIICHI', 'A Riichi hand must discard the drawn tile');
   }
@@ -402,7 +453,7 @@ function performDiscard(
     tile: removed.tile,
     tileId: physicalId,
     tsumogiri: phase.drawnTileId !== null && physicalId === phase.drawnTileId,
-    wasLastLiveDraw: phase.wasLastLiveDraw,
+    wasLastLiveDraw: phase.isRinshan !== true && phase.wasLastLiveDraw,
   } as const;
   const updatedPlayer: RoundPlayerState = {
     ...player,
@@ -417,8 +468,8 @@ function performDiscard(
   };
   const discardIndex = updatedPlayer.discards.length - 1;
   const nextState: RoundState = {
-    ...state,
-    players: replacePlayer(state.players, playerIndex, updatedPlayer),
+    ...working,
+    players: replacePlayer(working.players, playerIndex, updatedPlayer),
     phase: {
       kind: 'reactions',
       discarder: playerIndex,
@@ -431,7 +482,7 @@ function performDiscard(
   return {
     ok: true,
     state: nextState,
-    events: [{ type: 'TileDiscarded', player: playerIndex, discard }],
+    events: [...flushed.events, { type: 'TileDiscarded', player: playerIndex, discard }],
   };
 }
 
@@ -446,6 +497,24 @@ function markPassedRonFuriten(state: RoundState): RoundState {
     const player = players[playerIndex];
     if (isRonFuriten(player)) continue;
     if (!completesHandOnTile(player.concealed, discard.tile, player.melds)) continue;
+    const replacement: RoundPlayerState = player.riichi !== 'none'
+      ? { ...player, riichiFuriten: true }
+      : { ...player, temporaryFuriten: true };
+    players = replacePlayer(players, playerIndex, replacement);
+  }
+  return { ...state, players };
+}
+
+function markPassedChankanFuriten(state: RoundState): RoundState {
+  if (state.phase.kind !== 'kan-reactions') return state;
+  const phase = state.phase;
+  let players = state.players;
+  for (const playerIndex of PLAYERS) {
+    if (playerIndex === phase.declarer) continue;
+    if (phase.ronClaims.some((claim) => claim.player === playerIndex)) continue;
+    const player = players[playerIndex];
+    if (isRonFuriten(player)) continue;
+    if (!completesHandOnTile(player.concealed, phase.addedTile, player.melds)) continue;
     const replacement: RoundPlayerState = player.riichi !== 'none'
       ? { ...player, riichiFuriten: true }
       : { ...player, temporaryFuriten: true };
@@ -486,19 +555,21 @@ function activatePendingRiichi(state: RoundState): { state: RoundState; event: R
 
 function chooseCall(state: RoundState): CallClaim | null {
   if (state.phase.kind !== 'reactions' || state.phase.callClaims.length === 0) return null;
-  const pon = state.phase.callClaims.filter((claim) => claim.kind === 'pon');
-  const pool = pon.length > 0 ? pon : state.phase.callClaims.filter((claim) => claim.kind === 'chi');
+  const strong = state.phase.callClaims.filter(
+    (claim) => claim.kind === 'pon' || claim.kind === 'daiminkan',
+  );
+  const pool = strong.length > 0
+    ? strong
+    : state.phase.callClaims.filter((claim) => claim.kind === 'chi');
   if (pool.length === 0) return null;
+  const discarder = state.phase.discarder;
   return pool.reduce((best, claim) =>
-    callPriority(state.phase.kind === 'reactions' ? state.phase.discarder : 0, claim.player) <
-    callPriority(state.phase.kind === 'reactions' ? state.phase.discarder : 0, best.player)
-      ? claim
-      : best,
+    callPriority(discarder, claim.player) < callPriority(discarder, best.player) ? claim : best,
   );
 }
 
 function executeCall(state: RoundState, claim: CallClaim): { state: RoundState; event: RoundEvent } | null {
-  if (state.phase.kind !== 'reactions') return null;
+  if (state.phase.kind !== 'reactions' || claim.kind === 'daiminkan') return null;
   const discard = reactionDiscard(state);
   if (!discard) return null;
   const caller = state.players[claim.player];
@@ -546,7 +617,7 @@ function executeCall(state: RoundState, claim: CallClaim): { state: RoundState; 
   };
 }
 
-function notenDeltas(tenpaiPlayers: readonly PlayerIndex[]): readonly [number, number, number, number] {
+function notenDeltas(tenpaiPlayers: readonly PlayerIndex[]): PointDeltaTuple {
   const deltas = [0, 0, 0, 0];
   const count = tenpaiPlayers.length;
   if (count === 0 || count === 4) return [0, 0, 0, 0];
@@ -558,10 +629,51 @@ function notenDeltas(tenpaiPlayers: readonly PlayerIndex[]): readonly [number, n
   return [deltas[0], deltas[1], deltas[2], deltas[3]];
 }
 
+function nagashiDeltas(state: RoundState, qualifiers: readonly PlayerIndex[]): PointDeltaTuple {
+  const deltas = [0, 0, 0, 0];
+  for (const winner of qualifiers) {
+    if (winner === state.dealer) {
+      for (const payer of PLAYERS) {
+        if (payer === winner) continue;
+        deltas[payer] -= 4000;
+        deltas[winner] += 4000;
+      }
+      continue;
+    }
+    for (const payer of PLAYERS) {
+      if (payer === winner) continue;
+      const amount = payer === state.dealer ? 4000 : 2000;
+      deltas[payer] -= amount;
+      deltas[winner] += amount;
+    }
+  }
+  return [deltas[0], deltas[1], deltas[2], deltas[3]];
+}
+
 function settleExhaustive(state: RoundState): { result: RoundEndResult; players: RoundState['players'] } {
   const tenpaiPlayers = PLAYERS.filter((player) =>
     winningTileTypeKeys(state.players[player].concealed, state.players[player].melds).size > 0,
   );
+  const nagashiPlayers = PLAYERS.filter((player) => detectNagashiMangan(
+    state.players[player].discards.map((discard) => ({
+      tile: discard.tile,
+      wasCalled: discard.calledBy !== undefined,
+    })),
+  ) !== null);
+
+  if (nagashiPlayers.length > 0) {
+    const nagashiPayments = nagashiDeltas(state, nagashiPlayers);
+    const points = state.players.map((player, index) => player.points + nagashiPayments[index]);
+    const result: RoundEndResult = {
+      type: 'exhaustive-draw',
+      tenpaiPlayers,
+      notenPayments: [0, 0, 0, 0],
+      nagashiPlayers,
+      nagashiPayments,
+    };
+    return { result, players: replacePoints(state.players, points) };
+  }
+
   const deltas = notenDeltas(tenpaiPlayers);
   const points = state.players.map((player, index) => player.points + deltas[index]);
   const result: RoundEndResult = { type: 'exhaustive-draw', tenpaiPlayers, notenPayments: deltas };
@@ -590,7 +702,17 @@ export function getLegalActions(state: RoundState, player: PlayerIndex): LegalAc
     const riichiIds = legalRiichiDiscardIds(state, player);
     if (riichiIds.length > 0) actions.push({ type: 'riichi-discard', tileIds: riichiIds });
     if (scoreTsumo(state, player)) actions.push({ type: 'tsumo' });
+    const ankan = legalAnkanOptions(state, player);
+    if (ankan.length > 0) actions.push({ type: 'ankan', options: ankan });
+    const shouminkan = legalShouminkanOptions(state, player);
+    if (shouminkan.length > 0) actions.push({ type: 'shouminkan', options: shouminkan });
     return actions;
+  }
+
+  if (state.phase.kind === 'kan-reactions') {
+    if (state.phase.declarer === player) return [];
+    if (state.phase.ronClaims.some((claim) => claim.player === player)) return [];
+    return scoreChankan(state, player) ? [{ type: 'ron' }] : [];
   }
 
   if (state.phase.discarder === player) return [];
@@ -601,6 +723,8 @@ export function getLegalActions(state: RoundState, player: PlayerIndex): LegalAc
 
   const actions: LegalAction[] = [];
   if (scoreRon(state, player)) actions.push({ type: 'ron' });
+  const daiminkan = legalDaiminkanOptions(state, player, reactionDiscard(state));
+  if (daiminkan.length > 0) actions.push({ type: 'daiminkan', options: daiminkan });
   const pon = ponOptions(state, player);
   if (pon.length > 0) actions.push({ type: 'pon', options: pon });
   const chi = chiOptions(state, player);
@@ -672,6 +796,20 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
     return performDiscard(state, action.player, action.tileId, pending);
   }
 
+  if (action.type === 'ankan') {
+    const result = executeAnkan(state, action.player, action.tileIds);
+    return result
+      ? { ok: true, state: result.state, events: result.events }
+      : error('ILLEGAL_KAN', 'Those tiles do not form a legal Ankan in the current state');
+  }
+
+  if (action.type === 'shouminkan') {
+    const result = beginShouminkan(state, action.player, action.meldIndex, action.tileId);
+    return result
+      ? { ok: true, state: result.state, events: result.events }
+      : error('ILLEGAL_KAN', 'That tile cannot legally upgrade the selected Pon');
+  }
+
   if (action.type === 'tsumo') {
     if (state.phase.kind !== 'awaiting-discard') {
       return error('WRONG_PHASE', 'Tsumo requires the awaiting-discard phase');
@@ -691,6 +829,35 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
   }
 
   if (action.type === 'ron') {
+    if (state.phase.kind === 'kan-reactions') {
+      if (state.phase.declarer === action.player) {
+        return error('CANNOT_RON_OWN_DISCARD', 'A player cannot Chankan their own Kan');
+      }
+      if (state.phase.ronClaims.some((claim) => claim.player === action.player)) {
+        return error('DUPLICATE_RON_CLAIM', 'This player has already claimed Chankan');
+      }
+      const rawScore = scoreChankanIgnoringFuriten(state, action.player);
+      if (!rawScore) return error('ILLEGAL_WIN', 'The added Kan tile is not a legal Chankan win');
+      if (isRonFuriten(state.players[action.player])) {
+        return error('FURITEN', 'This player is Furiten and cannot win by Chankan');
+      }
+      const claim: RonClaim = { player: action.player, score: rawScore };
+      return {
+        ok: true,
+        state: {
+          ...state,
+          phase: { ...state.phase, ronClaims: [...state.phase.ronClaims, claim] },
+        },
+        events: [{
+          type: 'RonClaimed',
+          player: action.player,
+          discarder: state.phase.declarer,
+          tile: state.phase.addedTile,
+          chankan: true,
+        }],
+      };
+    }
+
     if (state.phase.kind !== 'reactions') {
       return error('WRONG_PHASE', 'Ron may only be claimed during a reaction window');
     }
@@ -710,13 +877,12 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
     }
     const discard = reactionDiscard(state)!;
     const claim: RonClaim = { player: action.player, score: rawScore };
-    const nextState: RoundState = {
-      ...state,
-      phase: { ...state.phase, ronClaims: [...state.phase.ronClaims, claim] },
-    };
     return {
       ok: true,
-      state: nextState,
+      state: {
+        ...state,
+        phase: { ...state.phase, ronClaims: [...state.phase.ronClaims, claim] },
+      },
       events: [{
         type: 'RonClaimed',
         player: action.player,
@@ -726,9 +892,9 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
     };
   }
 
-  if (action.type === 'chi' || action.type === 'pon') {
+  if (action.type === 'chi' || action.type === 'pon' || action.type === 'daiminkan') {
     if (state.phase.kind !== 'reactions') {
-      return error('WRONG_PHASE', 'Calls may only be claimed during a reaction window');
+      return error('WRONG_PHASE', 'Calls may only be claimed during a discard reaction window');
     }
     if (
       state.phase.callClaims.some((claim) => claim.player === action.player) ||
@@ -736,10 +902,13 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
     ) {
       return error('DUPLICATE_CALL_CLAIM', 'This player already submitted a reaction claim');
     }
-    const options = action.type === 'chi'
+    const discard = reactionDiscard(state);
+    const options: readonly (readonly number[])[] = action.type === 'chi'
       ? chiOptions(state, action.player)
-      : ponOptions(state, action.player);
-    if (!options.some((option) => sameOption(option, action.tileIds))) {
+      : action.type === 'pon'
+        ? ponOptions(state, action.player)
+        : legalDaiminkanOptions(state, action.player, discard);
+    if (!options.some((option) => sameIds(option, action.tileIds))) {
       return error('ILLEGAL_CALL', `Those tiles do not form a legal ${action.type}`);
     }
     const claim: CallClaim = { player: action.player, kind: action.type, tileIds: action.tileIds };
@@ -758,8 +927,29 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
     };
   }
 
+  if (state.phase.kind === 'kan-reactions') {
+    if (state.phase.ronClaims.length > 0) {
+      const settled = settleRon(state, state.phase.declarer, state.phase.ronClaims);
+      const result: RoundEndResult = {
+        type: 'ron',
+        discarder: state.phase.declarer,
+        winners: settled.winners,
+      };
+      const nextState = endedState(state, result, settled.players);
+      const events: RoundEvent[] = [
+        { type: 'HandWon', result },
+        { type: 'RoundEnded', result },
+      ];
+      return { ok: true, state: nextState, events };
+    }
+    const working = markPassedChankanFuriten(state);
+    const completed = completeShouminkan(working);
+    if (!completed) return error('ILLEGAL_KAN', 'The Shouminkan could not be completed');
+    return { ok: true, state: completed.state, events: completed.events };
+  }
+
   if (state.phase.kind !== 'reactions') {
-    return error('WRONG_PHASE', 'Reactions can only be resolved after a discard');
+    return error('WRONG_PHASE', 'Reactions can only be resolved after a discard or Shouminkan');
   }
 
   if (state.phase.ronClaims.length > 0) {
@@ -784,6 +974,13 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
 
   const selectedCall = chooseCall(working);
   if (selectedCall) {
+    const discard = reactionDiscard(working);
+    if (!discard) return error('ILLEGAL_CALL', 'Reaction window has no discard to call');
+    if (selectedCall.kind === 'daiminkan') {
+      const called = executeDaiminkan(working, selectedCall, discard);
+      if (!called) return error('ILLEGAL_KAN', 'The selected Daiminkan could not be applied');
+      return { ok: true, state: called.state, events: [...events, ...called.events] };
+    }
     const called = executeCall(working, selectedCall);
     if (!called) return error('ILLEGAL_CALL', 'The selected call could not be applied');
     return { ok: true, state: called.state, events: [...events, called.event] };
