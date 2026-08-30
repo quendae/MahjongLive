@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'shared/**'
+      - 'client/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -12,6 +13,7 @@ on:
     branches: [master]
     paths:
       - 'shared/**'
+      - 'client/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -33,3 +35,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
+      - run: pnpm client:typecheck
+      - run: pnpm client:build
