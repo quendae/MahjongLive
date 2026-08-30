@@ -16,7 +16,7 @@ function withEndedRound(
   const players = state.round.players.map((player, index) => ({
     ...player,
     points: points?.[index] ?? player.points,
-  })) as MatchState['round']['players'];
+  })) as unknown as MatchState['round']['players'];
   return {
     ...state,
     round: {
