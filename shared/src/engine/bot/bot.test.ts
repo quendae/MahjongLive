@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createRound } from '../rules/round';
-import type { RoundDiscard, RoundState } from '../rules/types';
-import { suited, wind } from '../tiles/tiles';
+import type { PlayerIndex, RoundDiscard, RoundState } from '../rules/types';
+import { dragon, suited, wind } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
 import { createRNG } from '../wall/prng';
 import { chooseBotDecision, evaluateDiscard } from './bot';
@@ -27,6 +27,29 @@ function withPlayerHand(tiles: Tile[], drawnTileId: number): RoundState {
     players: players as unknown as RoundState['players'],
     currentPlayer: 0,
     phase: { kind: 'awaiting-discard', player: 0, drawnTileId, wasLastLiveDraw: false },
+  };
+}
+
+function reactionState(
+  botHand: Tile[],
+  discardTile: Tile,
+  discarder: PlayerIndex,
+): RoundState {
+  const base = createRound(createRNG(505));
+  const discard: RoundDiscard = {
+    tile: discardTile,
+    tileId: discardTile.id!,
+    tsumogiri: false,
+    wasLastLiveDraw: false,
+  };
+  const players = [...base.players] as RoundState['players'][number][];
+  players[0] = { ...players[0], concealed: botHand, melds: [], discards: [] };
+  players[discarder] = { ...players[discarder], discards: [discard], discardCount: 1 };
+  return {
+    ...base,
+    players: players as unknown as RoundState['players'],
+    currentPlayer: discarder,
+    phase: { kind: 'reactions', discarder, discardIndex: 0, ronClaims: [], callClaims: [] },
   };
 }
 
@@ -139,5 +162,38 @@ describe('discard heuristics', () => {
     expect(decision.type).toBe('action');
     if (decision.type !== 'action') return;
     expect(applyAction(draw.state, decision.action).ok).toBe(true);
+  });
+});
+
+describe('open-call discipline', () => {
+  it('takes a value-honor Pon when it improves the hand', () => {
+    const red1 = physical(dragon('red'), 401);
+    const red2 = physical(dragon('red'), 402);
+    const botHand = [
+      red1, red2,
+      physical(m(1), 403), physical(m(2), 404), physical(m(3), 405),
+      physical(m(4), 406), physical(m(5), 407), physical(m(6), 408),
+      physical(p(7), 409), physical(p(8), 410),
+      physical(s(5), 411), physical(s(5), 412),
+      physical(wind('east'), 413),
+    ];
+    const state = reactionState(botHand, physical(dragon('red'), 499), 1);
+    const decision = chooseBotDecision(state, 0);
+    expect(decision.type).toBe('action');
+    if (decision.type !== 'action') return;
+    expect(decision.action.type).toBe('pon');
+  });
+
+  it('passes a shanten-looking Chi that would open a hand without a yaku path', () => {
+    const botHand = [
+      physical(m(1), 501), physical(m(2), 502),
+      physical(p(4), 503), physical(p(5), 504), physical(p(6), 505),
+      physical(s(7), 506), physical(s(8), 507), physical(s(9), 508),
+      physical(p(5), 509), physical(p(5), 510),
+      physical(wind('east'), 511), physical(wind('north'), 512), physical(m(9), 513),
+    ];
+    const state = reactionState(botHand, physical(m(3), 599), 3);
+    const decision = chooseBotDecision(state, 0);
+    expect(decision).toEqual({ type: 'pass' });
   });
 });
