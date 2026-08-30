@@ -1,6 +1,6 @@
 import { doraFromIndicator } from '../scoring/dora';
 import { structuralShanten } from '../shanten/shanten';
-import { isHonor, isTerminal, tileTypeKey } from '../tiles/tiles';
+import { isTerminal, tileTypeKey } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
 import { getLegalActions, seatWindFor } from '../rules/round';
 import type {
@@ -66,9 +66,16 @@ function keepValue(tile: Tile, hand: readonly Tile[], state: RoundState, player:
 
   if (isValueHonor(tile, state, player)) value += 2;
   if (tile.kind === 'suited') {
-    const sameSuit = hand.filter((candidate) => candidate.kind === 'suited' && candidate.suit === tile.suit);
-    if (sameSuit.some((candidate) => Math.abs(candidate.rank - tile.rank) === 1)) value += 3;
-    if (sameSuit.some((candidate) => Math.abs(candidate.rank - tile.rank) === 2)) value += 1;
+    if (hand.some((candidate) =>
+      candidate.kind === 'suited' &&
+      candidate.suit === tile.suit &&
+      Math.abs(candidate.rank - tile.rank) === 1
+    )) value += 3;
+    if (hand.some((candidate) =>
+      candidate.kind === 'suited' &&
+      candidate.suit === tile.suit &&
+      Math.abs(candidate.rank - tile.rank) === 2
+    )) value += 1;
     if (tile.rank >= 3 && tile.rank <= 7) value += 1;
   } else if (same === 1 && !isValueHonor(tile, state, player)) {
     value -= 2;
