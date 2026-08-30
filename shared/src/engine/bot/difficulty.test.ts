@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRound } from '../rules/round';
 import type { PlayerIndex, RoundDiscard, RoundState } from '../rules/types';
-import { dragon, suited, wind } from '../tiles/tiles';
+import { dragon, suited } from '../tiles/tiles';
 import type { SuitRank, Tile } from '../tiles/types';
 import { createRNG } from '../wall/prng';
 import { chooseBotDecisionForDifficulty, normalizeBotDifficulty } from './difficulty';
@@ -20,17 +20,18 @@ function ukeireChoiceFixture(): RoundState {
     physical(m(1), 101), physical(m(2), 102), physical(m(3), 103),
     physical(p(1), 104), physical(p(2), 105), physical(p(3), 106),
     physical(s(1), 107), physical(s(2), 108), physical(s(3), 109),
-    physical(s(4), 214), physical(s(5), 111), physical(s(6), 112),
-    physical(p(7), 113), physical(p(7), 114),
+    physical(s(4), 110), physical(s(5), 111),
+    physical(p(7), 113), physical(p(7), 114), physical(p(7), 115),
   ];
   const players = [...base.players] as RoundState['players'][number][];
-  players[0] = { ...players[0], concealed: hand, melds: [], discards: [] };
+  // Keep Riichi unavailable so this fixture measures only the discard profile. Both 4s and 7p
+  // preserve tenpai: 4s leaves a 5s tanki, while 7p leaves a wider 3s/6s ryanmen.
+  players[0] = { ...players[0], points: 900, concealed: hand, melds: [], discards: [] };
   return {
     ...base,
     players: players as unknown as RoundState['players'],
-    wall: { ...base.wall, doraIndicators: [physical(wind('east'), 900)] },
     currentPlayer: 0,
-    phase: { kind: 'awaiting-discard', player: 0, drawnTileId: 114, wasLastLiveDraw: false },
+    phase: { kind: 'awaiting-discard', player: 0, drawnTileId: 115, wasLastLiveDraw: false },
   };
 }
 
@@ -44,7 +45,7 @@ function valueHonorReactionFixture(): RoundState {
     physical(m(4), 406), physical(m(5), 407), physical(m(6), 408),
     physical(p(7), 409), physical(p(8), 410),
     physical(s(5), 411), physical(s(5), 412),
-    physical(wind('east'), 413),
+    physical(s(9), 413),
   ];
   const discardTile = physical(dragon('red'), 499);
   const discard: RoundDiscard = {
@@ -71,8 +72,10 @@ describe('bot difficulty profiles', () => {
     const standard = chooseBotDecisionForDifficulty(state, 0, 'standard');
     const expert = chooseBotDecisionForDifficulty(state, 0, 'expert');
 
-    expect(standard).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 113 } });
-    expect(expert).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 214 } });
+    // Standard prefers the cheaper-shape 4s discard. Expert sees that discarding a 7p leaves the
+    // much wider ryanmen and accepts the extra keep-value cost for greater ukeire.
+    expect(standard).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 110 } });
+    expect(expert).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 113 } });
   });
 
   it('keeps Casual closed while Standard may take a yaku-safe value-honor Pon', () => {
