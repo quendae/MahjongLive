@@ -24,8 +24,9 @@ function ukeireChoiceFixture(): RoundState {
     physical(p(7), 113), physical(p(7), 114), physical(p(7), 115),
   ];
   const players = [...base.players] as RoundState['players'][number][];
-  // Keep Riichi unavailable so this fixture measures only the discard profile. Both 4s and 7p
-  // preserve tenpai: 4s leaves a 5s tanki, while 7p leaves a wider 3s/6s ryanmen.
+  // Keep Riichi unavailable so this fixture measures only the discard profile. Several discards
+  // preserve the same structural distance; Expert may override Standard's shape tie-break when
+  // public-information ukeire identifies a wider continuation.
   players[0] = { ...players[0], points: 900, concealed: hand, melds: [], discards: [] };
   return {
     ...base,
@@ -67,14 +68,12 @@ function valueHonorReactionFixture(): RoundState {
 }
 
 describe('bot difficulty profiles', () => {
-  it('uses ukeire only on Expert when base heuristics are otherwise tied', () => {
+  it('uses ukeire only on Expert when base heuristics choose another equal-distance discard', () => {
     const state = ukeireChoiceFixture();
     const standard = chooseBotDecisionForDifficulty(state, 0, 'standard');
     const expert = chooseBotDecisionForDifficulty(state, 0, 'expert');
 
-    // Standard prefers the cheaper-shape 4s discard. Expert sees that discarding a 7p leaves the
-    // much wider ryanmen and accepts the extra keep-value cost for greater ukeire.
-    expect(standard).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 110 } });
+    expect(standard).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 107 } });
     expect(expert).toEqual({ type: 'action', action: { type: 'discard', player: 0, tileId: 113 } });
   });
 
