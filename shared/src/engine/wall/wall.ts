@@ -11,6 +11,7 @@ export interface Wall {
 const RED_FIVE_SUITS = ['man', 'pin', 'sou'] as const;
 const MAX_DORA_INDICATORS = 5;
 const URA_OFFSET = 5;
+const RINSHAN_INDEX = 10;
 
 export function build136Tiles(): Tile[] {
   const tiles: Tile[] = [];
@@ -53,6 +54,28 @@ export function drawTile(wall: Wall): { tile: Tile; wall: Wall } {
   return { tile, wall: { ...wall, liveWall: rest } };
 }
 
+/**
+ * Draws the next replacement tile after a completed Kan.
+ *
+ * The engine uses an abstract dead-wall layout where slot 10 is always the next Rinshan tile.
+ * After removing it, the final live-wall tile replenishes the dead wall. Appending the replacement
+ * makes the former slot 11 become the next slot 10, so repeated calls naturally consume the four
+ * original Rinshan tiles in order while preserving a 14-tile dead wall.
+ */
+export function drawRinshan(wall: Wall): { tile: Tile; wall: Wall } {
+  const tile = wall.deadWall[RINSHAN_INDEX];
+  if (!tile) throw new Error('No Rinshan tile is available');
+  if (wall.liveWall.length === 0) throw new Error('Cannot replenish the dead wall from an empty live wall');
+
+  const replacement = wall.liveWall[wall.liveWall.length - 1];
+  const liveWall = wall.liveWall.slice(0, -1);
+  const deadWall = [...wall.deadWall];
+  deadWall.splice(RINSHAN_INDEX, 1);
+  deadWall.push(replacement);
+
+  return { tile, wall: { ...wall, liveWall, deadWall } };
+}
+
 export function revealKanDora(wall: Wall): Wall {
   const nextIndex = wall.doraIndicators.length;
   if (nextIndex >= MAX_DORA_INDICATORS) {
@@ -65,13 +88,7 @@ export function revealKanDora(wall: Wall): Wall {
   return { ...wall, doraIndicators: [...wall.doraIndicators, indicator] };
 }
 
-/**
- * Hidden Ura indicators paired one-for-one with the currently visible Dora indicators.
- *
- * Engine dead-wall indexing is intentionally abstract: 0..4 are visible indicators, 5..9 are
- * their hidden Ura partners, and Plan 7 reserves 10..13 for Rinshan draws. Rendering may display
- * the physical wall however it likes.
- */
+/** Hidden Ura indicators paired one-for-one with the currently visible Dora indicators. */
 export function uraIndicators(wall: Wall): readonly Tile[] {
   return wall.deadWall.slice(URA_OFFSET, URA_OFFSET + wall.doraIndicators.length);
 }
