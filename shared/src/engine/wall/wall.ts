@@ -9,6 +9,8 @@ export interface Wall {
 }
 
 const RED_FIVE_SUITS = ['man', 'pin', 'sou'] as const;
+const MAX_DORA_INDICATORS = 5;
+const URA_OFFSET = 5;
 
 export function build136Tiles(): Tile[] {
   const tiles: Tile[] = [];
@@ -53,11 +55,25 @@ export function drawTile(wall: Wall): { tile: Tile; wall: Wall } {
 
 export function revealKanDora(wall: Wall): Wall {
   const nextIndex = wall.doraIndicators.length;
+  if (nextIndex >= MAX_DORA_INDICATORS) {
+    throw new Error('No more dora indicators may be revealed');
+  }
   const indicator = wall.deadWall[nextIndex];
   if (!indicator) {
     throw new Error('No more dead wall tiles available for a new dora indicator');
   }
   return { ...wall, doraIndicators: [...wall.doraIndicators, indicator] };
+}
+
+/**
+ * Hidden Ura indicators paired one-for-one with the currently visible Dora indicators.
+ *
+ * Engine dead-wall indexing is intentionally abstract: 0..4 are visible indicators, 5..9 are
+ * their hidden Ura partners, and Plan 7 reserves 10..13 for Rinshan draws. Rendering may display
+ * the physical wall however it likes.
+ */
+export function uraIndicators(wall: Wall): readonly Tile[] {
+  return wall.deadWall.slice(URA_OFFSET, URA_OFFSET + wall.doraIndicators.length);
 }
 
 export function remainingDraws(wall: Wall): number {
