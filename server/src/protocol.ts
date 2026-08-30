@@ -33,7 +33,7 @@ export type PlayerRoundAction = Exclude<RoundAction, { type: 'resolve-reactions'
 
 export type ClientCommand =
   | { type: 'set-ready'; ready: boolean }
-  | { type: 'start-round'; seed: number }
+  | { type: 'start-round' }
   | { type: 'round-action'; action: PlayerRoundAction }
   | { type: 'pass' };
 
