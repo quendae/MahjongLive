@@ -1,12 +1,12 @@
-import { YakuDetector, meldContainingTile, isYakuhaiTile } from './context';
+import {
+  YakuDetector,
+  WinningMeld,
+  isClosedHand,
+  meldContainingTile,
+  isYakuhaiTile,
+} from './context';
 import { tileTypeKey } from '../tiles/tiles';
 import { Tile } from '../tiles/types';
-import { Meld } from '../hand/decompose';
-
-// OPEN-HAND NOTE: Pinfu and Iipeikou both require a closed (menzen) hand — unlike Chanta or
-// Honitsu they have no reduced open-hand value, they simply do not apply once the hand is open.
-// This plan never constructs an open WinningHand (see the plan's "Open Hands" section), so no
-// closed-hand check appears here — add one when open melds exist.
 
 /**
  * Whether the winning tile completed `meld` from a two-sided (ryanmen) wait — the only wait shape
@@ -17,7 +17,8 @@ import { Meld } from '../hand/decompose';
  *   two-sided unless one of those ranks falls outside 1..9 — run `1,2,3` won on the `3` (held 1,2)
  *   and run `7,8,9` won on the `7` (held 8,9) are edge waits (penchan).
  */
-function isRyanmenWait(meld: Meld, winningTile: Tile): boolean {
+function isRyanmenWait(meld: WinningMeld, winningTile: Tile): boolean {
+  if (meld.type !== 'sequence') return false;
   const sorted = [...meld.tiles].sort((a, b) => {
     if (a.kind !== 'suited' || b.kind !== 'suited') return 0;
     return a.rank - b.rank;
@@ -32,8 +33,27 @@ function isRyanmenWait(meld: Meld, winningTile: Tile): boolean {
   return !isPenchanLow && !isPenchanHigh;
 }
 
+function sequenceSignature(meld: WinningMeld): string | null {
+  if (meld.type !== 'sequence') return null;
+  return meld.tiles.map(tileTypeKey).sort().join(',');
+}
+
+/** Number of disjoint identical-sequence pairs available among a standard hand's melds. */
+export function countIdenticalSequencePairs(melds: readonly WinningMeld[]): number {
+  const counts = new Map<string, number>();
+  for (const meld of melds) {
+    const key = sequenceSignature(meld);
+    if (key === null) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let pairs = 0;
+  for (const count of counts.values()) pairs += Math.floor(count / 2);
+  return pairs;
+}
+
 export const detectPinfu: YakuDetector = (hand) => {
   if (hand.shape !== 'standard') return null;
+  if (!isClosedHand(hand)) return null;
   if (hand.pair.length !== 2) return null;
   if (hand.melds.some((m) => m.type !== 'sequence')) return null;
   if (isYakuhaiTile(hand.pair[0], hand)) return null;
@@ -47,11 +67,8 @@ export const detectPinfu: YakuDetector = (hand) => {
 
 export const detectIipeikou: YakuDetector = (hand) => {
   if (hand.shape !== 'standard') return null;
+  if (!isClosedHand(hand)) return null;
 
-  const sequenceKeys = hand.melds
-    .filter((m) => m.type === 'sequence')
-    .map((m) => m.tiles.map(tileTypeKey).sort().join(','));
-
-  const hasDuplicate = sequenceKeys.some((key, i) => sequenceKeys.indexOf(key) !== i);
-  return hasDuplicate ? { name: 'Iipeikou', han: 1 } : null;
+  // Ryanpeikou is two identical-sequence pairs and supersedes Iipeikou rather than stacking.
+  return countIdenticalSequencePairs(hand.melds) === 1 ? { name: 'Iipeikou', han: 1 } : null;
 };
