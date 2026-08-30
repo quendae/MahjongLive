@@ -19,16 +19,11 @@ on:
       - 'pnpm-workspace.yaml'
       - '.github/workflows/shared-ci.yml'
 
-permissions:
-  contents: write
-
 jobs:
   core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: pnpm/action-setup@v4
         with:
           version: 11.24.0
@@ -37,17 +32,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
-      - name: Commit generated workspace lockfile
-        if: github.event_name == 'pull_request' && github.head_ref == 'plan8-authoritative-server'
-        run: |
-          if ! git diff --quiet -- pnpm-lock.yaml; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add pnpm-lock.yaml
-            git commit -m "chore: update lockfile for server workspace"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
       - run: pnpm --filter @mahjong-live/server typecheck
