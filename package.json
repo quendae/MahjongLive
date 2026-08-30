@@ -1,5 +1,11 @@
 {
   "name": "mahjong-live",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "scripts": {
+    "client:dev": "node client/scripts/vite.mjs dev",
+    "client:build": "node client/scripts/vite.mjs build",
+    "client:preview": "node client/scripts/vite.mjs preview",
+    "client:typecheck": "pnpm --filter @mahjong-live/shared exec tsc -p ../client/tsconfig.json"
+  }
 }
