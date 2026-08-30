@@ -118,8 +118,9 @@ function totalDiscards(state: RoundState): number {
 
 function scoreTsumo(state: RoundState, playerIndex: PlayerIndex): ScoredHand | null {
   if (state.phase.kind !== 'awaiting-discard' || state.phase.player !== playerIndex) return null;
+  const phase = state.phase;
   const player = state.players[playerIndex];
-  const winningTile = player.concealed.find((tile) => tile.id === state.phase.drawnTileId);
+  const winningTile = player.concealed.find((tile) => tile.id === phase.drawnTileId);
   if (!winningTile) return null;
   const concealedBeforeWin = player.concealed.filter((tile) => tile !== winningTile);
 
@@ -133,7 +134,7 @@ function scoreTsumo(state: RoundState, playerIndex: PlayerIndex): ScoredHand | n
     isRiichi: player.riichi !== 'none',
     isDoubleRiichi: player.riichi === 'double-riichi',
     isIppatsu: player.ippatsuEligible,
-    isHaitei: state.phase.wasLastLiveDraw,
+    isHaitei: phase.wasLastLiveDraw,
     isTenhou:
       playerIndex === state.dealer && totalDiscards(state) === 0 && state.callsMade === 0,
     isChiihou:
@@ -257,7 +258,9 @@ function endedState(
   return {
     ...state,
     players,
-    riichiSticks: 0,
+    // Riichi deposits belong to the table pot and carry to the next hand after an exhaustive draw.
+    // A win consumes the pot (for multi-Ron the nearest winner is selected in settleRon).
+    riichiSticks: result.type === 'exhaustive-draw' ? state.riichiSticks : 0,
     phase: { kind: 'ended', result },
   };
 }
