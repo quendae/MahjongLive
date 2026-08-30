@@ -1,3 +1,4 @@
+import type { BotDifficulty } from '../bot/difficulty';
 import type { MatchResult, MatchState } from '../match/types';
 import type {
   LegalAction,
@@ -11,6 +12,11 @@ export interface SingleGameState {
   /** Stable base seed. Every round derives its own seed from this plus match.roundNumber. */
   seed: number;
   humanSeat: PlayerIndex;
+  /**
+   * Optional for backwards-compatible JSON saves created before Plan 12. Missing resolves to Expert,
+   * which preserves the bot behaviour those saves previously used.
+   */
+  botDifficulty?: BotDifficulty;
   match: MatchState;
 }
 
