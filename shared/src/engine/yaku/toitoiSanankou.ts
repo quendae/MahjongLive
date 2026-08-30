@@ -1,9 +1,9 @@
-import { YakuDetector, isConcealedMeld } from './context';
+import { YakuDetector, isConcealedMeld, isTripletLike } from './context';
 
 export const detectToitoi: YakuDetector = (hand) => {
   if (hand.shape !== 'standard') return null;
-  const allTriplets = hand.melds.every((m) => m.type === 'triplet');
-  return allTriplets ? { name: 'Toitoi', han: 2 } : null;
+  const allTripletLike = hand.melds.every(isTripletLike);
+  return allTripletLike ? { name: 'Toitoi', han: 2 } : null;
 };
 
 export const detectSanankou: YakuDetector = (hand) => {

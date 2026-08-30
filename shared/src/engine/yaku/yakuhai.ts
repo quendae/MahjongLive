@@ -1,10 +1,10 @@
-import { YakuDetector, isYakuhaiTile } from './context';
+import { YakuDetector, isTripletLike, isYakuhaiTile } from './context';
 
 export const detectYakuhai: YakuDetector = (hand) => {
   if (hand.shape !== 'standard') return null;
 
   const qualifyingTriplets = hand.melds.filter(
-    (m) => m.type === 'triplet' && isYakuhaiTile(m.tiles[0], hand),
+    (m) => isTripletLike(m) && isYakuhaiTile(m.tiles[0], hand),
   );
   if (qualifyingTriplets.length === 0) return null;
 

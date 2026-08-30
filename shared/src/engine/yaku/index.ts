@@ -7,9 +7,40 @@ import { detectSanshokuDoujun, detectIttsuu } from './sanshokuIttsuu';
 import { detectChanta, detectJunchan } from './chantaJunchan';
 import { detectToitoi, detectSanankou } from './toitoiSanankou';
 import { detectHonitsu, detectChinitsu } from './honitsuChinitsu';
+import {
+  detectRyanpeikou,
+  detectSanshokuDoukou,
+  detectSankantsu,
+  detectHonroutou,
+  detectShousangen,
+} from './rarePatterns';
+import {
+  detectDoubleRiichi,
+  detectHaitei,
+  detectHoutei,
+  detectRinshan,
+  detectChankan,
+  detectTenhou,
+  detectChiihou,
+} from './situational';
+import {
+  detectKokushi,
+  detectTsuuiisou,
+  detectChinroutou,
+  detectRyuuiisou,
+  detectChuurenpoutou,
+} from './yakumanComposition';
+import {
+  detectSuuankou,
+  detectDaisangen,
+  detectShousuushii,
+  detectDaisuushii,
+  detectSuukantsu,
+} from './yakumanGroups';
 
 export const ALL_YAKU_DETECTORS: readonly YakuDetector[] = [
   detectRiichi,
+  detectDoubleRiichi,
   detectIppatsu,
   detectMenzenTsumo,
   detectChiitoitsu,
@@ -17,34 +48,56 @@ export const ALL_YAKU_DETECTORS: readonly YakuDetector[] = [
   detectYakuhai,
   detectPinfu,
   detectIipeikou,
+  detectRyanpeikou,
   detectSanshokuDoujun,
   detectIttsuu,
+  detectSanshokuDoukou,
+  detectSankantsu,
+  detectHonroutou,
+  detectShousangen,
   detectChanta,
   detectJunchan,
   detectToitoi,
   detectSanankou,
   detectHonitsu,
   detectChinitsu,
+  detectHaitei,
+  detectHoutei,
+  detectRinshan,
+  detectChankan,
+  detectKokushi,
+  detectSuuankou,
+  detectDaisangen,
+  detectShousuushii,
+  detectDaisuushii,
+  detectTsuuiisou,
+  detectChinroutou,
+  detectRyuuiisou,
+  detectChuurenpoutou,
+  detectSuukantsu,
+  detectTenhou,
+  detectChiihou,
 ];
 
 /**
- * Runs every detector in `ALL_YAKU_DETECTORS` and collects the matches. This is a simple,
- * un-deduplicated collector: it reports every yaku that is structurally true of the hand, and
- * does NOT resolve exclusivity between yaku families.
+ * Runs every hand-yaku detector and collects the matches. Nagashi Mangan is intentionally absent:
+ * it is an exhaustive-draw settlement evaluated from discard history, not a WinningHand yaku.
  *
- * In particular, `detectChanta` and `detectJunchan` are not mutually exclusive by construction —
- * Junchan's conditions (every meld/pair contains a terminal, no honors anywhere in the hand) are
- * a strict subset of Chanta's (every meld/pair contains a terminal-or-honor). Any hand that
- * qualifies for Junchan also satisfies Chanta, so both appear in the returned array together. In
- * standard Riichi rules, Junchan supersedes Chanta rather than stacking with it (a Junchan hand
- * scores 3 han for Junchan, not 2+3=5 for both).
+ * Family exclusivity that can be decided locally is already enforced by detectors:
+ * - Double Riichi supersedes Riichi.
+ * - Ryanpeikou supersedes Iipeikou.
+ * - Daisuushii supersedes Shousuushii.
  *
- * A consumer that sums `han` across these results (e.g. the Scoring plan) MUST resolve this kind
- * of yaku-family exclusivity itself before summing — blindly adding every result's `han` will
- * over-score a Junchan hand.
+ * Chanta/Junchan remain structurally non-exclusive for backwards compatibility with Plan 2; the
+ * scorer must resolve Junchan over Chanta before summing ordinary han.
+ *
+ * If any returned result has `yakuman`, Plan 4 scoring must sum Yakuman multipliers and ignore
+ * ordinary han for base hand value. V1 does not encode Yakuman as 13 han and disables double-wait
+ * Yakuman variants.
  */
 export function detectAllYaku(hand: WinningHand): YakuResult[] {
   return ALL_YAKU_DETECTORS.map((detect) => detect(hand)).filter((r): r is YakuResult => r !== null);
 }
 
 export * from './context';
+export * from './nagashi';

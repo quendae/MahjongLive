@@ -1,10 +1,24 @@
 import { Tile, Wind } from '../tiles/types';
-import { Meld } from '../hand/decompose';
 
 export type WinCondition = 'tsumo' | 'ron';
 
+/**
+ * A semantically-resolved meld in a completed standard hand.
+ *
+ * `isOpen` is optional only for backwards compatibility with the closed-only fixtures introduced
+ * by Plan 2. Absence means concealed. New production integration code should always set it.
+ */
+export interface WinningMeld {
+  type: 'sequence' | 'triplet' | 'quad';
+  tiles: readonly Tile[];
+  isOpen?: boolean;
+}
+
 export interface WinningHandBase {
-  /** All 14 tiles of the winning hand, for shape-agnostic checks (Tanyao, Honitsu, Chinitsu). */
+  /**
+   * Every physical tile in the resolved winning hand. This is 14 tiles without Kans and can be
+   * 15–18 for a standard hand containing one or more quads.
+   */
   allTiles: readonly Tile[];
   winningTile: Tile;
   winCondition: WinCondition;
@@ -20,12 +34,18 @@ export interface WinningHandBase {
   isRinshan: boolean;
   /** Won by Ron by robbing another player's added Kan. */
   isChankan: boolean;
+  /** Optional during the Plan 2 -> Plan 3 fixture migration; absent means false. */
+  isDoubleRiichi?: boolean;
+  /** Optional during the Plan 2 -> Plan 3 fixture migration; absent means false. */
+  isTenhou?: boolean;
+  /** Optional during the Plan 2 -> Plan 3 fixture migration; absent means false. */
+  isChiihou?: boolean;
 }
 
-/** A hand decomposed into four melds plus a pair. */
+/** A hand resolved into four melds plus a pair. */
 export interface StandardWinningHand extends WinningHandBase {
   shape: 'standard';
-  melds: readonly Meld[];
+  melds: readonly WinningMeld[];
   pair: readonly Tile[];
 }
 
@@ -34,14 +54,32 @@ export interface ChiitoitsuWinningHand extends WinningHandBase {
   shape: 'chiitoitsu';
 }
 
-export type WinningHand = StandardWinningHand | ChiitoitsuWinningHand;
+/** A Thirteen Orphans hand. Has no standard meld/pair decomposition. */
+export interface KokushiWinningHand extends WinningHandBase {
+  shape: 'kokushi';
+}
+
+export type WinningHand = StandardWinningHand | ChiitoitsuWinningHand | KokushiWinningHand;
 
 export interface YakuResult {
   name: string;
   han: number;
+  /** True Yakuman multiplier. V1 disables double-wait variants, so each detector returns 1. */
+  yakuman?: number;
 }
 
 export type YakuDetector = (hand: WinningHand) => YakuResult | null;
+
+/** Whether a resolved hand is menzen. Special closed-only shapes are always concealed. */
+export function isClosedHand(hand: WinningHand): boolean {
+  if (hand.shape !== 'standard') return true;
+  return hand.melds.every((meld) => meld.isOpen !== true);
+}
+
+/** Triplets and quads are equivalent for yaku defined over koutsu/kantsu groups. */
+export function isTripletLike(meld: WinningMeld): boolean {
+  return meld.type === 'triplet' || meld.type === 'quad';
+}
 
 /**
  * The meld containing a specific tile instance, found by reference identity.
@@ -63,15 +101,18 @@ export type YakuDetector = (hand: WinningHand) => YakuResult | null;
  * safe whenever this ambiguity exists: the same logical hand would yield different Sanankou/Pinfu
  * answers depending only on how the tiles happened to be ordered before decomposition.
  */
-export function meldContainingTile(melds: readonly Meld[], tile: Tile): Meld | undefined {
+export function meldContainingTile(
+  melds: readonly WinningMeld[],
+  tile: Tile,
+): WinningMeld | undefined {
   return melds.find((m) => m.tiles.includes(tile));
 }
 
 /**
- * Whether a triplet counts as concealed for Sanankou/Suuankou purposes. Only triplets can be
- * concealed (sequences and the pair never count). A triplet completed by Ron — turning a waiting
- * pair into a triplet (shanpon) — is NOT concealed even though no call was made; a triplet
- * completed by Tsumo, or one that already existed before the winning tile, is concealed.
+ * Whether a triplet/quad counts as concealed for Sanankou/Suuankou purposes. A called group is
+ * never concealed. A triplet completed by Ron — turning a waiting pair into a triplet (shanpon) —
+ * is NOT concealed even though no call was made; a triplet completed by Tsumo, or one that already
+ * existed before the winning tile, is concealed.
  *
  * HAZARD: the Ron-shanpon exception is decided by `meld.tiles.includes(hand.winningTile)`, a
  * reference-identity search. See `meldContainingTile` above — when a tile type's copies are split
@@ -80,8 +121,9 @@ export function meldContainingTile(melds: readonly Meld[], tile: Tile): Meld | u
  * game. The caller that builds the `WinningHand` is responsible for putting the winning tile's
  * object in the meld it truly completed.
  */
-export function isConcealedMeld(meld: Meld, hand: StandardWinningHand): boolean {
-  if (meld.type !== 'triplet') return false;
+export function isConcealedMeld(meld: WinningMeld, hand: StandardWinningHand): boolean {
+  if (!isTripletLike(meld)) return false;
+  if (meld.isOpen === true) return false;
   const containsWinningTile = meld.tiles.includes(hand.winningTile);
   if (containsWinningTile && hand.winCondition === 'ron') return false;
   return true;
