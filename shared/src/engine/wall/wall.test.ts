@@ -10,6 +10,15 @@ describe('build136Tiles', () => {
     expect(build136Tiles().length).toBe(136);
   });
 
+  it('assigns one stable physical ID to every wall tile', () => {
+    const ids = build136Tiles().map((tile) => tile.id);
+    expect(ids.every((id) => typeof id === 'number')).toBe(true);
+    expect(new Set(ids).size).toBe(136);
+    expect([...ids].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual(
+      Array.from({ length: 136 }, (_, index) => index),
+    );
+  });
+
   it('creates exactly one red five per suit', () => {
     const redFives = build136Tiles().filter(
       (t) => t.kind === 'suited' && t.rank === 5 && t.isRed
@@ -44,6 +53,7 @@ describe('buildWall', () => {
     const a = buildWall(createRNG(7));
     const b = buildWall(createRNG(7));
     expect(a.liveWall.map(tileTypeKey)).toEqual(b.liveWall.map(tileTypeKey));
+    expect(a.liveWall.map((tile) => tile.id)).toEqual(b.liveWall.map((tile) => tile.id));
   });
 });
 
