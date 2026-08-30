@@ -36,7 +36,8 @@ function tenpai(startId: number): Tile[] {
 }
 
 function lastDiscardState(tenpaiSeats: readonly PlayerIndex[]): RoundState {
-  const discardTile = physical(suited('sou', 9), 9000);
+  // A simple tile deliberately prevents this Plan 6 fixture from qualifying for Nagashi Mangan.
+  const discardTile = physical(suited('sou', 5), 9000);
   const discard: RoundDiscard = {
     tile: discardTile,
     tileId: discardTile.id!,
