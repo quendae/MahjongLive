@@ -6,6 +6,7 @@ import { getLegalActions, seatWindFor } from '../rules/round';
 import type {
   LegalAction,
   PlayerIndex,
+  PlayerMeld,
   RoundAction,
   RoundPlayerState,
   RoundState,
@@ -37,6 +38,10 @@ function removeIds(tiles: readonly Tile[], ids: readonly number[]): Tile[] | nul
   return remaining;
 }
 
+function isSimpleTile(tile: Tile): boolean {
+  return tile.kind === 'suited' && tile.rank >= 2 && tile.rank <= 8;
+}
+
 function activeDoraKeys(state: RoundState): Map<string, number> {
   const keys = new Map<string, number>();
   for (const indicator of state.wall.doraIndicators) {
@@ -57,6 +62,28 @@ function isValueHonor(tile: Tile, state: RoundState, player: PlayerIndex): boole
   if (tile.honorType === 'dragon') return true;
   const seatWind = seatWindFor(player, state.dealer);
   return tile.value === seatWind || tile.value === state.roundWind;
+}
+
+function valueHonorMeld(
+  meld: PlayerMeld,
+  state: RoundState,
+  player: PlayerIndex,
+): boolean {
+  if (meld.type !== 'triplet' && meld.type !== 'quad') return false;
+  const tile = meld.tiles[0];
+  return tile ? isValueHonor(tile, state, player) : false;
+}
+
+function hasValueHonorAnchor(
+  playerState: RoundPlayerState,
+  state: RoundState,
+  player: PlayerIndex,
+): boolean {
+  return playerState.melds.some((meld) => valueHonorMeld(meld, state, player));
+}
+
+function meldsAreAllSimple(melds: readonly PlayerMeld[]): boolean {
+  return melds.every((meld) => meld.tiles.every(isSimpleTile));
 }
 
 function keepValue(tile: Tile, hand: readonly Tile[], state: RoundState, player: PlayerIndex): number {
@@ -160,13 +187,14 @@ function currentBaseShanten(player: RoundPlayerState): number {
 function bestPostCallDiscardShanten(
   concealedAfterClaim: readonly Tile[],
   fixedMeldCount: number,
+  acceptsAfterDiscard: (tiles: readonly Tile[]) => boolean = () => true,
 ): number {
   let best = Infinity;
   for (const tile of concealedAfterClaim) {
     const id = requireId(tile);
     if (id === null) continue;
     const afterDiscard = removeIds(concealedAfterClaim, [id]);
-    if (!afterDiscard) continue;
+    if (!afterDiscard || !acceptsAfterDiscard(afterDiscard)) continue;
     try {
       best = Math.min(best, structuralShanten(afterDiscard, fixedMeldCount));
     } catch {
@@ -179,6 +207,11 @@ function bestPostCallDiscardShanten(
 function reactionDiscardTile(state: RoundState): Tile | null {
   if (state.phase.kind !== 'reactions') return null;
   return state.players[state.phase.discarder].discards[state.phase.discardIndex]?.tile ?? null;
+}
+
+function selectedTiles(player: RoundPlayerState, ids: readonly number[]): Tile[] | null {
+  const selected = ids.map((id) => player.concealed.find((tile) => tile.id === id));
+  return selected.some((tile) => tile === undefined) ? null : selected as Tile[];
 }
 
 function chooseCall(
@@ -194,16 +227,29 @@ function chooseCall(
     return null;
   }
   const discard = reactionDiscardTile(state);
+  const existingValueAnchor = hasValueHonorAnchor(player, state, playerIndex);
+  const existingMeldsSimple = meldsAreAllSimple(player.melds);
   const candidates: Array<{ action: RoundAction; after: number; priority: number }> = [];
 
   for (const legal of actions) {
-    if (legal.type === 'pon' || legal.type === 'chi') {
+    if ((legal.type === 'pon' || legal.type === 'chi') && discard) {
       for (const option of legal.options) {
+        const chosen = selectedTiles(player, option);
         const afterClaim = removeIds(player.concealed, option);
-        if (!afterClaim) continue;
-        const after = bestPostCallDiscardShanten(afterClaim, player.melds.length + 1);
+        if (!chosen || !afterClaim) continue;
+
+        const valueHonorPon = legal.type === 'pon' && isValueHonor(discard, state, playerIndex);
+        const valueAnchor = existingValueAnchor || valueHonorPon;
+        const calledMeldSimple = isSimpleTile(discard) && chosen.every(isSimpleTile);
+        const canPursueTanyao = !valueAnchor && existingMeldsSimple && calledMeldSimple;
+        if (!valueAnchor && !canPursueTanyao) continue;
+
+        const after = bestPostCallDiscardShanten(
+          afterClaim,
+          player.melds.length + 1,
+          valueAnchor ? undefined : (tiles) => tiles.every(isSimpleTile),
+        );
         if (!Number.isFinite(after)) continue;
-        const valueHonorPon = legal.type === 'pon' && discard !== null && isValueHonor(discard, state, playerIndex);
         if (after < before || (valueHonorPon && after <= before)) {
           candidates.push({
             action: { type: legal.type, player: playerIndex, tileIds: option } as RoundAction,
@@ -214,10 +260,21 @@ function chooseCall(
       }
     }
 
-    if (legal.type === 'daiminkan' && riichiOpponents(state, playerIndex).length === 0) {
+    if (legal.type === 'daiminkan' && discard && riichiOpponents(state, playerIndex).length === 0) {
       for (const option of legal.options) {
+        const chosen = selectedTiles(player, option);
         const afterClaim = removeIds(player.concealed, option);
-        if (!afterClaim) continue;
+        if (!chosen || !afterClaim) continue;
+
+        const valueAnchor = existingValueAnchor || isValueHonor(discard, state, playerIndex);
+        const tanyaoAnchor =
+          !valueAnchor &&
+          existingMeldsSimple &&
+          isSimpleTile(discard) &&
+          chosen.every(isSimpleTile) &&
+          afterClaim.every(isSimpleTile);
+        if (!valueAnchor && !tanyaoAnchor) continue;
+
         let after = Infinity;
         try {
           after = structuralShanten(afterClaim, player.melds.length + 1);
