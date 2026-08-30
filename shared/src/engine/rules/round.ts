@@ -4,7 +4,7 @@ import { sortTiles, tileTypeKey } from '../tiles/tiles';
 import type { Tile, Wind } from '../tiles/types';
 import { buildWall, drawTile, uraIndicators } from '../wall/wall';
 import type { RNG } from '../wall/prng';
-import { isRonFuriten, winningTileTypeKeys } from './waits';
+import { completesHandOnTile, isRonFuriten, winningTileTypeKeys } from './waits';
 import { resolveWinningHands } from './winning';
 import type {
   ApplyActionResult,
@@ -437,13 +437,15 @@ function performDiscard(
 
 function markPassedRonFuriten(state: RoundState): RoundState {
   if (state.phase.kind !== 'reactions') return state;
+  const discard = reactionDiscard(state);
+  if (!discard) return state;
   let players = state.players;
   for (const playerIndex of PLAYERS) {
     if (playerIndex === state.phase.discarder) continue;
     if (state.phase.ronClaims.some((claim) => claim.player === playerIndex)) continue;
     const player = players[playerIndex];
     if (isRonFuriten(player)) continue;
-    if (!scoreRonIgnoringFuriten(state, playerIndex)) continue;
+    if (!completesHandOnTile(player.concealed, discard.tile, player.melds)) continue;
     const replacement: RoundPlayerState = player.riichi !== 'none'
       ? { ...player, riichiFuriten: true }
       : { ...player, temporaryFuriten: true };
@@ -761,9 +763,6 @@ export function applyAction(state: RoundState, action: RoundAction): ApplyAction
   }
 
   if (state.phase.ronClaims.length > 0) {
-    // A Ron on a Riichi declaration discard prevents that declaration from completing, so the
-    // pending 1,000-point deposit is intentionally absent from state. Existing table sticks still
-    // go to the nearest Ron winner.
     const settled = settleRon(state, state.phase.discarder, state.phase.ronClaims);
     const result: RoundEndResult = {
       type: 'ron',
