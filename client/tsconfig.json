@@ -14,7 +14,14 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@mahjong-live/shared/single": ["../shared/src/engine/single/index.ts"],
+      "@mahjong-live/shared/rules": ["../shared/src/engine/rules/index.ts"],
+      "@mahjong-live/shared/match": ["../shared/src/engine/match/index.ts"],
+      "@mahjong-live/shared/tile-types": ["../shared/src/engine/tiles/types.ts"]
+    }
   },
   "include": ["src"]
 }
