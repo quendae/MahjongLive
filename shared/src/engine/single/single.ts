@@ -22,6 +22,8 @@ import type {
 const PLAYERS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const DEFAULT_SAFETY_CAP = 1024;
 
+type EngineFailure = Extract<ApplyActionResult, { ok: false }>;
+
 function mix32(value: number): number {
   let x = value >>> 0;
   x ^= x >>> 16;
@@ -105,11 +107,14 @@ function commitAction(
   source: SingleActionTrace['source'],
   events: RoundEvent[],
   trace: SingleActionTrace[],
-): { ok: true; state: SingleGameState } | { ok: false; result: ApplyActionResult } {
+): { ok: true; state: SingleGameState } | { ok: false; result: EngineFailure } {
   const result = applyAction(state.match.round, action);
   if (!result.ok) return { ok: false, result };
   events.push(...result.events);
-  trace.push({ source, ...(action.type !== 'resolve-reactions' ? { player: action.player } : {}), action });
+  const entry: SingleActionTrace = action.type === 'resolve-reactions'
+    ? { source, action }
+    : { source, player: action.player, action };
+  trace.push(entry);
   return { ok: true, state: withRound(state, result.state) };
 }
 
@@ -294,17 +299,11 @@ export function applyHumanDecision(
   }
 
   const driven = driveSingleGame(working, safetyCap);
-  return driven.ok
-    ? {
-        ...driven,
-        events: [...events, ...driven.events],
-        trace: [...trace, ...driven.trace],
-      }
-    : {
-        ...driven,
-        events: [...events, ...driven.events],
-        trace: [...trace, ...driven.trace],
-      };
+  return {
+    ...driven,
+    events: [...events, ...driven.events],
+    trace: [...trace, ...driven.trace],
+  };
 }
 
 /** Starts the next hand after the UI/user has acknowledged the completed-hand result. */
