@@ -194,7 +194,7 @@ describe('Tsumo settlement', () => {
     const end = result.state.phase.result;
     expect(end.type).toBe('tsumo');
     if (end.type !== 'tsumo') return;
-    expect(end.score.yaku.map((yaku) => yaku.name)).toContain('Haitei Raoyue');
+    expect(end.score.yaku.map((yaku) => yaku.name)).toContain('Haitei');
   });
 });
 
@@ -255,7 +255,7 @@ describe('Ron reaction window', () => {
     const claim = applyAction(state, { type: 'ron', player: 1 });
     expect(claim.ok).toBe(true);
     if (!claim.ok || claim.state.phase.kind !== 'reactions') return;
-    expect(claim.state.phase.ronClaims[0].score.yaku.map((yaku) => yaku.name)).toContain('Houtei Raoyui');
+    expect(claim.state.phase.ronClaims[0].score.yaku.map((yaku) => yaku.name)).toContain('Houtei');
   });
 
   it('ends as exhaustive draw after the last-live discard when nobody claims Ron and keeps the pot', () => {
