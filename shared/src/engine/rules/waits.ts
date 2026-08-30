@@ -17,6 +17,29 @@ function physicalTypeCounts(
 }
 
 /**
+ * Whether this exact tile structurally completes the player's current pre-win state.
+ *
+ * This deliberately ignores yaku. Passing a structurally winning discard creates Furiten even
+ * when that particular completed hand would not be legal to score because it has no yaku.
+ */
+export function completesHandOnTile(
+  concealedBeforeWin: readonly Tile[],
+  winningTile: Tile,
+  fixedMelds: readonly WinningMeld[] = [],
+): boolean {
+  const counts = physicalTypeCounts(concealedBeforeWin, fixedMelds);
+  if ((counts.get(tileTypeKey(winningTile)) ?? 0) >= 4) return false;
+  return resolveWinningHands({
+    concealedBeforeWin,
+    winningTile,
+    fixedMelds,
+    winCondition: 'ron',
+    seatWind: 'south',
+    roundWind: 'east',
+  }).length > 0;
+}
+
+/**
  * Every tile type that structurally completes the player's current pre-win tile state.
  *
  * This deliberately ignores yaku. Furiten and Riichi-tenpai are properties of the hand's waits,
