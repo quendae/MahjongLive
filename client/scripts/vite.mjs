@@ -12,7 +12,10 @@ const repoRoot = resolve(clientRoot, '..');
 const vitestPackage = realpathSync(resolve(repoRoot, 'shared/node_modules/vitest/package.json'));
 const requireFromVitest = createRequire(vitestPackage);
 const viteEntry = requireFromVitest.resolve('vite');
-const vite = await import(pathToFileURL(viteEntry).href);
+const viteModule = await import(pathToFileURL(viteEntry).href);
+// require.resolve() may choose Vite's CJS compatibility entry. Dynamic import wraps that API
+// under `default`, whereas the native ESM entry exposes the functions directly.
+const vite = viteModule.default ?? viteModule;
 
 const alias = [
   { find: '@mahjong-live/shared/single', replacement: resolve(repoRoot, 'shared/src/engine/single/index.ts') },
