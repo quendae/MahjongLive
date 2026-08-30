@@ -3,6 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rules": "./src/engine/rules/index.ts",
+    "./match": "./src/engine/match/index.ts",
+    "./bot": "./src/engine/bot/index.ts",
+    "./single": "./src/engine/single/index.ts",
+    "./shanten": "./src/engine/shanten/shanten.ts",
+    "./prng": "./src/engine/wall/prng.ts",
+    "./tiles": "./src/engine/tiles/tiles.ts",
+    "./tile-types": "./src/engine/tiles/types.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
