@@ -22,6 +22,7 @@ import type {
   SingleDriveResult,
   SingleDriveSuccess,
   SingleGameState,
+  SinglePresentationFrame,
 } from './types';
 
 const PLAYERS: readonly PlayerIndex[] = [0, 1, 2, 3];
@@ -98,8 +99,9 @@ function success(
   prompt: HumanPrompt,
   events: readonly RoundEvent[],
   trace: readonly SingleActionTrace[],
+  frames: readonly SinglePresentationFrame[],
 ): SingleDriveSuccess {
-  return { ok: true, state, prompt, events, trace };
+  return { ok: true, state, prompt, events, trace, frames };
 }
 
 function failure(
@@ -108,8 +110,9 @@ function failure(
   message: string,
   events: readonly RoundEvent[],
   trace: readonly SingleActionTrace[],
+  frames: readonly SinglePresentationFrame[],
 ): SingleDriveFailure {
-  return { ok: false, state, code, message, events, trace };
+  return { ok: false, state, code, message, events, trace, frames };
 }
 
 function withRound(state: SingleGameState, round: RoundState): SingleGameState {
@@ -122,15 +125,18 @@ function commitAction(
   source: SingleActionTrace['source'],
   events: RoundEvent[],
   trace: SingleActionTrace[],
+  frames: SinglePresentationFrame[],
 ): { ok: true; state: SingleGameState } | { ok: false; result: EngineFailure } {
   const result = applyAction(state.match.round, action);
   if (!result.ok) return { ok: false, result };
+  const nextState = withRound(state, result.state);
   events.push(...result.events);
   const entry: SingleActionTrace = action.type === 'resolve-reactions'
     ? { source, action }
     : { source, player: action.player, action };
   trace.push(entry);
-  return { ok: true, state: withRound(state, result.state) };
+  frames.push({ state: nextState, events: result.events, trace: entry });
+  return { ok: true, state: nextState };
 }
 
 function forcedHumanAutomaticAction(state: SingleGameState): RoundAction | null {
@@ -153,6 +159,7 @@ function processBotReactions(
   state: SingleGameState,
   events: RoundEvent[],
   trace: SingleActionTrace[],
+  frames: SinglePresentationFrame[],
 ): { ok: true; state: SingleGameState } | { ok: false; message: string; state: SingleGameState } {
   let working = state;
   const phase = working.match.round.phase;
@@ -172,7 +179,7 @@ function processBotReactions(
     if (action.type !== 'ron' && action.type !== 'chi' && action.type !== 'pon' && action.type !== 'daiminkan') {
       return { ok: false, state: working, message: `Bot ${player} returned non-reaction ${action.type}` };
     }
-    const committed = commitAction(working, action, 'bot', events, trace);
+    const committed = commitAction(working, action, 'bot', events, trace, frames);
     if (!committed.ok) {
       return {
         ok: false,
@@ -183,7 +190,7 @@ function processBotReactions(
     working = committed.state;
   }
 
-  const resolved = commitAction(working, { type: 'resolve-reactions' }, 'system', events, trace);
+  const resolved = commitAction(working, { type: 'resolve-reactions' }, 'system', events, trace, frames);
   if (!resolved.ok) {
     return {
       ok: false,
@@ -208,16 +215,17 @@ export function driveSingleGame(
     : state;
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
+  const frames: SinglePresentationFrame[] = [];
 
   for (let step = 0; step < safetyCap; step++) {
     const prompt = humanTurnPrompt(working);
-    if (prompt) return success(working, prompt, events, trace);
+    if (prompt) return success(working, prompt, events, trace, frames);
 
     const round = working.match.round;
     if (round.phase.kind === 'reactions' || round.phase.kind === 'kan-reactions') {
-      const reacted = processBotReactions(working, events, trace);
+      const reacted = processBotReactions(working, events, trace, frames);
       if (!reacted.ok) {
-        return failure(reacted.state, 'AUTOMATION_STALLED', reacted.message, events, trace);
+        return failure(reacted.state, 'AUTOMATION_STALLED', reacted.message, events, trace, frames);
       }
       working = reacted.state;
       continue;
@@ -225,7 +233,7 @@ export function driveSingleGame(
 
     const automaticHuman = forcedHumanAutomaticAction(working);
     if (automaticHuman) {
-      const committed = commitAction(working, automaticHuman, 'system', events, trace);
+      const committed = commitAction(working, automaticHuman, 'system', events, trace, frames);
       if (!committed.ok) {
         return failure(
           working,
@@ -233,6 +241,7 @@ export function driveSingleGame(
           `Forced human action was rejected: ${committed.result.error.code}`,
           events,
           trace,
+          frames,
         );
       }
       working = committed.state;
@@ -244,7 +253,7 @@ export function driveSingleGame(
       actor = round.phase.player;
     }
     if (actor === null || actor === working.humanSeat) {
-      return failure(working, 'AUTOMATION_STALLED', 'No automatic transition is available', events, trace);
+      return failure(working, 'AUTOMATION_STALLED', 'No automatic transition is available', events, trace, frames);
     }
 
     const decision = chooseBotDecisionForDifficulty(
@@ -253,9 +262,9 @@ export function driveSingleGame(
       singleBotDifficulty(working),
     );
     if (decision.type === 'pass') {
-      return failure(working, 'AUTOMATION_STALLED', `Bot ${actor} passed during its own turn`, events, trace);
+      return failure(working, 'AUTOMATION_STALLED', `Bot ${actor} passed during its own turn`, events, trace, frames);
     }
-    const committed = commitAction(working, decision.action, 'bot', events, trace);
+    const committed = commitAction(working, decision.action, 'bot', events, trace, frames);
     if (!committed.ok) {
       return failure(
         working,
@@ -263,12 +272,13 @@ export function driveSingleGame(
         `Bot ${actor} action ${decision.action.type} rejected: ${committed.result.error.code}`,
         events,
         trace,
+        frames,
       );
     }
     working = committed.state;
   }
 
-  return failure(working, 'SAFETY_CAP', `Automation exceeded ${safetyCap} actions`, events, trace);
+  return failure(working, 'SAFETY_CAP', `Automation exceeded ${safetyCap} actions`, events, trace, frames);
 }
 
 function isHumanReactionAction(action: RoundAction): boolean {
@@ -284,8 +294,9 @@ export function applyHumanDecision(
   const prompt = humanTurnPrompt(state);
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
+  const frames: SinglePresentationFrame[] = [];
   if (!prompt || (prompt.kind !== 'turn' && prompt.kind !== 'reaction')) {
-    return failure(state, 'ILLEGAL_HUMAN_ACTION', 'The game is not waiting for a human decision', events, trace);
+    return failure(state, 'ILLEGAL_HUMAN_ACTION', 'The game is not waiting for a human decision', events, trace, frames);
   }
 
   let working = state.botDifficulty === undefined
@@ -293,17 +304,17 @@ export function applyHumanDecision(
     : state;
   if (decision.type === 'pass') {
     if (prompt.kind !== 'reaction') {
-      return failure(state, 'INVALID_HUMAN_PASS', 'Pass is only valid during a reaction prompt', events, trace);
+      return failure(state, 'INVALID_HUMAN_PASS', 'Pass is only valid during a reaction prompt', events, trace, frames);
     }
   } else {
     const action = decision.action;
     if (action.type === 'resolve-reactions' || action.player !== state.humanSeat) {
-      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Action does not belong to the human seat', events, trace);
+      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Action does not belong to the human seat', events, trace, frames);
     }
     if (prompt.kind === 'reaction' && !isHumanReactionAction(action)) {
-      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Only Ron/Chi/Pon/Daiminkan or pass are valid reactions', events, trace);
+      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Only Ron/Chi/Pon/Daiminkan or pass are valid reactions', events, trace, frames);
     }
-    const committed = commitAction(working, action, 'human', events, trace);
+    const committed = commitAction(working, action, 'human', events, trace, frames);
     if (!committed.ok) {
       return failure(
         state,
@@ -311,6 +322,7 @@ export function applyHumanDecision(
         `${committed.result.error.code}: ${committed.result.error.message}`,
         events,
         trace,
+        frames,
       );
     }
     working = committed.state;
@@ -319,9 +331,9 @@ export function applyHumanDecision(
   // A human reaction (including pass) completes only their response. Other seats still answer
   // against the same phase, then the reducer resolves priority exactly once.
   if (prompt.kind === 'reaction') {
-    const reacted = processBotReactions(working, events, trace);
+    const reacted = processBotReactions(working, events, trace, frames);
     if (!reacted.ok) {
-      return failure(reacted.state, 'AUTOMATION_STALLED', reacted.message, events, trace);
+      return failure(reacted.state, 'AUTOMATION_STALLED', reacted.message, events, trace, frames);
     }
     working = reacted.state;
   }
@@ -331,6 +343,7 @@ export function applyHumanDecision(
     ...driven,
     events: [...events, ...driven.events],
     trace: [...trace, ...driven.trace],
+    frames: [...frames, ...driven.frames],
   };
 }
 
@@ -341,11 +354,12 @@ export function continueSingleGame(
 ): SingleDriveResult {
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
+  const frames: SinglePresentationFrame[] = [];
   if (state.match.status === 'ended') {
-    return success(state, { kind: 'match-ended', result: state.match.result! }, events, trace);
+    return success(state, { kind: 'match-ended', result: state.match.result! }, events, trace, frames);
   }
   if (state.match.round.phase.kind !== 'ended') {
-    return failure(state, 'ROUND_NOT_ENDED', 'The current hand is still in progress', events, trace);
+    return failure(state, 'ROUND_NOT_ENDED', 'The current hand is still in progress', events, trace, frames);
   }
 
   const normalizedState = state.botDifficulty === undefined
@@ -357,11 +371,11 @@ export function continueSingleGame(
     createRNG(deriveSingleRoundSeed(normalizedState.seed, nextRoundNumber)),
   );
   if (!advanced.ok) {
-    return failure(normalizedState, 'ROUND_NOT_ENDED', advanced.message, events, trace);
+    return failure(normalizedState, 'ROUND_NOT_ENDED', advanced.message, events, trace, frames);
   }
   const working = { ...normalizedState, match: advanced.state };
   if (advanced.state.status === 'ended') {
-    return success(working, { kind: 'match-ended', result: advanced.state.result! }, events, trace);
+    return success(working, { kind: 'match-ended', result: advanced.state.result! }, events, trace, frames);
   }
   return driveSingleGame(working, safetyCap);
 }
