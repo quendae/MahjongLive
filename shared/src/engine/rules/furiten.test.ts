@@ -39,6 +39,18 @@ function pinfuWait4p(startId = 0): Tile[] {
   ];
 }
 
+function noYakuWait4s(startId = 1000): Tile[] {
+  let id = startId;
+  const t = (tile: Tile) => physical(tile, id++);
+  return [
+    t(suited('man', 1)), t(suited('man', 2)), t(suited('man', 3)),
+    t(suited('man', 4)), t(suited('man', 5)), t(suited('man', 6)),
+    t(suited('pin', 7)), t(suited('pin', 8)), t(suited('pin', 9)),
+    t(suited('sou', 3)), t(suited('sou', 5)),
+    t(suited('sou', 9)), t(suited('sou', 9)),
+  ];
+}
+
 function reactionForPlayer1(
   p1: RoundPlayerState,
   discard = physical(suited('pin', 4), 900),
@@ -131,6 +143,17 @@ describe('temporary Furiten', () => {
     expect(draw.ok).toBe(true);
     if (!draw.ok) return;
     expect(draw.state.players[1].temporaryFuriten).toBe(false);
+  });
+
+  it('is also set when the passed tile completes the hand structurally but the Ron has no yaku', () => {
+    const discard = physical(suited('sou', 4), 1900);
+    const state = reactionForPlayer1(player(noYakuWait4s(1800)), discard);
+    expect(getLegalActions(state, 1).some((action) => action.type === 'ron')).toBe(false);
+
+    const passed = applyAction(state, { type: 'resolve-reactions' });
+    expect(passed.ok).toBe(true);
+    if (!passed.ok) return;
+    expect(passed.state.players[1].temporaryFuriten).toBe(true);
   });
 });
 
