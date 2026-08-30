@@ -1,17 +1,17 @@
-import { YakuDetector } from './context';
-
-// OPEN-HAND NOTE: Riichi, Ippatsu, and Menzen Tsumo all require a closed (menzen) hand. This
-// plan never constructs an open WinningHand (see the plan's "Open Hands" section), so no
-// closed-hand check appears here — add one when open melds exist.
+import { YakuDetector, isClosedHand } from './context';
 
 export const detectRiichi: YakuDetector = (hand) => {
+  if (!isClosedHand(hand)) return null;
+  if (hand.isDoubleRiichi === true) return null;
   return hand.isRiichi ? { name: 'Riichi', han: 1 } : null;
 };
 
 export const detectIppatsu: YakuDetector = (hand) => {
+  if (!isClosedHand(hand)) return null;
   return hand.isIppatsu ? { name: 'Ippatsu', han: 1 } : null;
 };
 
 export const detectMenzenTsumo: YakuDetector = (hand) => {
+  if (!isClosedHand(hand)) return null;
   return hand.winCondition === 'tsumo' ? { name: 'Menzen Tsumo', han: 1 } : null;
 };
