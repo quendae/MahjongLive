@@ -96,6 +96,70 @@ describe('scoring end-to-end', () => {
     expect(result.base.limit).toBe('baiman');
   });
 
+  it('applies project Kiriage Mangan to a real 4 han 30 fu hand', () => {
+    const winningTile = suited('pin', 4);
+    const melds: WinningMeld[] = [
+      { type: 'sequence', tiles: [suited('man', 2), suited('man', 3), suited('man', 4)] },
+      { type: 'sequence', tiles: [suited('man', 2), suited('man', 3), suited('man', 4)] },
+      { type: 'sequence', tiles: [winningTile, suited('pin', 5), suited('pin', 6)] },
+      { type: 'sequence', tiles: [suited('sou', 6), suited('sou', 7), suited('sou', 8)] },
+    ];
+    const pair = [suited('pin', 5), suited('pin', 5)];
+    const allTiles = [...melds.flatMap((meld) => meld.tiles), ...pair];
+    const hand: StandardWinningHand = {
+      ...base(allTiles, { winningTile, isRiichi: true }),
+      shape: 'standard',
+      melds,
+      pair,
+    };
+
+    const result = scoreWinningHand(hand, { doraIndicators: [] }, SETTLEMENT);
+    expect(result.status).toBe('scored');
+    if (result.status !== 'scored') return;
+    expect(result.scoringYaku.map((yaku) => yaku.name).sort()).toEqual([
+      'Iipeikou',
+      'Pinfu',
+      'Riichi',
+      'Tanyao',
+    ]);
+    expect(result.han).toBe(4);
+    expect(result.fu?.fu).toBe(30);
+    expect(result.base).toEqual({ basePoints: 2000, limit: 'mangan' });
+    expect(result.payments.winnerGain).toBe(8000);
+  });
+
+  it('reaches Kazoe Yakuman at 13+ total Han through yaku plus Dora', () => {
+    const winningTile = suited('man', 4);
+    const redFive = suited('man', 5, true);
+    const melds: WinningMeld[] = [
+      { type: 'sequence', tiles: [suited('man', 1), suited('man', 2), suited('man', 3)] },
+      { type: 'sequence', tiles: [suited('man', 1), suited('man', 2), suited('man', 3)] },
+      { type: 'sequence', tiles: [winningTile, redFive, suited('man', 6)] },
+      { type: 'sequence', tiles: [suited('man', 4), suited('man', 5), suited('man', 6)] },
+    ];
+    const pair = [suited('man', 7), suited('man', 7)];
+    const allTiles = [...melds.flatMap((meld) => meld.tiles), ...pair];
+    const hand: StandardWinningHand = {
+      ...base(allTiles, { winningTile, isRiichi: true }),
+      shape: 'standard',
+      melds,
+      pair,
+    };
+
+    const result = scoreWinningHand(
+      hand,
+      { doraIndicators: [suited('man', 6)] },
+      SETTLEMENT,
+    );
+    expect(result.status).toBe('scored');
+    if (result.status !== 'scored') return;
+    expect(result.yakuHan).toBe(11); // Chinitsu 6 + Ryanpeikou 3 + Pinfu 1 + Riichi 1
+    expect(result.dora).toEqual({ dora: 2, uraDora: 0, akaDora: 1, total: 3 });
+    expect(result.han).toBe(14);
+    expect(result.base).toEqual({ basePoints: 8000, limit: 'kazoe-yakuman' });
+    expect(result.payments.winnerGain).toBe(32000);
+  });
+
   it('chooses the higher-paying semantic interpretation of the same physical tiles', () => {
     // Physical shape: 112233m 445566p 77s. It can be seven pairs (2 han Chiitoitsu) or
     // 123m+123m+456p+456p+77s (3 han Ryanpeikou). The winning tile is the second 7s, a tanki in
