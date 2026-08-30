@@ -24,6 +24,8 @@ function player(
     discards: [],
     riichi: 'none',
     ippatsuEligible: false,
+    temporaryFuriten: false,
+    riichiFuriten: false,
     drawCount: 0,
     discardCount: 0,
     ...overrides,
@@ -92,7 +94,7 @@ function ronState(
   }
   return stateWith(
     [mutable[0], mutable[1], mutable[2], mutable[3]],
-    { kind: 'reactions', discarder: 0, discardIndex: 0, ronClaims: [] },
+    { kind: 'reactions', discarder: 0, discardIndex: 0, ronClaims: [], callClaims: [] },
     overrides,
   );
 }
@@ -202,7 +204,7 @@ describe('Ron reaction window', () => {
   it('validates Ron against the exact discard object, then settles on resolve-reactions', () => {
     const hand = pinfuHand(400);
     const state = ronState([{ playerIndex: 1, before: hand.before }], hand.winningTile);
-    expect(getLegalActions(state, 1)).toEqual([{ type: 'ron' }]);
+    expect(getLegalActions(state, 1).some((action) => action.type === 'ron')).toBe(true);
     expect(getLegalActions(state, 0)).toEqual([]);
 
     const claim = applyAction(state, { type: 'ron', player: 1 });
@@ -210,7 +212,7 @@ describe('Ron reaction window', () => {
     if (!claim.ok || claim.state.phase.kind !== 'reactions') return;
     expect(claim.state.phase.ronClaims).toHaveLength(1);
     expect(claim.state.phase.ronClaims[0].score.scoringYaku.map((yaku) => yaku.name)).toContain('Pinfu');
-    expect(claim.state.players[0].points).toBe(25_000); // claim alone does not settle
+    expect(claim.state.players[0].points).toBe(25_000);
 
     const resolved = applyAction(claim.state, { type: 'resolve-reactions' });
     expect(resolved.ok).toBe(true);
@@ -223,7 +225,6 @@ describe('Ron reaction window', () => {
   it('collects and settles two simultaneous Ron winners against one discarder', () => {
     const first = pinfuHand(500);
     const second = pinfuHand(600);
-    // Both waits require the same 4p tile type; the actual winning object is the one discard.
     const state = ronState([
       { playerIndex: 1, before: first.before },
       { playerIndex: 2, before: second.before },
@@ -264,7 +265,11 @@ describe('Ron reaction window', () => {
     const resolved = applyAction(state, { type: 'resolve-reactions' });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok || resolved.state.phase.kind !== 'ended') return;
-    expect(resolved.state.phase.result).toEqual({ type: 'exhaustive-draw' });
+    expect(resolved.state.phase.result).toEqual({
+      type: 'exhaustive-draw',
+      tenpaiPlayers: [],
+      notenPayments: [0, 0, 0, 0],
+    });
     expect(resolved.state.riichiSticks).toBe(2);
   });
 });

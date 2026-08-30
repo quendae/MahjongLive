@@ -18,7 +18,7 @@ export interface RoundDiscard {
   tsumogiri: boolean;
   /** This discard followed the final live-wall draw, so a Ron on it is Houtei. */
   wasLastLiveDraw: boolean;
-  /** Filled by Plan 6 when a discard is claimed for Chi/Pon/Kan. */
+  /** Set when this discard is consumed by a Chi/Pon/Kan. */
   calledBy?: PlayerIndex;
 }
 
@@ -31,6 +31,10 @@ export interface RoundPlayerState {
   discards: readonly RoundDiscard[];
   riichi: RiichiState;
   ippatsuEligible: boolean;
+  /** Passed a legal Ron since the previous own draw. */
+  temporaryFuriten: boolean;
+  /** Passed a legal Ron after declaring Riichi; persists for the hand. */
+  riichiFuriten: boolean;
   drawCount: number;
   discardCount: number;
 }
@@ -40,12 +44,28 @@ export interface RonClaim {
   score: ScoredHand;
 }
 
+export type CallKind = 'chi' | 'pon';
+
+export interface CallClaim {
+  player: PlayerIndex;
+  kind: CallKind;
+  /** Exact two physical hand tiles used with the current reaction discard. */
+  tileIds: readonly [number, number];
+}
+
+export interface PendingRiichi {
+  player: PlayerIndex;
+  tileId: number;
+  doubleRiichi: boolean;
+}
+
 export type RoundPhase =
   | { kind: 'awaiting-draw'; player: PlayerIndex }
   | {
       kind: 'awaiting-discard';
       player: PlayerIndex;
-      drawnTileId: number;
+      /** Null after a resolved Chi/Pon because the caller did not draw. */
+      drawnTileId: number | null;
       wasLastLiveDraw: boolean;
     }
   | {
@@ -53,6 +73,9 @@ export type RoundPhase =
       discarder: PlayerIndex;
       discardIndex: number;
       ronClaims: readonly RonClaim[];
+      callClaims: readonly CallClaim[];
+      /** Riichi becomes active and paid only if this declaration discard is not won by Ron. */
+      pendingRiichi?: PendingRiichi;
     }
   | { kind: 'ended'; result: RoundEndResult };
 
@@ -89,25 +112,37 @@ export type RoundEndResult =
     }
   | {
       type: 'exhaustive-draw';
+      tenpaiPlayers: readonly PlayerIndex[];
+      /** Per-seat point delta from the 3,000-point noten pool. */
+      notenPayments: readonly [number, number, number, number];
     };
 
 export type RoundAction =
   | { type: 'draw'; player: PlayerIndex }
   | { type: 'discard'; player: PlayerIndex; tileId: number }
+  | { type: 'riichi-discard'; player: PlayerIndex; tileId: number }
   | { type: 'tsumo'; player: PlayerIndex }
   | { type: 'ron'; player: PlayerIndex }
+  | { type: 'chi'; player: PlayerIndex; tileIds: readonly [number, number] }
+  | { type: 'pon'; player: PlayerIndex; tileIds: readonly [number, number] }
   | { type: 'resolve-reactions' };
 
 export type LegalAction =
   | { type: 'draw' }
   | { type: 'discard'; tileIds: readonly number[] }
+  | { type: 'riichi-discard'; tileIds: readonly number[] }
   | { type: 'tsumo' }
-  | { type: 'ron' };
+  | { type: 'ron' }
+  | { type: 'chi'; options: readonly (readonly [number, number])[] }
+  | { type: 'pon'; options: readonly (readonly [number, number])[] };
 
 export type RoundEvent =
   | { type: 'TileDrawn'; player: PlayerIndex; tile: Tile; wasLastLiveDraw: boolean }
   | { type: 'TileDiscarded'; player: PlayerIndex; discard: RoundDiscard }
+  | { type: 'RiichiDeclared'; player: PlayerIndex; doubleRiichi: boolean; tileId: number }
   | { type: 'RonClaimed'; player: PlayerIndex; discarder: PlayerIndex; tile: Tile }
+  | { type: 'CallClaimed'; player: PlayerIndex; kind: CallKind; discarder: PlayerIndex }
+  | { type: 'CallMade'; player: PlayerIndex; kind: CallKind; meld: PlayerMeld }
   | { type: 'HandWon'; result: Extract<RoundEndResult, { type: 'tsumo' | 'ron' }> }
   | { type: 'RoundEnded'; result: RoundEndResult };
 
@@ -119,8 +154,12 @@ export type EngineErrorCode =
   | 'TILE_NOT_FOUND'
   | 'MISSING_TILE_ID'
   | 'ILLEGAL_WIN'
+  | 'ILLEGAL_RIICHI'
+  | 'FURITEN'
+  | 'ILLEGAL_CALL'
   | 'CANNOT_RON_OWN_DISCARD'
-  | 'DUPLICATE_RON_CLAIM';
+  | 'DUPLICATE_RON_CLAIM'
+  | 'DUPLICATE_CALL_CLAIM';
 
 export interface EngineError {
   code: EngineErrorCode;

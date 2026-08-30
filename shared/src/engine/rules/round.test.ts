@@ -55,6 +55,8 @@ describe('basic draw/discard/reaction flow', () => {
     expect(draw.state.phase.kind).toBe('awaiting-discard');
     if (draw.state.phase.kind !== 'awaiting-discard') return;
     const drawnTileId = draw.state.phase.drawnTileId;
+    expect(drawnTileId).not.toBeNull();
+    if (drawnTileId === null) return;
     const discard = applyAction(draw.state, { type: 'discard', player: 0, tileId: drawnTileId });
     expect(discard.ok).toBe(true);
     if (!discard.ok) return;
