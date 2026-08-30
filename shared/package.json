@@ -6,7 +6,8 @@
   "exports": {
     "./rules": "./src/engine/rules/index.ts",
     "./prng": "./src/engine/wall/prng.ts",
-    "./tiles": "./src/engine/tiles/index.ts"
+    "./tiles": "./src/engine/tiles/tiles.ts",
+    "./tile-types": "./src/engine/tiles/types.ts"
   },
   "scripts": {
     "test": "vitest run",
