@@ -1,6 +1,6 @@
 import { doraFromIndicator } from '../scoring/dora';
-import { structuralShanten } from '../shanten/shanten';
-import { isTerminal, tileTypeKey } from '../tiles/tiles';
+import { structuralShanten, structuralShantenAfterDraw } from '../shanten/shanten';
+import { allTileTypes, isTerminal, tileTypeKey } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
 import { getLegalActions, seatWindFor } from '../rules/round';
 import type {
@@ -23,6 +23,10 @@ export interface DiscardEvaluation {
   doraCost: number;
   keepValue: number;
 }
+
+const TILE_TYPES = allTileTypes();
+const MAX_UKEIRE_SHANTEN = 1;
+const MAX_UKEIRE_CANDIDATES = 6;
 
 function requireId(tile: Tile): number | null {
   return typeof tile.id === 'number' ? tile.id : null;
@@ -130,6 +134,65 @@ function dangerScore(tile: Tile, state: RoundState, player: PlayerIndex): number
   return danger;
 }
 
+function knownPhysicalIdsByType(state: RoundState, player: PlayerIndex): Map<string, Set<number>> {
+  const known = new Map<string, Set<number>>();
+  const add = (tile: Tile) => {
+    const id = requireId(tile);
+    if (id === null) return;
+    const key = tileTypeKey(tile);
+    const ids = known.get(key) ?? new Set<number>();
+    ids.add(id);
+    known.set(key, ids);
+  };
+
+  // The bot may use only its own concealed tiles plus public information. Called discards also
+  // appear inside melds, so physical IDs deliberately deduplicate the same visible tile.
+  for (const tile of state.players[player].concealed) add(tile);
+  for (const roundPlayer of state.players) {
+    for (const discard of roundPlayer.discards) add(discard.tile);
+    for (const meld of roundPlayer.melds) for (const tile of meld.tiles) add(tile);
+  }
+  for (const indicator of state.wall.doraIndicators) add(indicator);
+  return known;
+}
+
+/**
+ * Exact effective-tile count for tenpai / one-shanten decisions, using no hidden information.
+ * Each tile type that lowers post-draw structural shanten contributes its still-unseen copies.
+ */
+export function evaluateDiscardUkeire(
+  state: RoundState,
+  player: PlayerIndex,
+  tileId: number,
+): number | null {
+  const roundPlayer = state.players[player];
+  const concealed = removeIds(roundPlayer.concealed, [tileId]);
+  if (!concealed) return null;
+  const fixedMeldCount = roundPlayer.melds.length;
+  let before: number;
+  try {
+    before = structuralShanten(concealed, fixedMeldCount);
+  } catch {
+    return null;
+  }
+  if (before > MAX_UKEIRE_SHANTEN) return 0;
+
+  const known = knownPhysicalIdsByType(state, player);
+  let ukeire = 0;
+  for (const candidate of TILE_TYPES) {
+    let after: number;
+    try {
+      after = structuralShantenAfterDraw([...concealed, candidate], fixedMeldCount);
+    } catch {
+      continue;
+    }
+    if (after >= before) continue;
+    const visibleCopies = known.get(tileTypeKey(candidate))?.size ?? 0;
+    ukeire += Math.max(0, 4 - visibleCopies);
+  }
+  return ukeire;
+}
+
 export function evaluateDiscard(
   state: RoundState,
   player: PlayerIndex,
@@ -156,6 +219,15 @@ export function evaluateDiscard(
   };
 }
 
+function baseDiscardCompare(a: DiscardEvaluation, b: DiscardEvaluation, folding: boolean): number {
+  if (folding && a.danger !== b.danger) return a.danger - b.danger;
+  if (a.shanten !== b.shanten) return a.shanten - b.shanten;
+  if (!folding && a.danger !== b.danger) return a.danger - b.danger;
+  if (a.doraCost !== b.doraCost) return a.doraCost - b.doraCost;
+  if (a.keepValue !== b.keepValue) return a.keepValue - b.keepValue;
+  return a.tileId - b.tileId;
+}
+
 function chooseDiscardId(
   state: RoundState,
   player: PlayerIndex,
@@ -168,15 +240,21 @@ function chooseDiscardId(
 
   const minShanten = Math.min(...evaluations.map((entry) => entry.shanten));
   const folding = riichiOpponents(state, player).length > 0 && minShanten >= 2;
+  evaluations.sort((a, b) => baseDiscardCompare(a, b, folding));
 
-  evaluations.sort((a, b) => {
-    if (folding && a.danger !== b.danger) return a.danger - b.danger;
-    if (a.shanten !== b.shanten) return a.shanten - b.shanten;
-    if (!folding && a.danger !== b.danger) return a.danger - b.danger;
-    if (a.doraCost !== b.doraCost) return a.doraCost - b.doraCost;
-    if (a.keepValue !== b.keepValue) return a.keepValue - b.keepValue;
-    return a.tileId - b.tileId;
-  });
+  if (minShanten <= MAX_UKEIRE_SHANTEN) {
+    const safestDanger = evaluations[0].danger;
+    const candidates = evaluations
+      .filter((entry) => entry.shanten === minShanten && (!folding || entry.danger === safestDanger))
+      .slice(0, MAX_UKEIRE_CANDIDATES)
+      .map((entry) => ({ entry, ukeire: evaluateDiscardUkeire(state, player, entry.tileId) ?? 0 }));
+
+    candidates.sort((a, b) =>
+      b.ukeire - a.ukeire || baseDiscardCompare(a.entry, b.entry, folding),
+    );
+    if (candidates[0]) return candidates[0].entry.tileId;
+  }
+
   return evaluations[0].tileId;
 }
 

@@ -44,15 +44,22 @@ function validateFixedMeldCount(fixedMeldCount: number, caller: string): number 
   return fixedMeldCount;
 }
 
+function structuralTileCount(fixedMeldCount: number, afterDraw: boolean): number {
+  return (afterDraw ? 14 : 13) - fixedMeldCount * 3;
+}
+
 function requireStructuralTileCount(
   tiles: readonly Tile[],
   fixedMeldCount: number,
   caller: string,
+  afterDraw = false,
 ): void {
   const fixed = validateFixedMeldCount(fixedMeldCount, caller);
-  const expected = 13 - fixed * 3;
+  const expected = structuralTileCount(fixed, afterDraw);
   if (tiles.length !== expected) {
-    throw new Error(`${caller} requires exactly ${expected} concealed tiles with ${fixed} fixed melds`);
+    throw new Error(
+      `${caller} requires exactly ${expected} concealed tiles with ${fixed} fixed melds${afterDraw ? ' after a draw' : ''}`,
+    );
   }
 }
 
@@ -117,6 +124,28 @@ function standardOverlap(counts: number[], meldsNeeded: number): number {
   return bestFrom(0, 0, 0, 0, false);
 }
 
+function standardStructuralShantenFromCounts(counts: number[], fixedMeldCount: number): number {
+  const concealedBaseline = 13 - fixedMeldCount * 3;
+  const meldsNeeded = MELDS_PER_HAND - fixedMeldCount;
+  return concealedBaseline - standardOverlap(counts, meldsNeeded);
+}
+
+function chiitoitsuShantenFromCounts(counts: number[]): number {
+  const pairs = counts.filter((count) => count >= 2).length;
+  const kinds = counts.filter((count) => count >= 1).length;
+  return 6 - pairs + Math.max(0, 7 - kinds);
+}
+
+function kokushiShantenFromCounts(counts: number[]): number {
+  let kinds = 0;
+  let hasPair = false;
+  for (const index of ORPHAN_INDICES) {
+    if (counts[index] >= 1) kinds += 1;
+    if (counts[index] >= 2) hasPair = true;
+  }
+  return 13 - kinds - (hasPair ? 1 : 0);
+}
+
 /** Shanten towards a closed standard hand: four melds plus a pair. */
 export function standardShanten(tiles: Tile[]): number {
   requireThirteenTiles(tiles, 'standardShanten');
@@ -132,31 +161,19 @@ export function standardShantenWithFixedMelds(
   fixedMeldCount: number,
 ): number {
   requireStructuralTileCount(tiles, fixedMeldCount, 'standardShantenWithFixedMelds');
-  const concealedBaseline = 13 - fixedMeldCount * 3;
-  const meldsNeeded = MELDS_PER_HAND - fixedMeldCount;
-  return concealedBaseline - standardOverlap(countByIndex(tiles), meldsNeeded);
+  return standardStructuralShantenFromCounts(countByIndex(tiles), fixedMeldCount);
 }
 
 /** Shanten towards Chiitoitsu (seven distinct pairs). */
 export function chiitoitsuShanten(tiles: Tile[]): number {
   requireThirteenTiles(tiles, 'chiitoitsuShanten');
-  const counts = countByIndex(tiles);
-  const pairs = counts.filter((count) => count >= 2).length;
-  const kinds = counts.filter((count) => count >= 1).length;
-  return 6 - pairs + Math.max(0, 7 - kinds);
+  return chiitoitsuShantenFromCounts(countByIndex(tiles));
 }
 
 /** Shanten towards Kokushi Musou. */
 export function kokushiShanten(tiles: Tile[]): number {
   requireThirteenTiles(tiles, 'kokushiShanten');
-  const counts = countByIndex(tiles);
-  let kinds = 0;
-  let hasPair = false;
-  for (const index of ORPHAN_INDICES) {
-    if (counts[index] >= 1) kinds += 1;
-    if (counts[index] >= 2) hasPair = true;
-  }
-  return 13 - kinds - (hasPair ? 1 : 0);
+  return kokushiShantenFromCounts(countByIndex(tiles));
 }
 
 /** How far a fully concealed 13-tile hand is from tenpai, using its closest legal shape. */
@@ -176,4 +193,20 @@ export function structuralShanten(
   requireStructuralTileCount(tiles, fixedMeldCount, 'structuralShanten');
   if (fixedMeldCount === 0) return shanten([...tiles]);
   return standardShantenWithFixedMelds(tiles, fixedMeldCount);
+}
+
+/**
+ * Structural distance immediately after a draw, before choosing the next discard.
+ * A complete shape returns -1, a draw that reaches tenpai returns 0, etc. This lets AI
+ * measure effective/improving draws without trying every possible follow-up discard.
+ */
+export function structuralShantenAfterDraw(
+  tiles: readonly Tile[],
+  fixedMeldCount = 0,
+): number {
+  requireStructuralTileCount(tiles, fixedMeldCount, 'structuralShantenAfterDraw', true);
+  const counts = countByIndex(tiles);
+  const standard = standardStructuralShantenFromCounts(counts, fixedMeldCount);
+  if (fixedMeldCount > 0) return standard;
+  return Math.min(standard, chiitoitsuShantenFromCounts(counts), kokushiShantenFromCounts(counts));
 }
