@@ -16,9 +16,9 @@ export interface RoundDiscard {
   tile: Tile;
   tileId: number;
   tsumogiri: boolean;
-  /** This discard followed the final live-wall draw, so a Ron on it is Houtei. */
+  /** This discard followed the final normal live-wall draw, so a Ron on it is Houtei. */
   wasLastLiveDraw: boolean;
-  /** Set when this discard is consumed by a Chi/Pon/Kan. */
+  /** Set when this discard is consumed by a Chi/Pon/Daiminkan. */
   calledBy?: PlayerIndex;
 }
 
@@ -31,9 +31,7 @@ export interface RoundPlayerState {
   discards: readonly RoundDiscard[];
   riichi: RiichiState;
   ippatsuEligible: boolean;
-  /** Passed a legal Ron since the previous own draw. */
   temporaryFuriten: boolean;
-  /** Passed a legal Ron after declaring Riichi; persists for the hand. */
   riichiFuriten: boolean;
   drawCount: number;
   discardCount: number;
@@ -44,13 +42,13 @@ export interface RonClaim {
   score: ScoredHand;
 }
 
-export type CallKind = 'chi' | 'pon';
+export type CallKind = 'chi' | 'pon' | 'daiminkan';
 
 export interface CallClaim {
   player: PlayerIndex;
   kind: CallKind;
-  /** Exact two physical hand tiles used with the current reaction discard. */
-  tileIds: readonly [number, number];
+  /** Two physical IDs for Chi/Pon, three for Daiminkan. */
+  tileIds: readonly number[];
 }
 
 export interface PendingRiichi {
@@ -67,6 +65,10 @@ export type RoundPhase =
       /** Null after a resolved Chi/Pon because the caller did not draw. */
       drawnTileId: number | null;
       wasLastLiveDraw: boolean;
+      /** The current draw came from the dead wall after a completed Kan. */
+      isRinshan?: boolean;
+      /** Tenhou-style delayed Dora from a Daiminkan/Shouminkan, revealed on discard/chained Kan. */
+      pendingKanDora?: boolean;
     }
   | {
       kind: 'reactions';
@@ -74,8 +76,15 @@ export type RoundPhase =
       discardIndex: number;
       ronClaims: readonly RonClaim[];
       callClaims: readonly CallClaim[];
-      /** Riichi becomes active and paid only if this declaration discard is not won by Ron. */
       pendingRiichi?: PendingRiichi;
+    }
+  | {
+      /** Shouminkan has been declared but has not yet completed because Chankan is possible. */
+      kind: 'kan-reactions';
+      declarer: PlayerIndex;
+      meldIndex: number;
+      addedTile: Tile;
+      ronClaims: readonly RonClaim[];
     }
   | { kind: 'ended'; result: RoundEndResult };
 
@@ -99,6 +108,8 @@ export interface RoundOptions {
   startingPoints?: number | readonly [number, number, number, number];
 }
 
+export type PointDeltaTuple = readonly [number, number, number, number];
+
 export type RoundEndResult =
   | {
       type: 'tsumo';
@@ -113,8 +124,10 @@ export type RoundEndResult =
   | {
       type: 'exhaustive-draw';
       tenpaiPlayers: readonly PlayerIndex[];
-      /** Per-seat point delta from the 3,000-point noten pool. */
-      notenPayments: readonly [number, number, number, number];
+      notenPayments: PointDeltaTuple;
+      /** Present only when Nagashi Mangan replaces ordinary noten settlement. */
+      nagashiPlayers?: readonly PlayerIndex[];
+      nagashiPayments?: PointDeltaTuple;
     };
 
 export type RoundAction =
@@ -125,6 +138,9 @@ export type RoundAction =
   | { type: 'ron'; player: PlayerIndex }
   | { type: 'chi'; player: PlayerIndex; tileIds: readonly [number, number] }
   | { type: 'pon'; player: PlayerIndex; tileIds: readonly [number, number] }
+  | { type: 'daiminkan'; player: PlayerIndex; tileIds: readonly [number, number, number] }
+  | { type: 'ankan'; player: PlayerIndex; tileIds: readonly [number, number, number, number] }
+  | { type: 'shouminkan'; player: PlayerIndex; meldIndex: number; tileId: number }
   | { type: 'resolve-reactions' };
 
 export type LegalAction =
@@ -134,15 +150,21 @@ export type LegalAction =
   | { type: 'tsumo' }
   | { type: 'ron' }
   | { type: 'chi'; options: readonly (readonly [number, number])[] }
-  | { type: 'pon'; options: readonly (readonly [number, number])[] };
+  | { type: 'pon'; options: readonly (readonly [number, number])[] }
+  | { type: 'daiminkan'; options: readonly (readonly [number, number, number])[] }
+  | { type: 'ankan'; options: readonly (readonly [number, number, number, number])[] }
+  | { type: 'shouminkan'; options: readonly { meldIndex: number; tileId: number }[] };
 
 export type RoundEvent =
-  | { type: 'TileDrawn'; player: PlayerIndex; tile: Tile; wasLastLiveDraw: boolean }
+  | { type: 'TileDrawn'; player: PlayerIndex; tile: Tile; wasLastLiveDraw: boolean; isRinshan?: boolean }
   | { type: 'TileDiscarded'; player: PlayerIndex; discard: RoundDiscard }
   | { type: 'RiichiDeclared'; player: PlayerIndex; doubleRiichi: boolean; tileId: number }
-  | { type: 'RonClaimed'; player: PlayerIndex; discarder: PlayerIndex; tile: Tile }
+  | { type: 'RonClaimed'; player: PlayerIndex; discarder: PlayerIndex; tile: Tile; chankan?: boolean }
   | { type: 'CallClaimed'; player: PlayerIndex; kind: CallKind; discarder: PlayerIndex }
   | { type: 'CallMade'; player: PlayerIndex; kind: CallKind; meld: PlayerMeld }
+  | { type: 'KanDeclared'; player: PlayerIndex; kind: 'ankan' | 'shouminkan'; meldIndex?: number }
+  | { type: 'KanCompleted'; player: PlayerIndex; kind: 'ankan' | 'daiminkan' | 'shouminkan'; meld: PlayerMeld }
+  | { type: 'DoraIndicatorRevealed'; count: number }
   | { type: 'HandWon'; result: Extract<RoundEndResult, { type: 'tsumo' | 'ron' }> }
   | { type: 'RoundEnded'; result: RoundEndResult };
 
@@ -157,6 +179,8 @@ export type EngineErrorCode =
   | 'ILLEGAL_RIICHI'
   | 'FURITEN'
   | 'ILLEGAL_CALL'
+  | 'ILLEGAL_KAN'
+  | 'KAN_LIMIT'
   | 'CANNOT_RON_OWN_DISCARD'
   | 'DUPLICATE_RON_CLAIM'
   | 'DUPLICATE_CALL_CLAIM';

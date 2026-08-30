@@ -260,7 +260,7 @@ describe('Ron reaction window', () => {
   });
 
   it('ends as exhaustive draw after the last-live discard when nobody claims Ron and keeps the pot', () => {
-    const discardTile = physical(suited('man', 9), 800);
+    const discardTile = physical(suited('man', 5), 800);
     const state = ronState([], discardTile, true, { riichiSticks: 2 });
     const resolved = applyAction(state, { type: 'resolve-reactions' });
     expect(resolved.ok).toBe(true);
