@@ -39,10 +39,13 @@ survives until the declarer's next discard, and is cancelled for all players whe
 current structural winning tile type appears in the player's own discard history, Ron is blocked
 on every wait; Tsumo remains legal.
 
-`Ruling:` **Temporary Furiten is created by passing a legal Ron opportunity.** On
-`resolve-reactions`, a player who could legally Ron (before Furiten) but submitted no Ron claim
-becomes temporary Furiten. It clears on that player's next normal draw. If the player is already in
-Riichi, passing Ron instead sets `riichiFuriten`, which lasts for the hand.
+`Ruling:` **Temporary/Riichi Furiten is triggered by passing a structural winning tile, even if
+that completed hand has no yaku.** On `resolve-reactions`, any non-Furiten player whose hand would
+be structurally complete with the current discard and who submitted no Ron claim enters temporary
+Furiten. This intentionally uses hand completion rather than `ScoredHand`, matching Tenhou-style
+Furiten semantics. Temporary Furiten clears on that player's next normal draw. If the player is
+already in Riichi, passing the structural win instead sets `riichiFuriten`, which lasts for the
+hand.
 
 `Ruling:` **Calls are claims until reaction resolution.** `chi` carries two exact hand tile IDs;
 `pon` carries two exact hand tile IDs. The discard is implicit from the reaction window. A resolved
@@ -104,7 +107,7 @@ shared/src/engine/rules/exhaustive.test.ts
 
 - Add `temporaryFuriten` and `riichiFuriten` to player state.
 - Ron legality checks permanent + temporary + Riichi Furiten.
-- On resolved pass, mark Furiten only for players who had an otherwise legal Ron.
+- On resolved pass, mark Furiten from structural completion, including no-yaku completions.
 - Clear temporary Furiten on that player's next draw.
 - Do not block Tsumo.
 
@@ -127,7 +130,8 @@ shared/src/engine/rules/exhaustive.test.ts
 
 - Existing Plan 1-5 tests stay green.
 - New reaction tests include simultaneous Ron + Pon (Ron wins), Pon + Chi (Pon wins), red-five Chi
-  combinations, pass-Ron temporary Furiten, Riichi pass-Ron persistent Furiten, call cancelling
-  Ippatsu, Double Riichi invalidated by any prior call, Ura Dora scoring, and noten payment matrix.
+  combinations, pass-Ron temporary Furiten, no-yaku structural pass Furiten, Riichi pass-Ron
+  persistent Furiten, call cancelling Ippatsu, Double Riichi invalidated by any prior call, Ura
+  Dora scoring, and noten payment matrix.
 - `pnpm --filter @mahjong-live/shared typecheck`
 - `pnpm --filter @mahjong-live/shared test`
