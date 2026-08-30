@@ -269,8 +269,6 @@ describe('Ron reaction window', () => {
       type: 'exhaustive-draw',
       tenpaiPlayers: [],
       notenPayments: [0, 0, 0, 0],
-      nagashiPlayers: [],
-      nagashiPayments: [0, 0, 0, 0],
     });
     expect(resolved.state.riichiSticks).toBe(2);
   });
