@@ -1,7 +1,7 @@
 import { YakuDetector, isClosedHand } from './context';
 import { isKokushi } from '../hand/specialShapes';
 import { isTerminal } from '../tiles/tiles';
-import { SuitedTile } from '../tiles/types';
+import { SuitedTile, Tile } from '../tiles/types';
 
 export const detectKokushi: YakuDetector = (hand) => {
   if (hand.shape !== 'kokushi') return null;
@@ -20,7 +20,7 @@ export const detectChinroutou: YakuDetector = (hand) => {
   return hand.allTiles.every(isTerminal) ? { name: 'Chinroutou', han: 0, yakuman: 1 } : null;
 };
 
-function isGreenTile(tile: (typeof import('../tiles/types'))['Tile']): boolean {
+function isGreenTile(tile: Tile): boolean {
   if (tile.kind === 'suited') {
     return tile.suit === 'sou' && [2, 3, 4, 6, 8].includes(tile.rank);
   }
