@@ -53,6 +53,12 @@ export interface CallClaim {
   tileIds: readonly [number, number];
 }
 
+export interface PendingRiichi {
+  player: PlayerIndex;
+  tileId: number;
+  doubleRiichi: boolean;
+}
+
 export type RoundPhase =
   | { kind: 'awaiting-draw'; player: PlayerIndex }
   | {
@@ -68,6 +74,8 @@ export type RoundPhase =
       discardIndex: number;
       ronClaims: readonly RonClaim[];
       callClaims: readonly CallClaim[];
+      /** Riichi becomes active and paid only if this declaration discard is not won by Ron. */
+      pendingRiichi?: PendingRiichi;
     }
   | { kind: 'ended'; result: RoundEndResult };
 
