@@ -99,6 +99,29 @@ describe('Ankan', () => {
     expect(getLegalActions(state, 0).some((action) => action.type === 'ankan')).toBe(false);
   });
 
+  it('allows Riichi Ankan when the drawn fourth copy preserves the exact structural wait set', () => {
+    const ones = [0, 1, 2, 3].map((n) => physical(suited('man', 1), 430 + n));
+    const rest = [
+      physical(suited('pin', 2), 440), physical(suited('pin', 3), 441), physical(suited('pin', 4), 442),
+      physical(suited('pin', 5), 443), physical(suited('pin', 6), 444), physical(suited('pin', 7), 445),
+      physical(suited('sou', 7), 446), physical(suited('sou', 8), 447),
+      physical(suited('sou', 9), 448), physical(suited('sou', 9), 449),
+    ];
+    const state = stateWith(
+      [player([...ones, ...rest], { riichi: 'riichi' }), player(), player(), player()],
+      { kind: 'awaiting-discard', player: 0, drawnTileId: ones[3].id!, wasLastLiveDraw: false },
+    );
+    const action = getLegalActions(state, 0).find((candidate) => candidate.type === 'ankan');
+    expect(action?.type).toBe('ankan');
+    if (!action || action.type !== 'ankan') return;
+    expect(action.options).toContainEqual(ones.map((tile) => tile.id));
+
+    const result = applyAction(state, { type: 'ankan', player: 0, tileIds: action.options[0] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].melds[0]).toMatchObject({ type: 'quad', isOpen: false });
+  });
+
   it('can win on the replacement tile with Rinshan Kaihou', () => {
     const east = [0, 1, 2, 3].map((n) => physical(wind('east'), 500 + n));
     const winning = physical(suited('sou', 8), 599);
@@ -155,6 +178,78 @@ describe('Daiminkan delayed Kan-Dora', () => {
     if (!discard.ok) return;
     expect(discard.state.wall.doraIndicators).toHaveLength(2);
     expect(discard.events.some((event) => event.type === 'DoraIndicatorRevealed')).toBe(true);
+  });
+
+  it('does not reveal the delayed Kan-Dora when the caller wins immediately on Rinshan', () => {
+    const discardTile = physical(suited('pin', 5), 1300);
+    const record: RoundDiscard = { tile: discardTile, tileId: 1300, tsumogiri: false, wasLastLiveDraw: false };
+    const matches = [1, 2, 3].map((n) => physical(suited('pin', 5, n === 1), 1300 + n));
+    const winning = physical(suited('sou', 8), 1399);
+    const preWin = [
+      physical(suited('man', 1), 1310), physical(suited('man', 2), 1311), physical(suited('man', 3), 1312),
+      physical(suited('pin', 2), 1313), physical(suited('pin', 3), 1314), physical(suited('pin', 4), 1315),
+      physical(suited('sou', 6), 1316), physical(suited('sou', 7), 1317),
+      physical(suited('sou', 5), 1318), physical(suited('sou', 5), 1319),
+    ];
+    const state = stateWith(
+      [player([], { discards: [record], discardCount: 1 }), player([...matches, ...preWin]), player(), player()],
+      { kind: 'reactions', discarder: 0, discardIndex: 0, ronClaims: [], callClaims: [] },
+      { wall: wall(winning) },
+    );
+    const legal = getLegalActions(state, 1).find((action) => action.type === 'daiminkan');
+    expect(legal?.type).toBe('daiminkan');
+    if (!legal || legal.type !== 'daiminkan') return;
+    const claim = applyAction(state, { type: 'daiminkan', player: 1, tileIds: legal.options[0] });
+    expect(claim.ok).toBe(true);
+    if (!claim.ok) return;
+    const resolved = applyAction(claim.state, { type: 'resolve-reactions' });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok || resolved.state.phase.kind !== 'awaiting-discard') return;
+    expect(resolved.state.wall.doraIndicators).toHaveLength(1);
+    expect(resolved.state.phase.pendingKanDora).toBe(true);
+    expect(getLegalActions(resolved.state, 1).some((action) => action.type === 'tsumo')).toBe(true);
+
+    const win = applyAction(resolved.state, { type: 'tsumo', player: 1 });
+    expect(win.ok).toBe(true);
+    if (!win.ok || win.state.phase.kind !== 'ended' || win.state.phase.result.type !== 'tsumo') return;
+    expect(win.state.phase.result.score.yaku.map((yaku) => yaku.name)).toContain('Rinshan Kaihou');
+    expect(win.state.wall.doraIndicators).toHaveLength(1);
+  });
+
+  it('flushes a previous delayed indicator before a chained Ankan, then reveals the Ankan Dora immediately', () => {
+    const discardTile = physical(suited('pin', 5), 1400);
+    const record: RoundDiscard = { tile: discardTile, tileId: 1400, tsumogiri: false, wasLastLiveDraw: false };
+    const matches = [1, 2, 3].map((n) => physical(suited('pin', 5, n === 1), 1400 + n));
+    const east = [0, 1, 2, 3].map((n) => physical(wind('east'), 1410 + n));
+    const state = stateWith(
+      [
+        player([], { discards: [record], discardCount: 1 }),
+        player([...matches, ...east, ...arbitraryTiles(1420).slice(0, 6)]),
+        player(),
+        player(),
+      ],
+      { kind: 'reactions', discarder: 0, discardIndex: 0, ronClaims: [], callClaims: [] },
+    );
+    const daiminkan = getLegalActions(state, 1).find((action) => action.type === 'daiminkan');
+    expect(daiminkan?.type).toBe('daiminkan');
+    if (!daiminkan || daiminkan.type !== 'daiminkan') return;
+    const claimed = applyAction(state, { type: 'daiminkan', player: 1, tileIds: daiminkan.options[0] });
+    expect(claimed.ok).toBe(true);
+    if (!claimed.ok) return;
+    const firstKan = applyAction(claimed.state, { type: 'resolve-reactions' });
+    expect(firstKan.ok).toBe(true);
+    if (!firstKan.ok || firstKan.state.phase.kind !== 'awaiting-discard') return;
+    expect(firstKan.state.wall.doraIndicators).toHaveLength(1);
+    expect(firstKan.state.phase.pendingKanDora).toBe(true);
+
+    const ankan = getLegalActions(firstKan.state, 1).find((action) => action.type === 'ankan');
+    expect(ankan?.type).toBe('ankan');
+    if (!ankan || ankan.type !== 'ankan') return;
+    const chained = applyAction(firstKan.state, { type: 'ankan', player: 1, tileIds: ankan.options[0] });
+    expect(chained.ok).toBe(true);
+    if (!chained.ok) return;
+    expect(chained.state.wall.doraIndicators).toHaveLength(3);
+    expect(chained.events.filter((event) => event.type === 'DoraIndicatorRevealed')).toHaveLength(2);
   });
 
   it('is suppressed by a competing Ron claim', () => {
