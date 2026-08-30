@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./rules": "./src/engine/rules/index.ts",
+    "./prng": "./src/engine/wall/prng.ts",
+    "./tiles": "./src/engine/tiles/index.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
