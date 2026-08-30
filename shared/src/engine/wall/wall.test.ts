@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  build136Tiles, buildWall, drawTile, revealKanDora, remainingDraws, doraFromIndicator,
+  build136Tiles, buildWall, drawTile, drawRinshan, revealKanDora, remainingDraws, doraFromIndicator,
 } from './wall';
 import { createRNG } from './prng';
 import { suited, wind, dragon, tileTypeKey } from '../tiles/tiles';
@@ -71,6 +71,48 @@ describe('drawTile', () => {
   it('throws when the live wall is empty', () => {
     const empty = { liveWall: [], deadWall: [], doraIndicators: [] };
     expect(() => drawTile(empty)).toThrow();
+  });
+});
+
+describe('drawRinshan', () => {
+  it('draws dead-wall slot 10, replenishes from the live-wall tail and preserves 14 dead tiles', () => {
+    const wall = buildWall(createRNG(11));
+    const expected = wall.deadWall[10];
+    const replacement = wall.liveWall[wall.liveWall.length - 1];
+    const beforeIds = [
+      ...wall.liveWall.map((tile) => tile.id),
+      ...wall.deadWall.map((tile) => tile.id),
+    ];
+
+    const draw = drawRinshan(wall);
+    expect(draw.tile).toBe(expected);
+    expect(draw.wall.liveWall).toHaveLength(wall.liveWall.length - 1);
+    expect(draw.wall.deadWall).toHaveLength(14);
+    expect(draw.wall.deadWall[13]).toBe(replacement);
+    expect(wall.deadWall).toHaveLength(14);
+
+    const afterIds = [
+      draw.tile.id,
+      ...draw.wall.liveWall.map((tile) => tile.id),
+      ...draw.wall.deadWall.map((tile) => tile.id),
+    ];
+    expect(new Set(afterIds).size).toBe(afterIds.length);
+    expect(new Set(afterIds)).toEqual(new Set(beforeIds));
+  });
+
+  it('consumes the original four Rinshan slots in order across repeated draws', () => {
+    const wall = buildWall(createRNG(12));
+    const expected = wall.deadWall.slice(10, 14);
+    let current = wall;
+    const drawn = [];
+    for (let i = 0; i < 4; i++) {
+      const result = drawRinshan(current);
+      drawn.push(result.tile);
+      current = result.wall;
+    }
+    expect(drawn).toEqual(expected);
+    expect(current.deadWall).toHaveLength(14);
+    expect(current.liveWall).toHaveLength(wall.liveWall.length - 4);
   });
 });
 
