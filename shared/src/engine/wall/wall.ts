@@ -12,14 +12,15 @@ const RED_FIVE_SUITS = ['man', 'pin', 'sou'] as const;
 
 export function build136Tiles(): Tile[] {
   const tiles: Tile[] = [];
+  let id = 0;
   for (const type of allTileTypes()) {
     for (let copy = 0; copy < 4; copy++) {
       if (type.kind === 'suited') {
         const isRedFive =
           type.rank === 5 && copy === 0 && (RED_FIVE_SUITS as readonly string[]).includes(type.suit);
-        tiles.push({ ...type, isRed: isRedFive });
+        tiles.push({ ...type, isRed: isRedFive, id: id++ });
       } else {
-        tiles.push({ ...type });
+        tiles.push({ ...type, id: id++ });
       }
     }
   }
