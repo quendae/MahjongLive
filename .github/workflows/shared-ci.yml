@@ -1,9 +1,10 @@
-name: Shared engine CI
+name: Core engine and server CI
 
 on:
   pull_request:
     paths:
       - 'shared/**'
+      - 'server/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -12,13 +13,14 @@ on:
     branches: [master]
     paths:
       - 'shared/**'
+      - 'server/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/shared-ci.yml'
 
 jobs:
-  shared:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,3 +35,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
+      - run: pnpm --filter @mahjong-live/server typecheck
+      - run: pnpm --filter @mahjong-live/server test
