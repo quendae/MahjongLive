@@ -21,16 +21,19 @@ export function evaluateDiscardAdvice(
   player: PlayerIndex,
   tileIds: readonly number[],
 ): readonly DiscardAdvice[] {
-  const entries = tileIds
-    .map((tileId) => {
-      const evaluation = evaluateDiscard(state, player, tileId);
-      if (!evaluation) return null;
-      return {
-        ...evaluation,
-        ukeire: evaluateDiscardUkeire(state, player, tileId) ?? 0,
-      };
-    })
-    .filter((entry): entry is Omit<DiscardAdvice, 'recommended'> => entry !== null);
+  const base = tileIds
+    .map((tileId) => evaluateDiscard(state, player, tileId))
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const minShanten = base.length > 0 ? Math.min(...base.map((entry) => entry.shanten)) : Infinity;
+
+  // Ukeire is the comparatively expensive part. It can only beat another discard after shanten
+  // is tied, so calculate it only for the best 0/1-shanten candidates the UI may recommend.
+  const entries: Array<Omit<DiscardAdvice, 'recommended'>> = base.map((entry) => ({
+    ...entry,
+    ukeire: entry.shanten === minShanten && minShanten <= 1
+      ? evaluateDiscardUkeire(state, player, entry.tileId) ?? 0
+      : 0,
+  }));
 
   entries.sort((a, b) => {
     if (a.shanten !== b.shanten) return a.shanten - b.shanten;
