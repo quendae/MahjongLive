@@ -174,4 +174,25 @@ describe('single-player controller', () => {
     if (!a.ok || !b.ok) return;
     expect(a.state.match.round.players[0].concealed).toEqual(b.state.match.round.players[0].concealed);
   });
+
+  it('round-trips through JSON and resumes with the same deterministic outcome', () => {
+    const first = driveSingleGame(createSingleGame(88001, 0));
+    expect(first.ok).toBe(true);
+    if (!first.ok || first.prompt.kind !== 'turn') return;
+
+    const restored = JSON.parse(JSON.stringify(first.state)) as SingleGameState;
+    expect(restored).toEqual(first.state);
+
+    const discard = first.prompt.legalActions.find((action) => action.type === 'discard');
+    expect(discard?.type).toBe('discard');
+    if (!discard || discard.type !== 'discard') return;
+    const decision = {
+      type: 'action' as const,
+      action: { type: 'discard' as const, player: 0 as const, tileId: discard.tileIds[0] },
+    };
+
+    const live = applyHumanDecision(first.state, decision);
+    const resumed = applyHumanDecision(restored, decision);
+    expect(resumed).toEqual(live);
+  });
 });
