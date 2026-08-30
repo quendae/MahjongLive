@@ -13,9 +13,13 @@ because it changes dead-wall/rinshan flow and introduces Chankan/Kan-Dora timing
 
 ## Ruling Ledger
 
-`Ruling:` **Riichi declaration and discard are atomic.** Use `riichi-discard` with a physical
-`tileId`; there is no intermediate state where 1,000 points were paid but the declaration discard
-has not happened.
+`Ruling:` **Riichi declaration + discard are one player action, but the declaration is pending
+through the reaction window.** `riichi-discard` places the declaration discard immediately and
+stores `pendingRiichi` in the reaction phase. If that discard is won by Ron, the declaration never
+completes and no 1,000-point deposit is paid. If no Ron occurs, `resolve-reactions` activates
+Riichi, deducts exactly 1,000 points and adds one table stick before resolving any Chi/Pon. A
+Chi/Pon on the declaration discard does not invalidate Riichi, but the resolved call cancels
+Ippatsu.
 
 `Ruling:` **Legal Riichi discard means the resulting 13-tile state has at least one structural
 winning tile type.** The wait query uses `resolveWinningHands` over all 34 tile types and does not
@@ -27,9 +31,9 @@ After Riichi, ordinary turns are tsumogiri-only; Plan 7 will add the legal Kan e
 `Ruling:` **Double Riichi is derived, not requested.** The declaration is Double Riichi iff it is
 the player's first discard and no call has yet been resolved.
 
-`Ruling:` **Ippatsu is history state.** It becomes eligible on Riichi declaration, survives until
-the declarer's next discard, and is cancelled for all players when any Chi/Pon (later Kan) is
-resolved.
+`Ruling:` **Ippatsu is history state.** It becomes eligible when a pending Riichi is activated,
+survives until the declarer's next discard, and is cancelled for all players when any Chi/Pon
+(later Kan) is resolved.
 
 `Ruling:` **Permanent discard Furiten is computed dynamically from the current wait set.** If any
 current structural winning tile type appears in the player's own discard history, Ron is blocked
@@ -88,10 +92,11 @@ shared/src/engine/rules/exhaustive.test.ts
 
 ## Task 2 — Riichi + Ippatsu + Ura
 
-- Add atomic action `{ type:'riichi-discard'; player; tileId }`.
+- Add action `{ type:'riichi-discard'; player; tileId }`, whose declaration remains pending in the
+  reaction phase until Ron has been excluded.
 - `getLegalActions` exposes all physical discard IDs that leave structural tenpai.
-- Deduct 1,000 points and increment table `riichiSticks` exactly once.
-- Derive Double Riichi and set Ippatsu.
+- On no-Ron reaction resolution, deduct 1,000 points and increment table `riichiSticks` exactly
+  once, derive Double Riichi, and set Ippatsu.
 - Enforce tsumogiri-only after declaration.
 - Pass matching Ura indicators to scoring; scorer already gates Ura by `hand.isRiichi`.
 
