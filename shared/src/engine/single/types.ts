@@ -53,12 +53,24 @@ export interface SingleActionTrace {
   action: RoundAction;
 }
 
+/**
+ * Transient UI metadata: the authoritative state immediately after one accepted reducer action.
+ * Frames are intentionally outside `SingleGameState`, so autosaves never persist presentation
+ * progress and a reload always resumes from the fully resolved authoritative state.
+ */
+export interface SinglePresentationFrame {
+  state: SingleGameState;
+  events: readonly RoundEvent[];
+  trace: SingleActionTrace;
+}
+
 export interface SingleDriveSuccess {
   ok: true;
   state: SingleGameState;
   prompt: HumanPrompt;
   events: readonly RoundEvent[];
   trace: readonly SingleActionTrace[];
+  frames: readonly SinglePresentationFrame[];
 }
 
 export interface SingleDriveFailure {
@@ -73,6 +85,7 @@ export interface SingleDriveFailure {
   message: string;
   events: readonly RoundEvent[];
   trace: readonly SingleActionTrace[];
+  frames: readonly SinglePresentationFrame[];
 }
 
 export type SingleDriveResult = SingleDriveSuccess | SingleDriveFailure;

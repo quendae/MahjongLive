@@ -29,9 +29,18 @@ import type {
 } from '@mahjong-live/shared/rules';
 import type { MatchResult } from '@mahjong-live/shared/match';
 import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
-import { difficultyLabel, loadPreferences, savePreferences } from './preferences';
+import {
+  difficultyLabel,
+  loadPreferences,
+  presentationDelayMs,
+  presentationSpeedLabel,
+  savePreferences,
+} from './preferences';
+import type { PresentationSpeed } from './preferences';
+import { presentationCaption } from './presentation';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
+const SETUP_PENDING_KEY = 'mahjong-live:setup-pending:v1';
 const LOG_LIMIT = 80;
 const PLAYER_SEATS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const numberFormat = new Intl.NumberFormat('en-US');
@@ -59,6 +68,8 @@ let pendingDifficulty: BotDifficulty = preferences.preferredDifficulty;
 let pendingAdvisor = preferences.advisorEnabled;
 let tutorialOpen = false;
 let renderedAdvice: readonly DiscardAdvice[] = [];
+let presentationLocked = false;
+let presentationCaptionText = '';
 
 const windGlyph: Record<Wind, string> = {
   east: '東',
@@ -224,7 +235,7 @@ function legalAction<T extends LegalAction['type']>(prompt: HumanPrompt, type: T
 }
 
 function computeDiscardAdvice(): readonly DiscardAdvice[] {
-  if (!current || !preferences.advisorEnabled || current.prompt.kind !== 'turn') return [];
+  if (presentationLocked || !current || !preferences.advisorEnabled || current.prompt.kind !== 'turn') return [];
   const legal = riichiMode
     ? legalAction(current.prompt, 'riichi-discard')
     : legalAction(current.prompt, 'discard');
@@ -266,8 +277,8 @@ function humanHandMarkup(): string {
     const id = tile.id ?? -1;
     const isDiscard = discardIds.has(id);
     const isRiichi = riichiIds.has(id);
-    const clickable = prompt.kind === 'turn' && (riichiMode ? isRiichi : isDiscard);
-    const disabled = prompt.kind === 'turn' && (riichiMode ? !isRiichi : !isDiscard);
+    const clickable = !presentationLocked && prompt.kind === 'turn' && (riichiMode ? isRiichi : isDiscard);
+    const disabled = !presentationLocked && prompt.kind === 'turn' && (riichiMode ? !isRiichi : !isDiscard);
     const advice = adviceById.get(id);
     return tileMarkup(tile, {
       clickable,
@@ -351,6 +362,13 @@ function advisorStrip(): string {
 
 function actionBar(): string {
   if (!current) return '';
+  if (presentationLocked) {
+    return `
+      <div class="action-dock presentation-dock">
+        <div class="presentation-pulse"><i></i><span>${presentationCaptionText || 'Resolving table actions…'}</span></div>
+      </div>
+    `;
+  }
   const prompt = current.prompt;
   if (prompt.kind === 'round-ended' || prompt.kind === 'match-ended') return '';
 
@@ -527,7 +545,7 @@ function matchResultMarkup(result: MatchResult): string {
 }
 
 function resultOverlay(): string {
-  if (!current || setupOpen || tutorialOpen) return '';
+  if (presentationLocked || !current || setupOpen || tutorialOpen) return '';
   if (current.prompt.kind === 'round-ended') {
     return `
       <div class="overlay">
@@ -576,7 +594,7 @@ function actionDescription(action: RoundAction): string {
 }
 
 function choiceOverlay(): string {
-  if (!choiceState || setupOpen || tutorialOpen) return '';
+  if (presentationLocked || !choiceState || setupOpen || tutorialOpen) return '';
   return `
     <div class="overlay overlay-choice">
       <div class="dialog choice-dialog">
@@ -597,9 +615,16 @@ function difficultyOptions(selected: BotDifficulty): string {
     .join('');
 }
 
+function speedOptions(selected: PresentationSpeed): string {
+  return (['slow', 'normal', 'fast', 'instant'] as const)
+    .map((speed) => `<option value="${speed}"${speed === selected ? ' selected' : ''}>${presentationSpeedLabel(speed)}</option>`)
+    .join('');
+}
+
 function headerMarkup(): string {
   if (!current) return '';
   const difficulty = singleBotDifficulty(current.state);
+  const lock = presentationLocked ? ' disabled' : '';
   return `
     <header class="app-header">
       <div class="brand">
@@ -611,11 +636,12 @@ function headerMarkup(): string {
         <span class="seed-pill">Seed ${current.state.seed}</span>
       </div>
       <div class="header-actions">
-        <label class="header-control"><span>Bot</span><select class="difficulty-select" data-setting-difficulty>${difficultyOptions(difficulty)}</select></label>
-        <label class="header-control advisor-toggle"><input type="checkbox" data-setting-advisor${preferences.advisorEnabled ? ' checked' : ''}><strong>Advisor</strong></label>
-        <button class="header-button" data-ui-action="tutorial">How to play</button>
-        <button class="header-button" data-ui-action="restart-seed">Restart seed</button>
-        <button class="header-button" data-ui-action="new-game">New game</button>
+        <label class="header-control"><span>Bot</span><select class="difficulty-select" data-setting-difficulty${lock}>${difficultyOptions(difficulty)}</select></label>
+        <label class="header-control"><span>Speed</span><select class="difficulty-select" data-setting-speed>${speedOptions(preferences.presentationSpeed)}</select></label>
+        <label class="header-control advisor-toggle"><input type="checkbox" data-setting-advisor${preferences.advisorEnabled ? ' checked' : ''}${lock}><strong>Advisor</strong></label>
+        <button class="header-button" data-ui-action="tutorial"${lock}>How to play</button>
+        <button class="header-button" data-ui-action="restart-seed"${lock}>Restart seed</button>
+        <button class="header-button" data-ui-action="new-game"${lock}>New game</button>
       </div>
     </header>
   `;
@@ -662,7 +688,7 @@ function tutorialOverlay(): string {
       <div class="dialog tutorial-dialog">
         <div class="dialog-eyebrow">Quick tutorial</div>
         <h2>Four things to know</h2>
-        <p class="tutorial-intro">The engine handles draws and bot turns automatically. You are stopped only when your decision matters.</p>
+        <p class="tutorial-intro">The engine resolves instantly, while the table presents automated moves at your chosen speed. You are stopped only when your decision matters.</p>
         <div class="tutorial-steps">
           <div class="tutorial-step"><b>1 · Discard</b><span>Click one of the bright tiles in your hand. The separated tile on the right is your latest draw.</span></div>
           <div class="tutorial-step"><b>2 · Calls</b><span>When Chi, Pon, Kan or Ron is legal, action buttons appear below the table. Pass is always available during reactions.</span></div>
@@ -686,7 +712,7 @@ function render(): void {
   const left = byPosition('left');
 
   app.innerHTML = `
-    <div class="app-shell">
+    <div class="app-shell${presentationLocked ? ' is-presenting' : ''}">
       ${headerMarkup()}
       <main class="game-layout">
         <section class="table-panel">
@@ -716,8 +742,58 @@ function persist(state: SingleGameState): void {
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
 }
 
+function settleResult(result: SingleDriveSuccess): void {
+  current = result;
+  presentationLocked = false;
+  presentationCaptionText = '';
+  riichiMode = false;
+  choiceState = null;
+  transientMessage = '';
+  render();
+}
+
+function playPresentation(result: SingleDriveSuccess): void {
+  const delay = presentationDelayMs(preferences.presentationSpeed);
+  if (delay === 0 || result.frames.length === 0) {
+    current = result;
+    appendEvents(result.events);
+    settleResult(result);
+    return;
+  }
+
+  presentationLocked = true;
+  riichiMode = false;
+  choiceState = null;
+  transientMessage = '';
+  let index = 0;
+
+  const step = () => {
+    const frame = result.frames[index];
+    if (!frame) {
+      settleResult(result);
+      return;
+    }
+    current = {
+      ...result,
+      state: frame.state,
+      events: frame.events,
+      trace: [frame.trace],
+      frames: [frame],
+    };
+    presentationCaptionText = presentationCaption(frame, result.state.humanSeat);
+    appendEvents(frame.events);
+    render();
+    index += 1;
+    window.setTimeout(step, presentationDelayMs(preferences.presentationSpeed));
+  };
+
+  step();
+}
+
 function processResult(result: SingleDriveResult): void {
   if (!result.ok) {
+    presentationLocked = false;
+    presentationCaptionText = '';
     transientMessage = `${result.code}: ${result.message}`;
     window.setTimeout(() => {
       transientMessage = '';
@@ -726,13 +802,11 @@ function processResult(result: SingleDriveResult): void {
     render();
     return;
   }
-  current = result;
-  riichiMode = false;
-  choiceState = null;
-  appendEvents(result.events);
+
+  // Persist the fully resolved authoritative state before presentation begins. Presentation frames
+  // are transient only, so a reload mid-animation resumes at the correct final checkpoint.
   persist(result.state);
-  transientMessage = '';
-  render();
+  playPresentation(result);
 }
 
 function startNewGame(
@@ -747,13 +821,14 @@ function startNewGame(
     transientMessage = result.message;
     return;
   }
-  current = result;
-  appendEvents(result.events);
-  persist(result.state);
-  render();
+  processResult(result);
 }
 
 function restoreGame(): boolean {
+  if (localStorage.getItem(SETUP_PENDING_KEY) === '1') {
+    localStorage.removeItem(SAVE_KEY);
+    return false;
+  }
   const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) return false;
   try {
@@ -778,17 +853,17 @@ function restoreGame(): boolean {
 }
 
 function submitHumanAction(action: RoundAction): void {
-  if (!current) return;
+  if (!current || presentationLocked) return;
   processResult(applyHumanDecision(current.state, { type: 'action', action }));
 }
 
 function submitPass(): void {
-  if (!current) return;
+  if (!current || presentationLocked) return;
   processResult(applyHumanDecision(current.state, { type: 'pass' }));
 }
 
 function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan'): void {
-  if (!current || (current.prompt.kind !== 'turn' && current.prompt.kind !== 'reaction')) return;
+  if (presentationLocked || !current || (current.prompt.kind !== 'turn' && current.prompt.kind !== 'reaction')) return;
   const human = current.state.humanSeat;
   const legal = current.prompt.legalActions.find((action) => action.type === type);
   if (!legal) return;
@@ -815,7 +890,7 @@ function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan')
 }
 
 function setActiveDifficulty(difficulty: BotDifficulty): void {
-  if (!current) return;
+  if (!current || presentationLocked) return;
   preferences = { ...preferences, preferredDifficulty: difficulty };
   savePreferences(preferences);
   current = {
@@ -827,13 +902,20 @@ function setActiveDifficulty(difficulty: BotDifficulty): void {
 }
 
 function setAdvisorEnabled(enabled: boolean): void {
+  if (presentationLocked) return;
   preferences = { ...preferences, advisorEnabled: enabled };
   savePreferences(preferences);
   render();
 }
 
+function setPresentationSpeed(speed: PresentationSpeed): void {
+  preferences = { ...preferences, presentationSpeed: speed };
+  savePreferences(preferences);
+  render();
+}
+
 function handleUiAction(action: string): void {
-  if (!current) return;
+  if (!current || presentationLocked) return;
   const human = current.state.humanSeat;
   switch (action) {
     case 'tsumo':
@@ -888,6 +970,7 @@ function handleUiAction(action: string): void {
         advisorEnabled: pendingAdvisor,
       };
       savePreferences(preferences);
+      localStorage.removeItem(SETUP_PENDING_KEY);
       setupOpen = false;
       setupRequired = false;
       tutorialOpen = !preferences.tutorialSeen;
@@ -907,7 +990,7 @@ function handleUiAction(action: string): void {
 }
 
 function handleTileSelection(tileId: number): void {
-  if (!current || current.prompt.kind !== 'turn') return;
+  if (presentationLocked || !current || current.prompt.kind !== 'turn') return;
   const human = current.state.humanSeat;
   const discard = legalAction(current.prompt, 'discard');
   const riichi = legalAction(current.prompt, 'riichi-discard');
@@ -936,6 +1019,7 @@ function bindInteractions(): void {
 
   app.querySelectorAll<HTMLElement>('[data-choice-index]').forEach((element) => {
     element.addEventListener('click', () => {
+      if (presentationLocked) return;
       const index = Number(element.dataset.choiceIndex);
       const action = choiceState?.actions[index];
       if (action) submitHumanAction(action);
@@ -957,6 +1041,11 @@ function bindInteractions(): void {
     if (value === 'casual' || value === 'standard' || value === 'expert') setActiveDifficulty(value);
   });
 
+  app.querySelector<HTMLSelectElement>('[data-setting-speed]')?.addEventListener('change', (event) => {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (value === 'slow' || value === 'normal' || value === 'fast' || value === 'instant') setPresentationSpeed(value);
+  });
+
   app.querySelector<HTMLInputElement>('[data-setting-advisor]')?.addEventListener('change', (event) => {
     setAdvisorEnabled((event.currentTarget as HTMLInputElement).checked);
   });
@@ -975,5 +1064,6 @@ if (restored) {
   setupOpen = true;
   pendingDifficulty = preferences.preferredDifficulty;
   pendingAdvisor = preferences.advisorEnabled;
+  localStorage.setItem(SETUP_PENDING_KEY, '1');
   startNewGame(randomSeed(), pendingDifficulty);
 }

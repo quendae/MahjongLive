@@ -21,6 +21,7 @@
   font-weight: 700;
   cursor: pointer;
 }
+.difficulty-select:disabled { cursor: default; opacity: .62; }
 
 .advisor-toggle {
   display: inline-flex;
@@ -73,6 +74,47 @@
   color: #d9e7df;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.08);
+}
+
+.presentation-dock {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.presentation-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid rgba(226,194,115,.16);
+  border-radius: 999px;
+  color: #e9e5d7;
+  background: rgba(226,194,115,.06);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.presentation-pulse i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #e2c273;
+  animation: presentation-pulse 1.1s ease-out infinite;
+}
+.is-presenting .mahjong-table {
+  box-shadow: inset 0 0 45px rgba(226,194,115,.025);
+}
+.is-presenting .tile { transition: transform .13s ease, opacity .13s ease, box-shadow .13s ease; }
+.is-presenting .header-button:disabled,
+.is-presenting .header-control input:disabled { opacity: .55; cursor: default; }
+
+@keyframes presentation-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(226,194,115,.48); }
+  70% { box-shadow: 0 0 0 8px rgba(226,194,115,0); }
+  100% { box-shadow: 0 0 0 0 rgba(226,194,115,0); }
 }
 
 .setup-dialog, .tutorial-dialog { width: min(92vw, 720px); }
@@ -138,6 +180,11 @@
 .tutorial-step b { display: block; color: #efd17e; margin-bottom: 5px; }
 .tutorial-step span { color: #afbeb5; font-size: 12px; line-height: 1.45; }
 
+@media (prefers-reduced-motion: reduce) {
+  .presentation-pulse i { animation: none; }
+  .is-presenting .tile { transition: none; }
+}
+
 @media (max-width: 980px) {
   .app-header { grid-template-columns: 1fr auto; gap: 8px; }
   .header-status { display: none; }
@@ -157,6 +204,7 @@
   .setup-actions { width: 100%; }
   .setup-actions button { flex: 1; }
   .advisor-strip { font-size: 10px; }
+  .presentation-pulse { max-width: 88vw; font-size: 11px; text-align: center; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
@@ -164,4 +212,5 @@
   .difficulty-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .difficulty-card { min-height: 98px; padding: 10px; }
   .tutorial-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-dock { min-height: 48px; }
 }
