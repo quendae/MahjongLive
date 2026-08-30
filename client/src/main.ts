@@ -1,12 +1,17 @@
 import './style.css';
+import './ux.css';
 
 import {
   applyHumanDecision,
   continueSingleGame,
   createSingleGame,
   driveSingleGame,
+  evaluateDiscardAdvice,
+  singleBotDifficulty,
 } from '@mahjong-live/shared/single';
 import type {
+  BotDifficulty,
+  DiscardAdvice,
   HumanPrompt,
   SingleDriveResult,
   SingleDriveSuccess,
@@ -24,6 +29,7 @@ import type {
 } from '@mahjong-live/shared/rules';
 import type { MatchResult } from '@mahjong-live/shared/match';
 import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
+import { difficultyLabel, loadPreferences, savePreferences } from './preferences';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
 const LOG_LIMIT = 80;
@@ -37,14 +43,22 @@ type ChoiceState = {
   actions: readonly RoundAction[];
 };
 
-const app = document.querySelector<HTMLDivElement>('#app');
-if (!app) throw new Error('Missing #app root');
+const root = document.querySelector<HTMLDivElement>('#app');
+if (!root) throw new Error('Missing #app root');
+const app: HTMLDivElement = root;
 
 let current: SingleDriveSuccess | null = null;
 let riichiMode = false;
 let choiceState: ChoiceState | null = null;
 let logEntries: string[] = [];
 let transientMessage = '';
+let preferences = loadPreferences();
+let setupOpen = false;
+let setupRequired = false;
+let pendingDifficulty: BotDifficulty = preferences.preferredDifficulty;
+let pendingAdvisor = preferences.advisorEnabled;
+let tutorialOpen = false;
+let renderedAdvice: readonly DiscardAdvice[] = [];
 
 const windGlyph: Record<Wind, string> = {
   east: '東',
@@ -126,6 +140,8 @@ function tileMarkup(
     eligible?: boolean;
     disabled?: boolean;
     called?: boolean;
+    advised?: boolean;
+    adviceText?: string;
   } = {},
 ): string {
   const id = typeof tile.id === 'number' ? tile.id : -1;
@@ -136,8 +152,10 @@ function tileMarkup(
   if (options.eligible) classes.push('tile-eligible');
   if (options.disabled) classes.push('tile-disabled');
   if (options.called) classes.push('tile-called');
+  if (options.advised) classes.push('tile-advised');
   const attrs = options.clickable && id >= 0 ? ` data-tile-id="${id}" role="button" tabindex="0"` : '';
-  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${attrs}>${tileFace(tile)}</div>`;
+  const title = options.adviceText ? ` title="${options.adviceText}"` : '';
+  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${attrs}${title}>${tileFace(tile)}</div>`;
 }
 
 function tileBackMarkup(compact = false): string {
@@ -205,6 +223,25 @@ function legalAction<T extends LegalAction['type']>(prompt: HumanPrompt, type: T
   return prompt.legalActions.find((action): action is Extract<LegalAction, { type: T }> => action.type === type);
 }
 
+function computeDiscardAdvice(): readonly DiscardAdvice[] {
+  if (!current || !preferences.advisorEnabled || current.prompt.kind !== 'turn') return [];
+  const legal = riichiMode
+    ? legalAction(current.prompt, 'riichi-discard')
+    : legalAction(current.prompt, 'discard');
+  if (!legal || !('tileIds' in legal)) return [];
+  return evaluateDiscardAdvice(
+    current.state.match.round,
+    current.state.humanSeat,
+    legal.tileIds,
+  );
+}
+
+function adviceText(advice: DiscardAdvice): string {
+  const distance = advice.shanten === 0 ? 'Tenpai' : `${advice.shanten} shanten`;
+  const ukeire = advice.shanten <= 1 ? ` · ${advice.ukeire} ukeire` : '';
+  return `Advisor: ${distance}${ukeire}`;
+}
+
 function humanHandMarkup(): string {
   if (!current) return '';
   const prompt = current.prompt;
@@ -215,6 +252,7 @@ function humanHandMarkup(): string {
   const riichiDiscard = legalAction(prompt, 'riichi-discard');
   const discardIds = new Set(discard?.tileIds ?? []);
   const riichiIds = new Set(riichiDiscard?.tileIds ?? []);
+  const adviceById = new Map(renderedAdvice.map((entry) => [entry.tileId, entry]));
   const drawnId = round.phase.kind === 'awaiting-discard' && round.phase.player === human
     ? round.phase.drawnTileId
     : null;
@@ -230,11 +268,14 @@ function humanHandMarkup(): string {
     const isRiichi = riichiIds.has(id);
     const clickable = prompt.kind === 'turn' && (riichiMode ? isRiichi : isDiscard);
     const disabled = prompt.kind === 'turn' && (riichiMode ? !isRiichi : !isDiscard);
+    const advice = adviceById.get(id);
     return tileMarkup(tile, {
       clickable,
       drawn: id === drawnId,
       eligible: riichiMode && isRiichi,
       disabled,
+      advised: clickable && advice?.recommended === true,
+      adviceText: advice ? adviceText(advice) : undefined,
     });
   }).join('');
 }
@@ -290,6 +331,24 @@ function actionButton(label: string, action: string, emphasis = ''): string {
   return `<button class="action-button ${emphasis}" data-ui-action="${action}">${label}</button>`;
 }
 
+function advisorStrip(): string {
+  if (!preferences.advisorEnabled || renderedAdvice.length === 0 || !current) return '';
+  const best = renderedAdvice.find((entry) => entry.recommended) ?? renderedAdvice[0];
+  const tile = current.state.match.round.players[current.state.humanSeat].concealed.find(
+    (candidate) => candidate.id === best.tileId,
+  );
+  const distance = best.shanten === 0 ? 'Tenpai' : `${best.shanten} shanten`;
+  const ukeire = best.shanten <= 1 ? `<span class="advisor-chip">${best.ukeire} ukeire</span>` : '';
+  return `
+    <div class="advisor-strip">
+      <strong>Advisor</strong>
+      <span class="advisor-chip">${distance}</span>
+      ${ukeire}
+      ${tile ? `<span>Suggested discard: ${tileLabel(tile)}</span>` : ''}
+    </div>
+  `;
+}
+
 function actionBar(): string {
   if (!current) return '';
   const prompt = current.prompt;
@@ -320,6 +379,7 @@ function actionBar(): string {
   return `
     <div class="action-dock">
       <div class="action-hint">${hint}</div>
+      ${advisorStrip()}
       <div class="action-buttons">${buttons.join('')}</div>
     </div>
   `;
@@ -467,7 +527,7 @@ function matchResultMarkup(result: MatchResult): string {
 }
 
 function resultOverlay(): string {
-  if (!current) return '';
+  if (!current || setupOpen || tutorialOpen) return '';
   if (current.prompt.kind === 'round-ended') {
     return `
       <div class="overlay">
@@ -516,7 +576,7 @@ function actionDescription(action: RoundAction): string {
 }
 
 function choiceOverlay(): string {
-  if (!choiceState) return '';
+  if (!choiceState || setupOpen || tutorialOpen) return '';
   return `
     <div class="overlay overlay-choice">
       <div class="dialog choice-dialog">
@@ -531,8 +591,15 @@ function choiceOverlay(): string {
   `;
 }
 
+function difficultyOptions(selected: BotDifficulty): string {
+  return (['casual', 'standard', 'expert'] as const)
+    .map((difficulty) => `<option value="${difficulty}"${difficulty === selected ? ' selected' : ''}>${difficultyLabel(difficulty)}</option>`)
+    .join('');
+}
+
 function headerMarkup(): string {
   if (!current) return '';
+  const difficulty = singleBotDifficulty(current.state);
   return `
     <header class="app-header">
       <div class="brand">
@@ -544,6 +611,9 @@ function headerMarkup(): string {
         <span class="seed-pill">Seed ${current.state.seed}</span>
       </div>
       <div class="header-actions">
+        <label class="header-control"><span>Bot</span><select class="difficulty-select" data-setting-difficulty>${difficultyOptions(difficulty)}</select></label>
+        <label class="header-control advisor-toggle"><input type="checkbox" data-setting-advisor${preferences.advisorEnabled ? ' checked' : ''}><strong>Advisor</strong></label>
+        <button class="header-button" data-ui-action="tutorial">How to play</button>
         <button class="header-button" data-ui-action="restart-seed">Restart seed</button>
         <button class="header-button" data-ui-action="new-game">New game</button>
       </div>
@@ -551,8 +621,63 @@ function headerMarkup(): string {
   `;
 }
 
+function setupOverlay(): string {
+  if (!setupOpen) return '';
+  const cards: Array<{ difficulty: BotDifficulty; copy: string }> = [
+    { difficulty: 'casual', copy: 'Closed-hand, shanten-first opponents. No voluntary calls or advanced defensive tie-breaks.' },
+    { difficulty: 'standard', copy: 'Balanced opponents using shape, Dora preservation, genbutsu defense and yaku-safe calls.' },
+    { difficulty: 'expert', copy: 'Strongest profile. Adds public-information ukeire to Standard decision making.' },
+  ];
+  return `
+    <div class="overlay">
+      <div class="dialog setup-dialog">
+        <div class="dialog-eyebrow">Single Player</div>
+        <h2>Start a Hanchan</h2>
+        <p class="setup-intro">Choose how hard the three opponents should play. Every profile uses the same authoritative rules and sees only legal/public information.</p>
+        <div class="difficulty-grid">
+          ${cards.map(({ difficulty, copy }) => `
+            <button class="difficulty-card${pendingDifficulty === difficulty ? ' is-selected' : ''}" data-difficulty-choice="${difficulty}">
+              <strong>${difficultyLabel(difficulty)}</strong>
+              <span>${copy}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="setup-options">
+          <div><strong>Discard advisor</strong><small>Highlights a recommended discard and shows shanten/ukeire. It never reads hidden hands.</small></div>
+          <label class="advisor-toggle"><input type="checkbox" data-setup-advisor${pendingAdvisor ? ' checked' : ''}> Enable</label>
+        </div>
+        <div class="setup-actions">
+          ${setupRequired ? '' : '<button class="secondary-button" data-ui-action="cancel-setup">Cancel</button>'}
+          <button class="primary-button" data-ui-action="confirm-new-game">Start Hanchan</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function tutorialOverlay(): string {
+  if (!tutorialOpen || setupOpen) return '';
+  return `
+    <div class="overlay">
+      <div class="dialog tutorial-dialog">
+        <div class="dialog-eyebrow">Quick tutorial</div>
+        <h2>Four things to know</h2>
+        <p class="tutorial-intro">The engine handles draws and bot turns automatically. You are stopped only when your decision matters.</p>
+        <div class="tutorial-steps">
+          <div class="tutorial-step"><b>1 · Discard</b><span>Click one of the bright tiles in your hand. The separated tile on the right is your latest draw.</span></div>
+          <div class="tutorial-step"><b>2 · Calls</b><span>When Chi, Pon, Kan or Ron is legal, action buttons appear below the table. Pass is always available during reactions.</span></div>
+          <div class="tutorial-step"><b>3 · Riichi</b><span>Press Riichi first; only legal declaration discards remain highlighted. Then choose the discard.</span></div>
+          <div class="tutorial-step"><b>4 · Dora & advisor</b><span>Dora indicators sit in the table center. The optional advisor highlights development using only your hand and public tiles.</span></div>
+        </div>
+        <button class="primary-button" data-ui-action="close-tutorial">Play</button>
+      </div>
+    </div>
+  `;
+}
+
 function render(): void {
   if (!current) return;
+  renderedAdvice = computeDiscardAdvice();
   const human = current.state.humanSeat;
   const opponents = PLAYER_SEATS.filter((player) => player !== human);
   const byPosition = (position: 'right' | 'top' | 'left') => opponents.find((player) => seatPosition(player, human) === position);
@@ -579,6 +704,8 @@ function render(): void {
       ${transientMessage ? `<div class="toast">${transientMessage}</div>` : ''}
       ${choiceOverlay()}
       ${resultOverlay()}
+      ${setupOverlay()}
+      ${tutorialOverlay()}
     </div>
   `;
 
@@ -608,11 +735,14 @@ function processResult(result: SingleDriveResult): void {
   render();
 }
 
-function startNewGame(seed = randomSeed()): void {
+function startNewGame(
+  seed = randomSeed(),
+  difficulty: BotDifficulty = preferences.preferredDifficulty,
+): void {
   logEntries = [];
   riichiMode = false;
   choiceState = null;
-  const result = driveSingleGame(createSingleGame(seed, 0));
+  const result = driveSingleGame(createSingleGame(seed, 0, difficulty));
   if (!result.ok) {
     transientMessage = result.message;
     return;
@@ -631,8 +761,14 @@ function restoreGame(): boolean {
     const result = driveSingleGame(state);
     if (!result.ok) return false;
     current = result;
+    preferences = {
+      ...preferences,
+      preferredDifficulty: singleBotDifficulty(result.state),
+    };
+    savePreferences(preferences);
     logEntries = ['Saved game resumed.'];
     appendEvents(result.events);
+    persist(result.state);
     render();
     return true;
   } catch {
@@ -678,6 +814,24 @@ function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan')
   render();
 }
 
+function setActiveDifficulty(difficulty: BotDifficulty): void {
+  if (!current) return;
+  preferences = { ...preferences, preferredDifficulty: difficulty };
+  savePreferences(preferences);
+  current = {
+    ...current,
+    state: { ...current.state, botDifficulty: difficulty },
+  };
+  persist(current.state);
+  render();
+}
+
+function setAdvisorEnabled(enabled: boolean): void {
+  preferences = { ...preferences, advisorEnabled: enabled };
+  savePreferences(preferences);
+  render();
+}
+
 function handleUiAction(action: string): void {
   if (!current) return;
   const human = current.state.humanSeat;
@@ -710,10 +864,44 @@ function handleUiAction(action: string): void {
       processResult(continueSingleGame(current.state));
       break;
     case 'restart-seed':
-      if (confirm('Restart this seed from East 1?')) startNewGame(current.state.seed);
+      if (confirm('Restart this seed from East 1?')) {
+        startNewGame(current.state.seed, singleBotDifficulty(current.state));
+      }
       break;
     case 'new-game':
-      if (confirm('Start a new hanchan? The autosave will be replaced.')) startNewGame();
+      pendingDifficulty = preferences.preferredDifficulty;
+      pendingAdvisor = preferences.advisorEnabled;
+      setupRequired = false;
+      setupOpen = true;
+      render();
+      break;
+    case 'cancel-setup':
+      if (!setupRequired) {
+        setupOpen = false;
+        render();
+      }
+      break;
+    case 'confirm-new-game':
+      preferences = {
+        ...preferences,
+        preferredDifficulty: pendingDifficulty,
+        advisorEnabled: pendingAdvisor,
+      };
+      savePreferences(preferences);
+      setupOpen = false;
+      setupRequired = false;
+      tutorialOpen = !preferences.tutorialSeen;
+      startNewGame(randomSeed(), pendingDifficulty);
+      break;
+    case 'tutorial':
+      tutorialOpen = true;
+      render();
+      break;
+    case 'close-tutorial':
+      tutorialOpen = false;
+      preferences = { ...preferences, tutorialSeen: true };
+      savePreferences(preferences);
+      render();
       break;
   }
 }
@@ -753,6 +941,39 @@ function bindInteractions(): void {
       if (action) submitHumanAction(action);
     });
   });
+
+  app.querySelectorAll<HTMLElement>('[data-difficulty-choice]').forEach((element) => {
+    element.addEventListener('click', () => {
+      const value = element.dataset.difficultyChoice;
+      if (value === 'casual' || value === 'standard' || value === 'expert') {
+        pendingDifficulty = value;
+        render();
+      }
+    });
+  });
+
+  app.querySelector<HTMLSelectElement>('[data-setting-difficulty]')?.addEventListener('change', (event) => {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (value === 'casual' || value === 'standard' || value === 'expert') setActiveDifficulty(value);
+  });
+
+  app.querySelector<HTMLInputElement>('[data-setting-advisor]')?.addEventListener('change', (event) => {
+    setAdvisorEnabled((event.currentTarget as HTMLInputElement).checked);
+  });
+
+  app.querySelector<HTMLInputElement>('[data-setup-advisor]')?.addEventListener('change', (event) => {
+    pendingAdvisor = (event.currentTarget as HTMLInputElement).checked;
+  });
 }
 
-if (!restoreGame()) startNewGame();
+const restored = restoreGame();
+if (restored) {
+  tutorialOpen = !preferences.tutorialSeen;
+  render();
+} else {
+  setupRequired = true;
+  setupOpen = true;
+  pendingDifficulty = preferences.preferredDifficulty;
+  pendingAdvisor = preferences.advisorEnabled;
+  startNewGame(randomSeed(), pendingDifficulty);
+}

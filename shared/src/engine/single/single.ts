@@ -1,4 +1,9 @@
-import { chooseBotDecision } from '../bot/bot';
+import {
+  chooseBotDecisionForDifficulty,
+  DEFAULT_BOT_DIFFICULTY,
+  normalizeBotDifficulty,
+} from '../bot/difficulty';
+import type { BotDifficulty } from '../bot/difficulty';
 import { advanceMatch, createMatch } from '../match/match';
 import { applyAction, getLegalActions } from '../rules/round';
 import type {
@@ -39,11 +44,21 @@ export function deriveSingleRoundSeed(baseSeed: number, roundNumber: number): nu
   return mix32((Math.trunc(baseSeed) ^ Math.imul(Math.max(1, Math.trunc(roundNumber)), 0x9e3779b9)) >>> 0);
 }
 
-export function createSingleGame(seed: number, humanSeat: PlayerIndex = 0): SingleGameState {
+/** Missing difficulty means a pre-Plan-12 save, which used today's Expert production bot. */
+export function singleBotDifficulty(state: SingleGameState): BotDifficulty {
+  return normalizeBotDifficulty(state.botDifficulty, DEFAULT_BOT_DIFFICULTY);
+}
+
+export function createSingleGame(
+  seed: number,
+  humanSeat: PlayerIndex = 0,
+  botDifficulty: BotDifficulty = DEFAULT_BOT_DIFFICULTY,
+): SingleGameState {
   const normalizedSeed = Math.trunc(seed) >>> 0;
   return {
     seed: normalizedSeed,
     humanSeat,
+    botDifficulty: normalizeBotDifficulty(botDifficulty),
     match: createMatch(createRNG(deriveSingleRoundSeed(normalizedSeed, 1))),
   };
 }
@@ -147,7 +162,11 @@ function processBotReactions(
 
   for (const player of PLAYERS) {
     if (player === working.humanSeat) continue;
-    const decision = chooseBotDecision(working.match.round, player);
+    const decision = chooseBotDecisionForDifficulty(
+      working.match.round,
+      player,
+      singleBotDifficulty(working),
+    );
     if (decision.type === 'pass') continue;
     const action = decision.action;
     if (action.type !== 'ron' && action.type !== 'chi' && action.type !== 'pon' && action.type !== 'daiminkan') {
@@ -183,7 +202,10 @@ export function driveSingleGame(
   state: SingleGameState,
   safetyCap = DEFAULT_SAFETY_CAP,
 ): SingleDriveResult {
-  let working = state;
+  // Migrate old serialized saves in-memory without changing their deterministic round state.
+  let working: SingleGameState = state.botDifficulty === undefined
+    ? { ...state, botDifficulty: singleBotDifficulty(state) }
+    : state;
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
 
@@ -225,7 +247,11 @@ export function driveSingleGame(
       return failure(working, 'AUTOMATION_STALLED', 'No automatic transition is available', events, trace);
     }
 
-    const decision = chooseBotDecision(round, actor);
+    const decision = chooseBotDecisionForDifficulty(
+      round,
+      actor,
+      singleBotDifficulty(working),
+    );
     if (decision.type === 'pass') {
       return failure(working, 'AUTOMATION_STALLED', `Bot ${actor} passed during its own turn`, events, trace);
     }
@@ -262,7 +288,9 @@ export function applyHumanDecision(
     return failure(state, 'ILLEGAL_HUMAN_ACTION', 'The game is not waiting for a human decision', events, trace);
   }
 
-  let working = state;
+  let working = state.botDifficulty === undefined
+    ? { ...state, botDifficulty: singleBotDifficulty(state) }
+    : state;
   if (decision.type === 'pass') {
     if (prompt.kind !== 'reaction') {
       return failure(state, 'INVALID_HUMAN_PASS', 'Pass is only valid during a reaction prompt', events, trace);
@@ -320,15 +348,18 @@ export function continueSingleGame(
     return failure(state, 'ROUND_NOT_ENDED', 'The current hand is still in progress', events, trace);
   }
 
-  const nextRoundNumber = state.match.roundNumber + 1;
+  const normalizedState = state.botDifficulty === undefined
+    ? { ...state, botDifficulty: singleBotDifficulty(state) }
+    : state;
+  const nextRoundNumber = normalizedState.match.roundNumber + 1;
   const advanced = advanceMatch(
-    state.match,
-    createRNG(deriveSingleRoundSeed(state.seed, nextRoundNumber)),
+    normalizedState.match,
+    createRNG(deriveSingleRoundSeed(normalizedState.seed, nextRoundNumber)),
   );
   if (!advanced.ok) {
-    return failure(state, 'ROUND_NOT_ENDED', advanced.message, events, trace);
+    return failure(normalizedState, 'ROUND_NOT_ENDED', advanced.message, events, trace);
   }
-  const working = { ...state, match: advanced.state };
+  const working = { ...normalizedState, match: advanced.state };
   if (advanced.state.status === 'ended') {
     return success(working, { kind: 'match-ended', result: advanced.state.result! }, events, trace);
   }
