@@ -15,6 +15,7 @@ if (nodeMajor < 20) {
 
 const isWindows = process.platform === 'win32';
 const pnpmBin = isWindows ? 'pnpm.cmd' : 'pnpm';
+const corepackBin = isWindows ? 'corepack.cmd' : 'corepack';
 const npxBin = isWindows ? 'npx.cmd' : 'npx';
 
 function available(command, args = ['--version']) {
@@ -38,8 +39,8 @@ function run(command, args) {
 let packageRunner;
 if (available(pnpmBin)) {
   packageRunner = { command: pnpmBin, prefix: [] };
-} else if (available('corepack', ['pnpm', '--version'])) {
-  packageRunner = { command: 'corepack', prefix: ['pnpm'] };
+} else if (available(corepackBin, ['pnpm', '--version'])) {
+  packageRunner = { command: corepackBin, prefix: ['pnpm'] };
 } else {
   packageRunner = { command: npxBin, prefix: ['--yes', 'pnpm@11.24.0'] };
 }
