@@ -1,49 +1,158 @@
-.mahjong-table.table-3d-active {
-  isolation: isolate;
-  background: #143d2d;
+#table-3d-stage {
+  position: fixed;
+  z-index: 8;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 30px;
+  contain: strict;
+}
+
+#table-3d-stage.is-active {
+  display: block;
 }
 
 .table-3d-canvas {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
   width: 100%;
   height: 100%;
   display: block;
-  border-radius: 19px;
-  touch-action: pan-y;
-}
-
-.table-3d-active::after {
-  z-index: 2;
-}
-
-.table-3d-active .table-center,
-.table-3d-active .player-zone {
-  z-index: 4;
-}
-
-/* Public table objects are rendered as real geometry in WebGL.
-   Keep the DOM nodes in place as the authoritative/accessibility source. */
-.table-3d-active .discard-river,
-.table-3d-active .opponent-hand,
-.table-3d-active .meld-row {
-  opacity: 0;
   pointer-events: none;
 }
 
-/* The local rack remains DOM-based for now so keyboard/touch interaction stays excellent.
-   It sits over the 3D table and will be migrated to ray-cast picking in the next pass. */
+.mahjong-table.table-3d-active {
+  isolation: auto;
+  background: #102f23;
+}
+
+.mahjong-table.table-3d-active::after {
+  opacity: .18;
+  z-index: 9;
+}
+
+/* In 3D mode the DOM remains the authoritative state/accessibility source,
+   while Three.js owns all physical tiles, including the local hand. */
+.table-3d-active .discard-river,
+.table-3d-active .opponent-hand,
+.table-3d-active .meld-row,
 .table-3d-active .human-hand {
-  position: relative;
-  z-index: 6;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.table-3d-active .player-zone {
+  z-index: 12;
+  width: auto;
+}
+
+.table-3d-active .player-top {
+  top: 13px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.table-3d-active .player-bottom {
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.table-3d-active .player-left {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.table-3d-active .player-right {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .table-3d-active .human-card,
 .table-3d-active .opponent-card {
-  background: rgba(4, 15, 10, .42);
-  border-color: rgba(255,255,255,.055);
-  backdrop-filter: blur(4px);
+  width: 148px;
+  min-height: 0;
+  padding: 5px 7px;
+  border-radius: 9px;
+  background: rgba(4, 15, 10, .68);
+  border-color: rgba(240, 225, 190, .10);
+  box-shadow: 0 5px 16px rgba(0,0,0,.18);
+  backdrop-filter: none;
+}
+
+.table-3d-active .player-heading {
+  min-height: 21px;
+  gap: 5px;
+}
+
+.table-3d-active .seat-wind {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.table-3d-active .player-name,
+.table-3d-active .player-points {
+  font-size: 10px;
+}
+
+.table-3d-active .player-tags {
+  min-height: 0;
+  margin: 1px 0 0;
+}
+
+.table-3d-active .status-tag {
+  padding: 1px 4px;
+  font-size: 7px;
+}
+
+.table-3d-active .table-center {
+  z-index: 12;
+  width: 190px;
+  min-height: 118px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  border-color: rgba(225, 201, 145, .18);
+  background: rgba(5, 16, 11, .82);
+  box-shadow: 0 10px 26px rgba(0,0,0,.24);
+  backdrop-filter: none;
+}
+
+.table-3d-active .round-title {
+  font-size: 23px;
+}
+
+.table-3d-active .center-meta {
+  margin: 4px 0 7px;
+  gap: 3px 7px;
+  font-size: 8px;
+}
+
+.table-3d-active .dora-row {
+  min-height: 25px;
+}
+
+.table-3d-active .dora-row .tile {
+  width: 24px;
+  height: 32px;
+}
+
+.table-3d-active .turn-indicator {
+  margin-top: 7px;
+  font-size: 9px;
+}
+
+.mahjong-table.table-3d-tile-hover {
+  cursor: pointer;
 }
 
 .table-3d-toggle {
@@ -77,7 +186,7 @@
 
 .table-3d-fallback-note {
   position: absolute;
-  z-index: 8;
+  z-index: 15;
   left: 50%;
   top: 18px;
   transform: translateX(-50%);
@@ -86,7 +195,7 @@
   border: 1px solid rgba(213,181,107,.2);
   border-radius: 999px;
   color: #d9d8ce;
-  background: rgba(5,16,11,.82);
+  background: rgba(5,16,11,.88);
   font-size: 10px;
   text-align: center;
   pointer-events: none;
@@ -98,8 +207,24 @@
 }
 
 @media (max-width: 760px) {
-  .table-3d-canvas { border-radius: 13px; }
-  .table-3d-active .opponent-card { background: rgba(4,15,10,.56); }
+  #table-3d-stage { border-radius: 20px; }
+
+  .table-3d-active .human-card,
+  .table-3d-active .opponent-card {
+    width: 116px;
+    padding: 4px 5px;
+  }
+
+  .table-3d-active .player-name,
+  .table-3d-active .player-points {
+    font-size: 9px;
+  }
+
+  .table-3d-active .table-center {
+    width: 158px;
+    min-height: 104px;
+    padding: 8px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
