@@ -17,10 +17,30 @@ const isWindows = process.platform === 'win32';
 const pnpmBin = isWindows ? 'pnpm.cmd' : 'pnpm';
 const corepackBin = isWindows ? 'corepack.cmd' : 'corepack';
 const npxBin = isWindows ? 'npx.cmd' : 'npx';
+const windowsCommandHost = process.env.ComSpec || 'cmd.exe';
+
+function portableInvocation(command, args) {
+  if (isWindows && /\.(?:cmd|bat)$/i.test(command)) {
+    return {
+      command: windowsCommandHost,
+      args: ['/d', '/c', command, ...args],
+    };
+  }
+  return { command, args };
+}
+
+function spawnSyncPortable(command, args, stdio = 'ignore') {
+  const invocation = portableInvocation(command, args);
+  return spawnSync(invocation.command, invocation.args, {
+    cwd: root,
+    stdio,
+    shell: false,
+  });
+}
 
 function available(command, args = ['--version']) {
-  const result = spawnSync(command, args, { cwd: root, stdio: 'ignore', shell: false });
-  return result.status === 0;
+  const result = spawnSyncPortable(command, args, 'ignore');
+  return !result.error && result.status === 0;
 }
 
 function run(command, args) {
@@ -38,23 +58,40 @@ function run(command, args) {
 
 let packageRunner;
 if (available(pnpmBin)) {
-  packageRunner = { command: pnpmBin, prefix: [] };
+  packageRunner = { command: pnpmBin, prefix: [], label: 'pnpm' };
 } else if (available(corepackBin, ['pnpm', '--version'])) {
-  packageRunner = { command: corepackBin, prefix: ['pnpm'] };
+  packageRunner = { command: corepackBin, prefix: ['pnpm'], label: 'Corepack / pnpm' };
+} else if (available(npxBin, ['--version'])) {
+  packageRunner = { command: npxBin, prefix: ['--yes', 'pnpm@11.24.0'], label: 'npx / pnpm' };
 } else {
-  packageRunner = { command: npxBin, prefix: ['--yes', 'pnpm@11.24.0'] };
+  console.error('\nMahjong Live could not find pnpm, Corepack, or npx.');
+  console.error(`Node.js detected: ${process.version}`);
+  console.error('Reinstall the current Node.js LTS release with npm included, then try again.\n');
+  process.exit(1);
 }
 
 const dependenciesReady = existsSync(resolve(root, 'shared/node_modules/vitest/package.json'));
 if (!dependenciesReady) {
-  console.log('\nMahjong Live: first start — installing project dependencies...\n');
-  const install = spawnSync(
+  console.log('\nMahjong Live: first start — installing project dependencies...');
+  console.log(`Package runner: ${packageRunner.label}\n`);
+
+  const install = spawnSyncPortable(
     packageRunner.command,
     [...packageRunner.prefix, 'install', '--frozen-lockfile'],
-    { cwd: root, stdio: 'inherit', shell: false },
+    'inherit',
   );
+
+  if (install.error) {
+    console.error(`\nCould not launch ${packageRunner.label}: ${install.error.message}`);
+    console.error(`Node.js: ${process.version}`);
+    console.error('If this persists, reinstall the current Node.js LTS release and try again.');
+    process.exit(1);
+  }
+
   if (install.status !== 0) {
-    console.error('\nDependency installation failed. Check your internet connection and try again.');
+    console.error(`\nDependency installation failed with exit code ${install.status ?? 'unknown'}.`);
+    console.error(`Package runner: ${packageRunner.label}`);
+    console.error('The package-manager error printed above contains the actual cause.');
     process.exit(install.status ?? 1);
   }
 }
