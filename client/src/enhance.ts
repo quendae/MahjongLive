@@ -2,13 +2,13 @@ import './game-feel.css';
 
 import type { Dragon, Suit, SuitRank, Tile, Wind } from '@mahjong-live/shared/tile-types';
 import { playDoraCue, playPresentationCaption, playTileSelect, playUiTap, setSoundEnabled, unlockAudio } from './audio';
-import { loadPreferences, savePreferences } from './preferences';
 import { renderTileFace } from './tile-face';
 
+const SOUND_KEY = 'mahjong-live:sound-enabled:v1';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
-let soundEnabled = loadPreferences().soundEnabled;
+let soundEnabled = localStorage.getItem(SOUND_KEY) !== '0';
 let lastPresentationSignature = '';
 let lastDoraCount = -1;
 let scheduled = false;
@@ -90,9 +90,8 @@ function ensureSoundButton(): void {
   button.addEventListener('click', () => {
     unlockAudio();
     soundEnabled = !soundEnabled;
+    localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
     setSoundEnabled(soundEnabled);
-    const latest = loadPreferences();
-    savePreferences({ ...latest, soundEnabled });
     updateSoundButton(button);
     if (soundEnabled) {
       unlockAudio();
