@@ -1,4 +1,10 @@
-export function createFaceCanvas(label: string | null, back = false): HTMLCanvasElement {
+export type TileFaceMode = 'classic' | 'beginner';
+
+export function createFaceCanvas(
+  label: string | null,
+  back = false,
+  mode: TileFaceMode = 'classic',
+): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = 160;
   canvas.height = 216;
@@ -9,12 +15,12 @@ export function createFaceCanvas(label: string | null, back = false): HTMLCanvas
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = back ? '#8fb39f' : '#c8bea9';
   ctx.lineWidth = 5;
-  ctx.strokeRect(5, 5, 150, 206);
+  roundRectStroke(ctx, 5, 5, 150, 206, 12);
 
   if (back) {
     ctx.strokeStyle = 'rgba(232,244,236,.34)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(18, 18, 124, 180);
+    roundRectStroke(ctx, 18, 18, 124, 180, 8);
     for (let y = 28; y < 195; y += 18) {
       for (let x = 25; x < 145; x += 18) {
         ctx.beginPath();
@@ -29,7 +35,7 @@ export function createFaceCanvas(label: string | null, back = false): HTMLCanvas
     return canvas;
   }
 
-  const text = label?.trim() ?? '';
+  const text = label?.trim().toLowerCase() ?? '';
   const suited = /^(red )?([1-9])([mps])$/.exec(text);
   if (suited) {
     const red = Boolean(suited[1]);
@@ -38,25 +44,29 @@ export function createFaceCanvas(label: string | null, back = false): HTMLCanvas
     if (suit === 'm') drawMan(ctx, rank, red);
     else if (suit === 'p') drawPin(ctx, rank, red);
     else drawSou(ctx, rank, red);
+    if (mode === 'beginner') drawBeginnerBadge(ctx, `${rank}${suit.toUpperCase()}`, suitColor(suit, red));
     return canvas;
   }
 
-  const glyphs: Record<string, { glyph: string; color: string }> = {
-    east: { glyph: '東', color: '#26372f' },
-    south: { glyph: '南', color: '#26372f' },
-    west: { glyph: '西', color: '#26372f' },
-    north: { glyph: '北', color: '#26372f' },
-    'red dragon': { glyph: '中', color: '#bb3a34' },
-    'green dragon': { glyph: '發', color: '#26744e' },
+  const glyphs: Record<string, { glyph: string; color: string; beginner: string }> = {
+    east: { glyph: '東', color: '#26372f', beginner: 'E' },
+    south: { glyph: '南', color: '#26372f', beginner: 'S' },
+    west: { glyph: '西', color: '#26372f', beginner: 'W' },
+    north: { glyph: '北', color: '#26372f', beginner: 'N' },
+    'red dragon': { glyph: '中', color: '#bb3a34', beginner: 'RED' },
+    'green dragon': { glyph: '發', color: '#26744e', beginner: 'GREEN' },
   };
+
   if (text === 'white dragon') {
     ctx.strokeStyle = '#38749a';
     ctx.lineWidth = 9;
-    ctx.strokeRect(39, 36, 82, 144);
+    roundRectStroke(ctx, 39, 36, 82, 144, 5);
     ctx.lineWidth = 3;
-    ctx.strokeRect(49, 48, 62, 120);
+    roundRectStroke(ctx, 49, 48, 62, 120, 4);
+    if (mode === 'beginner') drawBeginnerBadge(ctx, 'WHITE', '#38749a', true);
     return canvas;
   }
+
   const honor = glyphs[text];
   if (honor) {
     ctx.fillStyle = honor.color;
@@ -64,8 +74,57 @@ export function createFaceCanvas(label: string | null, back = false): HTMLCanvas
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(honor.glyph, 80, 111);
+    if (mode === 'beginner') {
+      drawBeginnerBadge(ctx, honor.beginner, honor.color, honor.beginner.length > 1);
+    }
   }
   return canvas;
+}
+
+function roundRectStroke(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+  ctx.stroke();
+}
+
+function drawBeginnerBadge(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  color: string,
+  wide = false,
+): void {
+  const width = wide ? 66 : 44;
+  const height = 30;
+  const x = 160 - width - 11;
+  const y = 11;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,253,245,.94)';
+  ctx.strokeStyle = 'rgba(35,48,40,.2)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = `800 ${wide ? 13 : 18}px Inter, Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + width / 2, y + height / 2 + .5);
+  ctx.restore();
+}
+
+function suitColor(suit: string, red: boolean): string {
+  if (red) return '#bd3b34';
+  if (suit === 'm') return '#ad3932';
+  if (suit === 'p') return '#356b95';
+  return '#2d7952';
 }
 
 function drawMan(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {

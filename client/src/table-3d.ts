@@ -1,12 +1,17 @@
 import './table-3d.css';
 import { createFaceCanvas } from './table-3d-faces';
+import type { TileFaceMode } from './table-3d-faces';
 
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
 const MODE_KEY = 'mahjong-live:table-3d:v1';
-const app = document.querySelector<HTMLDivElement>('#app');
-const stage = document.querySelector<HTMLDivElement>('#table-3d-stage');
-if (!app) throw new Error('Missing #app root');
-if (!stage) throw new Error('Missing #table-3d-stage root');
+const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
+
+const appRoot = document.querySelector<HTMLDivElement>('#app');
+const stageRoot = document.querySelector<HTMLDivElement>('#table-3d-stage');
+if (!appRoot) throw new Error('Missing #app root');
+if (!stageRoot) throw new Error('Missing #table-3d-stage root');
+const app = appRoot;
+const stage = stageRoot;
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let enabled = localStorage.getItem(MODE_KEY) !== '0';
@@ -17,7 +22,7 @@ let reconcileScheduled = false;
 let reconcileGeneration = 0;
 
 type Side = 'bottom' | 'top' | 'left' | 'right';
-type TileZone = 'hand' | 'river' | 'rack' | 'meld' | 'wall';
+type TileZone = 'hand' | 'river' | 'rack' | 'meld';
 
 type TileSpec = {
   key: string;
@@ -31,9 +36,9 @@ type TileSpec = {
   selectable: boolean;
   advised: boolean;
   drawn: boolean;
+  latest: boolean;
   tileId: number | null;
   element: HTMLElement | null;
-  wallLayer?: number;
 };
 
 type Transform = {
@@ -61,6 +66,7 @@ type TileActor = {
   body: any;
   face: any;
   indicator: any;
+  latestHalo: any;
   spec: TileSpec;
   target: Transform;
   motion: Motion | null;
@@ -72,7 +78,6 @@ type TableRuntime = {
   scene: any;
   camera: any;
   actorRoot: any;
-  fxRoot: any;
   tileGeometry: any;
   faceGeometry: any;
   ivoryMaterial: any;
@@ -89,7 +94,12 @@ type TableRuntime = {
   pressedKey: string | null;
   drawOrigin: Transform | null;
   lastRemainingDraws: number;
+  faceMode: TileFaceMode;
 };
+
+function readFaceMode(): TileFaceMode {
+  return localStorage.getItem(TILE_MODE_KEY) === 'beginner' ? 'beginner' : 'classic';
+}
 
 function loadThree(): Promise<any> {
   if (!threePromise) {
@@ -190,10 +200,9 @@ function signedHash(key: string, salt: string): number {
 }
 
 function baseTransform(spec: TileSpec): Transform {
-  const restingY = .23;
   const transform: Transform = {
     x: 0,
-    y: restingY,
+    y: .24,
     z: 0,
     yaw: 0,
     pitch: 0,
@@ -202,16 +211,16 @@ function baseTransform(spec: TileSpec): Transform {
   };
 
   if (spec.zone === 'hand') {
-    const spacing = Math.min(.49, 6.15 / Math.max(1, spec.total - 1));
-    transform.x = (spec.index - (spec.total - 1) / 2) * spacing + (spec.drawn ? .13 : 0);
-    transform.z = 3.17;
+    const spacing = Math.min(.50, 6.45 / Math.max(1, spec.total - 1));
+    transform.x = (spec.index - (spec.total - 1) / 2) * spacing + (spec.drawn ? .15 : 0);
+    transform.z = 4.02;
     transform.y = .27;
-    transform.scale = 1.06;
+    transform.scale = 1.03;
   } else if (spec.zone === 'river') {
     const row = Math.floor(spec.index / 6);
     const col = spec.index % 6;
-    const cross = (col - 2.5) * .47;
-    const depth = 1.40 + row * .58;
+    const cross = (col - 2.5) * .52;
+    const depth = 1.16 + row * .67;
     if (spec.side === 'bottom') {
       transform.x = cross;
       transform.z = depth;
@@ -228,64 +237,51 @@ function baseTransform(spec: TileSpec): Transform {
       transform.z = -cross;
       transform.yaw = -Math.PI / 2;
     }
-    transform.scale = .91;
+    transform.scale = .88;
+    if (spec.latest) {
+      transform.y += .09;
+      transform.scale = .94;
+      if (spec.side === 'bottom') transform.z -= .15;
+      if (spec.side === 'top') transform.z += .15;
+      if (spec.side === 'left') transform.x += .15;
+      if (spec.side === 'right') transform.x -= .15;
+    }
   } else if (spec.zone === 'rack') {
     const centered = spec.index - (spec.total - 1) / 2;
-    const spacing = .34;
-    transform.scale = .78;
+    const spacing = .35;
+    transform.scale = .76;
     if (spec.side === 'top') {
       transform.x = centered * spacing;
-      transform.z = -3.28;
+      transform.z = -4.08;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -4.05;
+      transform.x = -5.10;
       transform.z = centered * spacing;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 4.05;
-      transform.z = -centered * spacing;
-      transform.yaw = -Math.PI / 2;
-    }
-  } else if (spec.zone === 'meld') {
-    const centered = spec.index - (spec.total - 1) / 2;
-    const spacing = .39;
-    transform.scale = .80;
-    if (spec.side === 'bottom') {
-      transform.x = centered * spacing;
-      transform.z = 2.70;
-    } else if (spec.side === 'top') {
-      transform.x = -centered * spacing;
-      transform.z = -2.70;
-      transform.yaw = Math.PI;
-    } else if (spec.side === 'left') {
-      transform.x = -3.30;
-      transform.z = centered * spacing;
-      transform.yaw = Math.PI / 2;
-    } else {
-      transform.x = 3.30;
+      transform.x = 5.10;
       transform.z = -centered * spacing;
       transform.yaw = -Math.PI / 2;
     }
   } else {
-    const slot = spec.index;
-    const layer = spec.wallLayer ?? 0;
-    transform.scale = .76;
-    transform.y = .19 + layer * .13;
-    if (slot < 9) {
-      transform.x = (slot - 4) * .48;
-      transform.z = -3.94;
+    const row = Math.floor(spec.index / 8);
+    const col = spec.index % 8;
+    transform.scale = .80;
+    if (spec.side === 'bottom') {
+      transform.x = 4.65 - col * .42;
+      transform.z = 3.46 - row * .56;
+    } else if (spec.side === 'top') {
+      transform.x = -4.65 + col * .42;
+      transform.z = -3.46 + row * .56;
       transform.yaw = Math.PI;
-    } else if (slot < 18) {
-      transform.x = 4.52;
-      transform.z = (slot - 13) * .48;
-      transform.yaw = -Math.PI / 2;
-    } else if (slot < 27) {
-      transform.x = (22 - slot) * .48;
-      transform.z = 3.94;
-    } else {
-      transform.x = -4.52;
-      transform.z = (31 - slot) * .48;
+    } else if (spec.side === 'left') {
+      transform.x = -4.62 + row * .56;
+      transform.z = 3.42 - col * .42;
       transform.yaw = Math.PI / 2;
+    } else {
+      transform.x = 4.62 - row * .56;
+      transform.z = -3.42 + col * .42;
+      transform.yaw = -Math.PI / 2;
     }
   }
 
@@ -298,25 +294,21 @@ function humanizeTransform(spec: TileSpec, input: Transform): Transform {
   let yaw = 0;
   let tilt = 0;
   if (spec.zone === 'river') {
-    position = .032;
-    yaw = .036;
-    tilt = .008;
-  } else if (spec.zone === 'meld') {
-    position = .016;
-    yaw = .018;
+    position = spec.latest ? .006 : .014;
+    yaw = .025;
     tilt = .005;
-  } else if (spec.zone === 'hand') {
-    position = .005;
-    yaw = .006;
-    tilt = .0025;
-  } else if (spec.zone === 'rack') {
+  } else if (spec.zone === 'meld') {
     position = .008;
+    yaw = .015;
+    tilt = .004;
+  } else if (spec.zone === 'hand') {
+    position = .004;
+    yaw = .006;
+    tilt = .002;
+  } else {
+    position = .005;
     yaw = .008;
-    tilt = .003;
-  } else if (spec.zone === 'wall') {
-    position = .003;
-    yaw = .003;
-    tilt = .0015;
+    tilt = .0025;
   }
   out.x += signedHash(spec.key, 'x') * position;
   out.z += signedHash(spec.key, 'z') * position;
@@ -354,21 +346,72 @@ function transformsDiffer(a: Transform, b: Transform): boolean {
     || Math.abs(a.scale - b.scale) > .002;
 }
 
+function roundedTileGeometry(THREE: any): any {
+  const width = .43;
+  const depth = .57;
+  const height = .16;
+  const radius = .055;
+  const x0 = -width / 2;
+  const x1 = width / 2;
+  const y0 = -depth / 2;
+  const y1 = depth / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x0 + radius, y0);
+  shape.lineTo(x1 - radius, y0);
+  shape.quadraticCurveTo(x1, y0, x1, y0 + radius);
+  shape.lineTo(x1, y1 - radius);
+  shape.quadraticCurveTo(x1, y1, x1 - radius, y1);
+  shape.lineTo(x0 + radius, y1);
+  shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
+  shape.lineTo(x0, y0 + radius);
+  shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: height,
+    steps: 1,
+    curveSegments: 4,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    bevelSize: .018,
+    bevelThickness: .018,
+  });
+  geometry.rotateX(-Math.PI / 2);
+  geometry.center();
+  return geometry;
+}
+
+function disposeFaceMaterials(rt: TableRuntime): void {
+  for (const material of rt.faceMaterials.values()) {
+    material.map?.dispose?.();
+    material.dispose?.();
+  }
+  rt.faceMaterials.clear();
+}
+
 function materialForFace(rt: TableRuntime, label: string | null, back = false): any {
   if (back) return rt.backMaterial;
-  const key = label ?? 'blank';
+  const key = `${rt.faceMode}:${label ?? 'blank'}`;
   const cached = rt.faceMaterials.get(key);
   if (cached) return cached;
-  const texture = new rt.THREE.CanvasTexture(createFaceCanvas(label));
+  const texture = new rt.THREE.CanvasTexture(createFaceCanvas(label, false, rt.faceMode));
   texture.colorSpace = rt.THREE.SRGBColorSpace;
   texture.anisotropy = Math.min(8, rt.renderer.capabilities.getMaxAnisotropy());
   const material = new rt.THREE.MeshStandardMaterial({
     map: texture,
-    roughness: .62,
+    roughness: .60,
     metalness: 0,
   });
   rt.faceMaterials.set(key, material);
   return material;
+}
+
+function syncFaceMode(rt: TableRuntime): void {
+  const next = readFaceMode();
+  if (next === rt.faceMode) return;
+  rt.faceMode = next;
+  disposeFaceMaterials(rt);
+  for (const actor of rt.actors.values()) {
+    actor.face.material = materialForFace(rt, actor.spec.label, actor.spec.back);
+  }
 }
 
 function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): TileActor {
@@ -383,25 +426,40 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   visual.add(body);
 
   const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
-  face.position.y = .086;
+  face.position.y = .096;
   face.rotation.x = -Math.PI / 2;
   face.receiveShadow = true;
   visual.add(face);
 
   const indicator = new THREE.Mesh(
-    new THREE.RingGeometry(.23, .28, 32),
+    new THREE.RingGeometry(.235, .285, 34),
     new THREE.MeshBasicMaterial({
-      color: 0xe5c56e,
+      color: 0xe8c96f,
       transparent: true,
-      opacity: .82,
+      opacity: .84,
       side: THREE.DoubleSide,
       depthWrite: false,
     }),
   );
   indicator.rotation.x = -Math.PI / 2;
-  indicator.position.y = -.086;
+  indicator.position.y = -.103;
   indicator.visible = false;
   visual.add(indicator);
+
+  const latestHalo = new THREE.Mesh(
+    new THREE.RingGeometry(.29, .35, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0xf4d47d,
+      transparent: true,
+      opacity: .92,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  latestHalo.rotation.x = -Math.PI / 2;
+  latestHalo.position.y = -.106;
+  latestHalo.visible = spec.latest;
+  visual.add(latestHalo);
 
   const actor: TileActor = {
     key: spec.key,
@@ -410,6 +468,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
     body,
     face,
     indicator,
+    latestHalo,
     spec,
     target: initial,
     motion: null,
@@ -432,6 +491,7 @@ function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void 
   actor.spec = spec;
   if (changedFace) actor.face.material = materialForFace(rt, spec.label, spec.back);
   actor.indicator.visible = spec.advised;
+  actor.latestHalo.visible = spec.latest;
 }
 
 function rekeyActor(rt: TableRuntime, actor: TileActor, key: string): void {
@@ -468,7 +528,9 @@ function migrationCandidate(spec: TileSpec, unused: TileActor[]): TileActor | un
   if (spec.zone === 'meld') {
     const fromRiver = unused.find((actor) => labelMatches(actor) && actor.spec.zone === 'river');
     if (fromRiver) return fromRiver;
-    const fromOwn = unused.find((actor) => actor.spec.player === spec.player && (actor.spec.zone === 'hand' || actor.spec.zone === 'rack') && (labelMatches(actor) || actor.spec.back));
+    const fromOwn = unused.find((actor) => actor.spec.player === spec.player
+      && (actor.spec.zone === 'hand' || actor.spec.zone === 'rack')
+      && (labelMatches(actor) || actor.spec.back));
     if (fromOwn) return fromOwn;
   }
   if (spec.zone === 'hand') {
@@ -479,13 +541,20 @@ function migrationCandidate(spec: TileSpec, unused: TileActor[]): TileActor | un
 
 function motionProfile(from: TileZone, to: TileZone): { arc: number; duration: number } {
   if (reducedMotion) return { arc: 0, duration: 0 };
-  if (from === 'hand' && to === 'river') return { arc: .92, duration: 380 };
-  if (from === 'rack' && to === 'river') return { arc: .58, duration: 330 };
-  if (to === 'meld' && (from === 'hand' || from === 'rack' || from === 'river')) return { arc: .48, duration: 360 };
-  return { arc: .10, duration: 210 };
+  if (from === 'hand' && to === 'river') return { arc: .86, duration: 390 };
+  if (from === 'rack' && to === 'river') return { arc: .58, duration: 340 };
+  if (to === 'meld' && (from === 'hand' || from === 'rack' || from === 'river')) return { arc: .46, duration: 370 };
+  return { arc: .10, duration: 220 };
 }
 
-function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
+function elementTileId(element: HTMLElement): number | null {
+  const raw = element.dataset.engineTileId ?? element.dataset.tileId;
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function gatherSpecs(table: HTMLElement): TileSpec[] {
   const specs: TileSpec[] = [];
 
   for (const zone of table.querySelectorAll<HTMLElement>('.player-zone')) {
@@ -495,19 +564,22 @@ function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
     const river = [...zone.querySelectorAll<HTMLElement>('.discard-river .tile')]
       .filter((element) => !element.classList.contains('tile-called'));
     river.forEach((element, index) => {
+      const tileId = elementTileId(element);
+      const label = element.getAttribute('aria-label');
       specs.push({
-        key: `river:${player}:${index}`,
+        key: tileId === null ? `river:${player}:${index}:${label ?? 'tile'}` : `tile:${tileId}`,
         zone: 'river',
         side,
         player,
         index,
         total: river.length,
-        label: element.getAttribute('aria-label'),
+        label,
         back: false,
         selectable: false,
         advised: false,
         drawn: false,
-        tileId: null,
+        latest: element.classList.contains('tile-latest-discard'),
+        tileId,
         element,
       });
     });
@@ -527,6 +599,7 @@ function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
           selectable: false,
           advised: false,
           drawn: false,
+          latest: false,
           tileId: null,
           element,
         });
@@ -535,19 +608,22 @@ function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
 
     const meld = [...zone.querySelectorAll<HTMLElement>('.meld-row .tile')];
     meld.forEach((element, index) => {
+      const tileId = elementTileId(element);
+      const label = element.getAttribute('aria-label');
       specs.push({
-        key: `meld:${player}:${index}:${element.getAttribute('aria-label') ?? 'back'}`,
+        key: tileId === null ? `meld:${player}:${index}:${label ?? 'back'}` : `tile:${tileId}`,
         zone: 'meld',
         side,
         player,
         index,
         total: meld.length,
-        label: element.getAttribute('aria-label'),
+        label,
         back: element.classList.contains('tile-back'),
         selectable: false,
         advised: false,
         drawn: false,
-        tileId: null,
+        latest: false,
+        tileId,
         element,
       });
     });
@@ -555,11 +631,10 @@ function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
 
   const handElements = [...table.querySelectorAll<HTMLElement>('.human-hand .tile')];
   handElements.forEach((element, index) => {
-    const rawId = element.dataset.tileId;
-    const tileId = rawId === undefined ? null : Number(rawId);
+    const tileId = elementTileId(element);
     const label = element.getAttribute('aria-label');
     specs.push({
-      key: tileId !== null && Number.isFinite(tileId) ? `tile:${tileId}` : `hand:${index}:${label ?? 'tile'}`,
+      key: tileId === null ? `hand:${index}:${label ?? 'tile'}` : `tile:${tileId}`,
       zone: 'hand',
       side: 'bottom',
       player: zonePlayer(table, 'bottom'),
@@ -567,22 +642,14 @@ function gatherSpecs(table: HTMLElement, draws: number): TileSpec[] {
       total: handElements.length,
       label,
       back: false,
-      selectable: element.classList.contains('tile-clickable') && tileId !== null && Number.isFinite(tileId),
+      selectable: element.classList.contains('tile-clickable') && tileId !== null,
       advised: element.classList.contains('tile-advised'),
       drawn: element.classList.contains('tile-drawn'),
-      tileId: tileId !== null && Number.isFinite(tileId) ? tileId : null,
+      latest: false,
+      tileId,
       element,
     });
   });
-
-  const fullStacks = Math.floor(draws / 2);
-  const hasHalfStack = draws % 2 === 1;
-  for (let slot = 0; slot < fullStacks; slot += 1) {
-    for (let layer = 0; layer < 2; layer += 1) {
-      specs.push(wallSpec(slot, layer));
-    }
-  }
-  if (hasHalfStack) specs.push(wallSpec(fullStacks, 0));
 
   return specs;
 }
@@ -591,39 +658,27 @@ function zonePlayer(table: HTMLElement, side: Side): string {
   return table.querySelector<HTMLElement>(`.player-${side}`)?.dataset.player ?? side;
 }
 
-function wallSpec(slot: number, layer: number): TileSpec {
+function syntheticDrawOrigin(draws: number): Transform {
+  const offset = ((draws % 7) - 3) * .065;
   return {
-    key: `wall:${slot}:${layer}`,
-    zone: 'wall',
-    side: slot < 9 ? 'top' : slot < 18 ? 'right' : slot < 27 ? 'bottom' : 'left',
-    player: 'wall',
-    index: slot,
-    total: 35,
-    label: null,
-    back: true,
-    selectable: false,
-    advised: false,
-    drawn: false,
-    tileId: null,
-    element: null,
-    wallLayer: layer,
+    x: 5.22,
+    y: .42,
+    z: -3.68 + offset,
+    yaw: -Math.PI / 2,
+    pitch: -.04,
+    roll: .02,
+    scale: .76,
   };
 }
 
-function chooseDrawOrigin(rt: TableRuntime, desired: Map<string, TileSpec>, draws: number): Transform | null {
-  if (draws >= rt.lastRemainingDraws) return rt.drawOrigin;
-  const removed = [...rt.actors.values()]
-    .filter((actor) => actor.spec.zone === 'wall' && !desired.has(actor.key))
-    .sort((a, b) => b.spec.index - a.spec.index || (b.spec.wallLayer ?? 0) - (a.spec.wallLayer ?? 0));
-  const actor = removed[0];
-  return actor ? transformFromActor(actor) : rt.drawOrigin;
-}
-
 function syncActors(rt: TableRuntime, table: HTMLElement): void {
+  syncFaceMode(rt);
   const draws = remainingDraws();
-  const specs = gatherSpecs(table, draws);
+  const drawJustOccurred = draws < rt.lastRemainingDraws;
+  if (drawJustOccurred) rt.drawOrigin = syntheticDrawOrigin(draws);
+
+  const specs = gatherSpecs(table);
   const desired = new Map(specs.map((spec) => [spec.key, spec]));
-  rt.drawOrigin = chooseDrawOrigin(rt, desired, draws);
   const unused = [...rt.actors.values()].filter((actor) => !desired.has(actor.key));
   const now = performance.now();
 
@@ -645,17 +700,15 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
 
     if (!actor) {
       let initial = target;
-      if (rt.initialized && spec.zone === 'hand' && rt.drawOrigin) {
-        initial = { ...rt.drawOrigin, y: rt.drawOrigin.y + .42, scale: .76 };
+      if (rt.initialized && drawJustOccurred && rt.drawOrigin && (spec.zone === 'hand' || spec.zone === 'rack')) {
+        initial = { ...rt.drawOrigin };
       } else if (rt.initialized && spec.zone === 'river' && spec.side !== 'bottom') {
-        const rackGhost: TileSpec = { ...spec, zone: 'rack', index: 0, total: 1, back: true };
-        initial = baseTransform(rackGhost);
+        initial = baseTransform({ ...spec, zone: 'rack', index: 0, total: 1, back: true, latest: false });
       }
       actor = createActor(rt, spec, initial);
       rt.actors.set(spec.key, actor);
-      const arc = rt.initialized && spec.zone === 'hand' ? .72 : rt.initialized && spec.zone === 'river' ? .52 : 0;
-      const duration = rt.initialized && (spec.zone === 'hand' || spec.zone === 'river') ? 340 : 0;
-      beginMotion(actor, target, now, arc, duration);
+      const shouldTravel = rt.initialized && transformsDiffer(initial, target);
+      beginMotion(actor, target, now, shouldTravel ? .62 : 0, shouldTravel ? 350 : 0);
       refreshActor(rt, actor, spec);
       continue;
     }
@@ -678,40 +731,6 @@ function removeActor(rt: TableRuntime, actor: TileActor): void {
   if (rt.pressedKey === actor.key) rt.pressedKey = null;
   rt.actors.delete(actor.key);
   actor.group.removeFromParent();
-}
-
-function currentTurnSide(table: HTMLElement): Side | null {
-  const text = table.querySelector('.turn-indicator')?.textContent?.trim() ?? '';
-  const actorName = /^(You|Bot \d+) to act$/.exec(text)?.[1];
-  if (!actorName) return null;
-  const zone = [...table.querySelectorAll<HTMLElement>('.player-zone')].find(
-    (candidate) => candidate.querySelector('.player-name')?.textContent?.trim() === actorName,
-  );
-  return zone ? zoneSide(zone) : null;
-}
-
-function updateTurnMarker(rt: TableRuntime, table: HTMLElement): void {
-  rt.fxRoot.clear();
-  const side = currentTurnSide(table);
-  if (!side) return;
-  const THREE = rt.THREE;
-  const marker = new THREE.Mesh(
-    new THREE.RingGeometry(.21, .27, 36),
-    new THREE.MeshBasicMaterial({
-      color: 0xe2c273,
-      transparent: true,
-      opacity: .72,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
-  marker.rotation.x = -Math.PI / 2;
-  marker.position.y = .16;
-  if (side === 'bottom') marker.position.set(0, .16, 3.62);
-  if (side === 'top') marker.position.set(0, .16, -3.62);
-  if (side === 'left') marker.position.set(-4.36, .16, 0);
-  if (side === 'right') marker.position.set(4.36, .16, 0);
-  rt.fxRoot.add(marker);
 }
 
 function alignStage(rt: TableRuntime, table: HTMLElement): void {
@@ -745,39 +764,40 @@ function createRuntime(THREE: any): TableRuntime {
   stage.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0b2017, 14, 26);
+  scene.fog = new THREE.Fog(0x0b2017, 16, 29);
 
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 50);
-  camera.position.set(0, 8.75, 9.55);
-  camera.lookAt(0, .08, 0);
+  const camera = new THREE.PerspectiveCamera(37, 1, .1, 60);
+  camera.position.set(0, 10.15, 11.55);
+  camera.lookAt(0, .08, .20);
 
   scene.add(new THREE.HemisphereLight(0xf3ead7, 0x0b1811, 1.35));
-  const key = new THREE.DirectionalLight(0xffefd2, 2.25);
-  key.position.set(-4.5, 10, 6.5);
+  const key = new THREE.DirectionalLight(0xffefd2, 2.3);
+  key.position.set(-4.8, 11, 7.2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = 24;
-  key.shadow.camera.left = -7;
-  key.shadow.camera.right = 7;
-  key.shadow.camera.top = 7;
-  key.shadow.camera.bottom = -7;
+  key.shadow.camera.far = 28;
+  key.shadow.camera.left = -8;
+  key.shadow.camera.right = 8;
+  key.shadow.camera.top = 8;
+  key.shadow.camera.bottom = -8;
   scene.add(key);
-  const fill = new THREE.PointLight(0x79ae92, .8, 15, 2);
-  fill.position.set(4, 4, -4);
+
+  const fill = new THREE.PointLight(0x79ae92, .75, 17, 2);
+  fill.position.set(4.6, 4.5, -4.5);
   scene.add(fill);
 
   const base = new THREE.Mesh(
-    new THREE.BoxGeometry(10.7, .46, 8.75),
+    new THREE.BoxGeometry(12.25, .48, 9.85),
     new THREE.MeshStandardMaterial({ color: 0x3a2b20, roughness: .74, metalness: .015 }),
   );
-  base.position.y = -.28;
+  base.position.y = -.29;
   base.receiveShadow = true;
   base.castShadow = true;
   scene.add(base);
 
   const felt = new THREE.Mesh(
-    new THREE.BoxGeometry(9.88, .18, 7.98),
+    new THREE.BoxGeometry(11.48, .18, 9.08),
     new THREE.MeshStandardMaterial({ color: 0x174a36, roughness: .96, metalness: 0 }),
   );
   felt.position.y = .02;
@@ -785,13 +805,16 @@ function createRuntime(THREE: any): TableRuntime {
   scene.add(felt);
 
   const actorRoot = new THREE.Group();
-  const fxRoot = new THREE.Group();
-  scene.add(actorRoot, fxRoot);
+  scene.add(actorRoot);
 
-  const tileGeometry = new THREE.BoxGeometry(.43, .16, .57, 2, 1, 2);
+  const tileGeometry = roundedTileGeometry(THREE);
   const faceGeometry = new THREE.PlaneGeometry(.37, .51);
-  const ivoryMaterial = new THREE.MeshStandardMaterial({ color: 0xe9dfc8, roughness: .55, metalness: 0 });
-  const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true));
+  const ivoryMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe9dfc8,
+    roughness: .54,
+    metalness: 0,
+  });
+  const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true, 'classic'));
   backTexture.colorSpace = THREE.SRGBColorSpace;
   const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: .65, metalness: 0 });
 
@@ -801,7 +824,6 @@ function createRuntime(THREE: any): TableRuntime {
     scene,
     camera,
     actorRoot,
-    fxRoot,
     tileGeometry,
     faceGeometry,
     ivoryMaterial,
@@ -818,6 +840,7 @@ function createRuntime(THREE: any): TableRuntime {
     pressedKey: null,
     drawOrigin: null,
     lastRemainingDraws: remainingDraws(),
+    faceMode: readFaceMode(),
   };
 
   renderer.setAnimationLoop((time: number) => frameRuntime(rt, time));
@@ -832,7 +855,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
       const motion = actor.motion;
       const progress = Math.max(0, Math.min(1, (time - motion.startedAt) / motion.duration));
       const eased = progress * progress * (3 - 2 * progress);
-      const settle = Math.sin(progress * Math.PI * 3) * .026 * (1 - progress);
+      const settle = Math.sin(progress * Math.PI * 3) * .022 * (1 - progress);
       actor.group.position.x = lerp(motion.start.x, motion.target.x, eased);
       actor.group.position.z = lerp(motion.start.z, motion.target.z, eased);
       actor.group.position.y = lerp(motion.start.y, motion.target.y, eased)
@@ -854,10 +877,17 @@ function frameRuntime(rt: TableRuntime, time: number): void {
     const hoverY = hovered ? (pressed ? .10 : .19) : 0;
     actor.visual.position.y += (hoverY - actor.visual.position.y) * .22;
     const targetTiltX = hovered ? -.06 : 0;
-    const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .045 : 0;
+    const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
     actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
     actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
     actor.indicator.visible = actor.spec.advised || hovered;
+    actor.latestHalo.visible = actor.spec.latest;
+    if (actor.spec.latest && !reducedMotion) {
+      const pulse = 1 + Math.sin(time / 180) * .055;
+      actor.latestHalo.scale.setScalar(pulse);
+    } else {
+      actor.latestHalo.scale.setScalar(1);
+    }
   }
 
   rt.renderer.render(rt.scene, rt.camera);
@@ -887,11 +917,9 @@ function disposeRuntime(): void {
   rt.ivoryMaterial.dispose();
   rt.backMaterial.map?.dispose?.();
   rt.backMaterial.dispose();
-  for (const material of rt.faceMaterials.values()) {
-    material.map?.dispose?.();
-    material.dispose?.();
-  }
+  disposeFaceMaterials(rt);
   rt.renderer.dispose();
+  rt.renderer.forceContextLoss?.();
 }
 
 function deactivateStage(): void {
@@ -942,7 +970,6 @@ async function reconcile(): Promise<void> {
   removeFallbackNote(table);
   alignStage(rt, table);
   syncActors(rt, table);
-  updateTurnMarker(rt, table);
   updateModeButton();
 }
 
@@ -958,7 +985,9 @@ function eventTargetElement(event: Event): Element | null {
 
 function isUiTarget(event: Event): boolean {
   const target = eventTargetElement(event);
-  return Boolean(target?.closest('button, select, input, textarea, a, [data-ui-action], .action-dock, .table-center'));
+  return Boolean(target?.closest(
+    'button, select, input, textarea, a, [data-ui-action], .action-dock, .table-center, .reaction-popup, .table-dora-tray',
+  ));
 }
 
 function pickActor(event: PointerEvent): TileActor | null {
@@ -999,7 +1028,10 @@ function onPointerUp(event: PointerEvent): void {
   const rt = runtime;
   if (!rt) return;
   const actor = pickActor(event);
-  const shouldActivate = actor && rt.pressedKey === actor.key && actor.spec.selectable && actor.spec.tileId !== null;
+  const shouldActivate = actor
+    && rt.pressedKey === actor.key
+    && actor.spec.selectable
+    && actor.spec.tileId !== null;
   rt.pressedKey = null;
   if (!shouldActivate || !actor) return;
   const source = app.querySelector<HTMLElement>(`[data-tile-id="${actor.spec.tileId}"]`);
@@ -1013,17 +1045,17 @@ function onPointerLeave(): void {
   runtime.table?.classList.remove('table-3d-tile-hover');
 }
 
-const observer = new MutationObserver(() => scheduleReconcile());
+const observer = new MutationObserver(scheduleReconcile);
 observer.observe(app, { childList: true, subtree: true });
 window.addEventListener('resize', scheduleReconcile, { passive: true });
 window.addEventListener('scroll', scheduleReconcile, { passive: true });
+window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
 window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
 window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
 window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
 window.addEventListener('blur', onPointerLeave);
+window.addEventListener('pagehide', disposeRuntime, { once: true });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) onPointerLeave();
 });
 scheduleReconcile();
-
-void disposeRuntime;
