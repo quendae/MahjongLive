@@ -2,6 +2,7 @@
   "name": "mahjong-live",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "start": "node scripts/start.mjs",
     "dev": "node scripts/start.mjs --no-open",
