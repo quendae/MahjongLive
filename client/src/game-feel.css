@@ -1,0 +1,316 @@
+.mahjong-table {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255,255,255,.07), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(3,20,13,.04), rgba(2,13,9,.18) 76%),
+    repeating-linear-gradient(25deg, rgba(255,255,255,.014) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(115deg, rgba(0,0,0,.025) 0 1px, transparent 1px 7px),
+    linear-gradient(145deg, #205b42 0%, #123e2d 55%, #0e3124 100%);
+  border-color: #4a3727;
+  box-shadow:
+    inset 0 0 0 2px rgba(242,218,165,.18),
+    inset 0 0 100px rgba(0,0,0,.34),
+    0 28px 80px rgba(0,0,0,.48);
+}
+
+.mahjong-table::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 30px;
+  box-shadow:
+    inset 0 3px 0 rgba(255,255,255,.055),
+    inset 0 -4px 0 rgba(0,0,0,.28);
+}
+
+.player-zone {
+  transition: filter .18s ease;
+}
+
+.player-zone.is-active-turn .opponent-card,
+.player-zone.is-active-turn .human-card {
+  border-color: rgba(236,207,130,.38);
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.22),
+    0 0 0 1px rgba(236,207,130,.08),
+    0 0 26px rgba(236,207,130,.08);
+}
+
+.player-zone.is-active-turn .seat-wind {
+  box-shadow: 0 0 0 2px rgba(236,207,130,.18), 0 0 14px rgba(236,207,130,.18);
+}
+
+.tile {
+  isolation: isolate;
+  border-color: #d9d0bc;
+  border-bottom-color: #a99b82;
+  border-radius: 7px 7px 6px 6px;
+  background:
+    linear-gradient(112deg, rgba(255,255,255,.95), rgba(255,255,255,0) 34%),
+    linear-gradient(155deg, #fffef8 0%, #f3eedf 66%, #ddd3bc 100%);
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.95),
+    inset -1px -2px 0 rgba(91,77,48,.1),
+    0 4px 0 #b7aa90,
+    0 7px 9px rgba(0,0,0,.25);
+  transform-origin: 50% 100%;
+}
+
+.tile::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 4px;
+  right: 4px;
+  bottom: -5px;
+  height: 6px;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(180deg, #c9bda4, #9d8f74);
+  box-shadow: inset 0 -1px 0 rgba(65,50,26,.16);
+}
+
+.tile-face-svg {
+  width: 88%;
+  height: 90%;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 .35px 0 rgba(255,255,255,.6));
+}
+
+.tile-face-man text,
+.tile-face-honor text {
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", "Noto Serif JP", Georgia, serif;
+  paint-order: stroke fill;
+  stroke: rgba(255,255,255,.22);
+  stroke-width: .7px;
+}
+
+.tile-face-man .man-number {
+  font-size: 50px;
+  font-weight: 800;
+}
+
+.tile-face-man .man-suit {
+  font-size: 43px;
+  font-weight: 800;
+}
+
+.tile-face-honor .honor-glyph {
+  font-size: 74px;
+  font-weight: 800;
+}
+
+.tile-compact {
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.9),
+    inset -1px -1px 0 rgba(91,77,48,.08),
+    0 2px 0 #b7aa90,
+    0 4px 5px rgba(0,0,0,.22);
+}
+
+.tile-compact::before {
+  left: 3px;
+  right: 3px;
+  bottom: -3px;
+  height: 4px;
+  border-radius: 0 0 3px 3px;
+}
+
+.tile-back {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.11), transparent 30%),
+    linear-gradient(145deg, #75a18a 0%, #416f59 55%, #315944 100%);
+  border-color: #92b19f;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.24),
+    inset -1px -1px 0 rgba(0,0,0,.13),
+    0 2px 0 #254b38,
+    0 4px 6px rgba(0,0,0,.24);
+}
+
+.tile-back::before { background: linear-gradient(180deg, #416a55, #284b39); }
+.tile-back span {
+  width: 72%;
+  height: 76%;
+  border: 1px solid rgba(237,247,240,.28);
+  border-radius: 3px;
+  background:
+    linear-gradient(45deg, transparent 44%, rgba(255,255,255,.055) 45% 55%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, rgba(255,255,255,.055) 45% 55%, transparent 56%);
+  background-size: 7px 7px;
+}
+
+.tile-clickable {
+  transition: transform .12s cubic-bezier(.2,.8,.2,1), box-shadow .12s ease, filter .12s ease;
+}
+
+.tile-clickable:hover {
+  transform: translateY(-10px) rotateX(3deg);
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.95),
+    inset -1px -2px 0 rgba(91,77,48,.1),
+    0 4px 0 #b7aa90,
+    0 14px 15px rgba(0,0,0,.32);
+}
+
+.tile-clickable:active {
+  transform: translateY(-4px) scale(.975);
+  transition-duration: .045s;
+}
+
+.tile-drawn {
+  margin-left: 13px;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.95),
+    inset -1px -2px 0 rgba(91,77,48,.1),
+    0 4px 0 #b7aa90,
+    0 8px 13px rgba(0,0,0,.3);
+}
+
+.tile-fresh {
+  animation: tile-drop-in .25s cubic-bezier(.2,.9,.25,1.15) both;
+}
+
+.fx-draw .opponent-hand .tile-back:last-child,
+.fx-draw .human-hand .tile-drawn {
+  animation: tile-draw-in .23s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.fx-call .meld-row {
+  animation: meld-call-pop .3s cubic-bezier(.2,.9,.2,1.2) both;
+}
+
+.fx-riichi .riichi-tag,
+.fx-riichi .player-heading {
+  animation: riichi-flash .42s ease-out both;
+}
+
+.fx-winner .opponent-card,
+.fx-winner .human-card {
+  animation: winner-glow .8s ease-out both;
+}
+
+.table-center.fx-dora .dora-row {
+  animation: dora-reveal .48s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.mahjong-table.fx-win {
+  animation: table-win .8s ease-out both;
+}
+
+.sound-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sound-button .sound-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-grid;
+  place-items: center;
+  color: #e8d18d;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.sound-button.is-muted {
+  color: #8fa097;
+  background: rgba(255,255,255,.03);
+}
+
+.sound-button.is-muted .sound-icon { color: #7b8f83; }
+
+.log-list::-webkit-scrollbar,
+.human-hand::-webkit-scrollbar,
+.dialog::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.log-list::-webkit-scrollbar-track,
+.human-hand::-webkit-scrollbar-track,
+.dialog::-webkit-scrollbar-track {
+  background: rgba(0,0,0,.08);
+  border-radius: 999px;
+}
+
+.log-list::-webkit-scrollbar-thumb,
+.human-hand::-webkit-scrollbar-thumb,
+.dialog::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #456555;
+  background-clip: padding-box;
+}
+
+@keyframes tile-drop-in {
+  0% { opacity: .25; transform: translateY(-18px) scale(1.08) rotate(-2deg); }
+  68% { opacity: 1; transform: translateY(2px) scale(.99) rotate(.4deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+
+@keyframes tile-draw-in {
+  0% { opacity: .25; transform: translateX(18px) translateY(-7px) rotate(3deg); }
+  100% { opacity: 1; transform: translateX(0) translateY(0) rotate(0); }
+}
+
+@keyframes meld-call-pop {
+  0% { transform: scale(.84); filter: brightness(1.45); }
+  72% { transform: scale(1.04); filter: brightness(1.15); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes riichi-flash {
+  0% { filter: brightness(1); }
+  35% { filter: brightness(1.7) drop-shadow(0 0 8px rgba(222,92,75,.8)); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes dora-reveal {
+  0% { opacity: .3; transform: perspective(200px) rotateY(80deg) scale(.92); }
+  55% { opacity: 1; transform: perspective(200px) rotateY(-8deg) scale(1.05); }
+  100% { opacity: 1; transform: perspective(200px) rotateY(0) scale(1); }
+}
+
+@keyframes winner-glow {
+  0% { filter: brightness(1); }
+  40% { filter: brightness(1.35) drop-shadow(0 0 18px rgba(229,196,108,.42)); }
+  100% { filter: brightness(1.08); }
+}
+
+@keyframes table-win {
+  0% { box-shadow: inset 0 0 0 2px rgba(242,218,165,.18), inset 0 0 100px rgba(0,0,0,.34), 0 28px 80px rgba(0,0,0,.48); }
+  40% { box-shadow: inset 0 0 80px rgba(236,204,119,.12), inset 0 0 0 2px rgba(242,218,165,.38), 0 28px 90px rgba(0,0,0,.52), 0 0 40px rgba(236,204,119,.12); }
+  100% { box-shadow: inset 0 0 0 2px rgba(242,218,165,.18), inset 0 0 100px rgba(0,0,0,.34), 0 28px 80px rgba(0,0,0,.48); }
+}
+
+@media (max-width: 760px) {
+  .tile-drawn { margin-left: 7px; }
+  .tile-face-svg { width: 91%; height: 92%; }
+  .sound-button span:last-child { display: none; }
+  .sound-button { padding-left: 9px; padding-right: 9px; }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .tile::before { bottom: -3px; height: 4px; }
+  .tile { box-shadow: inset 1px 1px 0 rgba(255,255,255,.9), 0 2px 0 #b7aa90, 0 4px 5px rgba(0,0,0,.22); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-fresh,
+  .fx-draw .opponent-hand .tile-back:last-child,
+  .fx-draw .human-hand .tile-drawn,
+  .fx-call .meld-row,
+  .fx-riichi .riichi-tag,
+  .fx-riichi .player-heading,
+  .fx-winner .opponent-card,
+  .fx-winner .human-card,
+  .table-center.fx-dora .dora-row,
+  .mahjong-table.fx-win {
+    animation: none !important;
+  }
+
+  .tile-clickable { transition: none; }
+}
