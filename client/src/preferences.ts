@@ -9,7 +9,6 @@ export interface ClientPreferences {
   advisorEnabled: boolean;
   tutorialSeen: boolean;
   presentationSpeed: PresentationSpeed;
-  soundEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: ClientPreferences = {
@@ -17,7 +16,6 @@ const DEFAULT_PREFERENCES: ClientPreferences = {
   advisorEnabled: false,
   tutorialSeen: false,
   presentationSpeed: 'normal',
-  soundEnabled: true,
 };
 
 function isDifficulty(value: unknown): value is BotDifficulty {
@@ -44,9 +42,6 @@ export function loadPreferences(): ClientPreferences {
       presentationSpeed: isPresentationSpeed(parsed.presentationSpeed)
         ? parsed.presentationSpeed
         : DEFAULT_PREFERENCES.presentationSpeed,
-      soundEnabled: typeof parsed.soundEnabled === 'boolean'
-        ? parsed.soundEnabled
-        : DEFAULT_PREFERENCES.soundEnabled,
     };
   } catch {
     return { ...DEFAULT_PREFERENCES };
