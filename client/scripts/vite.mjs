@@ -13,8 +13,6 @@ const vitestPackage = realpathSync(resolve(repoRoot, 'shared/node_modules/vitest
 const requireFromVitest = createRequire(vitestPackage);
 const viteEntry = requireFromVitest.resolve('vite');
 const viteModule = await import(pathToFileURL(viteEntry).href);
-// require.resolve() may choose Vite's CJS compatibility entry. Dynamic import wraps that API
-// under `default`, whereas the native ESM entry exposes the functions directly.
 const vite = viteModule.default ?? viteModule;
 
 const alias = [
@@ -24,9 +22,26 @@ const alias = [
   { find: '@mahjong-live/shared/tile-types', replacement: resolve(repoRoot, 'shared/src/engine/tiles/types.ts') },
 ];
 
+const flags = new Set(process.argv.slice(3));
+const openBrowser = flags.has('--open') || (!flags.has('--no-open') && process.argv[2] === 'dev');
+const commonServer = {
+  host: '127.0.0.1',
+  strictPort: false,
+  open: openBrowser,
+};
+
 const config = {
   root: clientRoot,
   resolve: { alias },
+  clearScreen: false,
+  server: {
+    ...commonServer,
+    port: 5173,
+  },
+  preview: {
+    ...commonServer,
+    port: 4173,
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
