@@ -111,6 +111,33 @@ export function playTileSelect(): void {
   tileClack(0.58);
 }
 
+export function playDoraCue(): void {
+  doraCue();
+}
+
+/** Fallback cue mapper for the DOM presentation layer. */
+export function playPresentationCaption(caption: string): void {
+  if (!enabled || !caption) return;
+  const normalized = caption.toLowerCase();
+  if (normalized.includes('tsumo') || normalized.includes('ron') || normalized.includes('wins')) {
+    winCue();
+    return;
+  }
+  if (normalized.includes('riichi')) {
+    riichiCue();
+    return;
+  }
+  if (normalized.includes('chi') || normalized.includes('pon') || normalized.includes('kan')) {
+    callChime();
+    return;
+  }
+  if (normalized.includes('discard')) {
+    tileClack();
+    return;
+  }
+  if (normalized.includes('draw')) drawSlide();
+}
+
 /** Play one restrained cue for the most meaningful event in a presentation frame. */
 export function playRoundEvents(events: readonly RoundEvent[]): void {
   if (!enabled || events.length === 0) return;
