@@ -1,4 +1,4 @@
-import type { Tile } from '@mahjong-live/shared/tile-types';
+import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
 
 const MAN_NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'] as const;
 
@@ -102,7 +102,7 @@ function honorFace(tile: Extract<Tile, { kind: 'honor' }>): string {
   }
 
   const glyph = tile.honorType === 'wind'
-    ? ({ east: '東', south: '南', west: '西', north: '北' } as const)[tile.value]
+    ? ({ east: '東', south: '南', west: '西', north: '北' } as const)[tile.value as Wind]
     : tile.value === 'green' ? '發' : '中';
   const color = tile.honorType === 'wind' ? '#27372f' : tile.value === 'green' ? '#237a50' : '#c13c34';
   return svg(`<text x="50" y="94" text-anchor="middle" class="honor-glyph" fill="${color}">${glyph}</text>`, 'tile-face-honor');
