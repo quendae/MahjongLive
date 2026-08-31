@@ -1,0 +1,107 @@
+.mahjong-table.table-3d-active {
+  isolation: isolate;
+  background: #143d2d;
+}
+
+.table-3d-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 19px;
+  touch-action: pan-y;
+}
+
+.table-3d-active::after {
+  z-index: 2;
+}
+
+.table-3d-active .table-center,
+.table-3d-active .player-zone {
+  z-index: 4;
+}
+
+/* Public table objects are rendered as real geometry in WebGL.
+   Keep the DOM nodes in place as the authoritative/accessibility source. */
+.table-3d-active .discard-river,
+.table-3d-active .opponent-hand,
+.table-3d-active .meld-row {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The local rack remains DOM-based for now so keyboard/touch interaction stays excellent.
+   It sits over the 3D table and will be migrated to ray-cast picking in the next pass. */
+.table-3d-active .human-hand {
+  position: relative;
+  z-index: 6;
+}
+
+.table-3d-active .human-card,
+.table-3d-active .opponent-card {
+  background: rgba(4, 15, 10, .42);
+  border-color: rgba(255,255,255,.055);
+  backdrop-filter: blur(4px);
+}
+
+.table-3d-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-3d-toggle .mode-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #70c39a;
+  box-shadow: 0 0 8px rgba(112,195,154,.55);
+}
+
+.table-3d-toggle.is-2d .mode-dot {
+  background: #819086;
+  box-shadow: none;
+}
+
+.table-3d-toggle.is-loading .mode-dot {
+  background: #d8bb73;
+  animation: mode-pulse 1s ease-in-out infinite;
+}
+
+.table-3d-toggle.is-error .mode-dot {
+  background: #d56b5e;
+  box-shadow: none;
+}
+
+.table-3d-fallback-note {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 36px));
+  padding: 7px 10px;
+  border: 1px solid rgba(213,181,107,.2);
+  border-radius: 999px;
+  color: #d9d8ce;
+  background: rgba(5,16,11,.82);
+  font-size: 10px;
+  text-align: center;
+  pointer-events: none;
+}
+
+@keyframes mode-pulse {
+  0%, 100% { opacity: .5; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .table-3d-canvas { border-radius: 13px; }
+  .table-3d-active .opponent-card { background: rgba(4,15,10,.56); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table-3d-toggle.is-loading .mode-dot { animation: none; }
+}
