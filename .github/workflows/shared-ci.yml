@@ -5,6 +5,9 @@ on:
     paths:
       - 'shared/**'
       - 'client/**'
+      - 'scripts/**'
+      - 'START_GAME.bat'
+      - 'start-game.sh'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -14,6 +17,9 @@ on:
     paths:
       - 'shared/**'
       - 'client/**'
+      - 'scripts/**'
+      - 'START_GAME.bat'
+      - 'start-game.sh'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -33,6 +39,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node --check scripts/start.mjs
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
       - run: pnpm client:typecheck

@@ -2,10 +2,14 @@
   "name": "mahjong-live",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "start": "node scripts/start.mjs",
+    "dev": "node scripts/start.mjs --no-open",
     "client:dev": "node client/scripts/vite.mjs dev",
     "client:build": "node client/scripts/vite.mjs build",
     "client:preview": "node client/scripts/vite.mjs preview",
-    "client:typecheck": "pnpm --filter @mahjong-live/shared exec tsc -p ../client/tsconfig.json"
+    "client:typecheck": "pnpm --filter @mahjong-live/shared exec tsc -p ../client/tsconfig.json",
+    "check": "pnpm --filter @mahjong-live/shared typecheck && pnpm --filter @mahjong-live/shared test && pnpm client:typecheck && pnpm client:build"
   }
 }
