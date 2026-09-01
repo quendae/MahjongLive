@@ -65,6 +65,7 @@ type TileActor = {
   visual: any;
   body: any;
   face: any;
+  rear: any;
   indicator: any;
   latestHalo: any;
   spec: TileSpec;
@@ -214,7 +215,9 @@ function baseTransform(spec: TileSpec): Transform {
     const spacing = Math.min(.50, 6.45 / Math.max(1, spec.total - 1));
     transform.x = (spec.index - (spec.total - 1) / 2) * spacing + (spec.drawn ? .15 : 0);
     transform.z = 4.02;
-    transform.y = .27;
+    // The human rack stands on the narrow edge. The tile face points toward the bottom player.
+    transform.y = .42;
+    transform.pitch = Math.PI / 2;
     transform.scale = 1.03;
   } else if (spec.zone === 'river') {
     const row = Math.floor(spec.index / 6);
@@ -249,6 +252,10 @@ function baseTransform(spec: TileSpec): Transform {
   } else if (spec.zone === 'rack') {
     const centered = spec.index - (spec.total - 1) / 2;
     const spacing = .35;
+    // Opponent concealed tiles also stand upright. Pitch gives the long face its vertical height;
+    // yaw then turns that face toward the owner of the rack rather than toward the table centre.
+    transform.y = .34;
+    transform.pitch = Math.PI / 2;
     transform.scale = .76;
     if (spec.side === 'top') {
       transform.x = centered * spacing;
@@ -257,11 +264,11 @@ function baseTransform(spec: TileSpec): Transform {
     } else if (spec.side === 'left') {
       transform.x = -5.10;
       transform.z = centered * spacing;
-      transform.yaw = Math.PI / 2;
+      transform.yaw = -Math.PI / 2;
     } else {
       transform.x = 5.10;
       transform.z = -centered * spacing;
-      transform.yaw = -Math.PI / 2;
+      transform.yaw = Math.PI / 2;
     }
   } else {
     const row = Math.floor(spec.index / 8);
@@ -431,6 +438,14 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   face.receiveShadow = true;
   visual.add(face);
 
+  // A separate physical rear face matters once a hand stands upright: opponents' tile faces point
+  // toward their owners, while the centre/camera must see the tile backs rather than bare ivory.
+  const rear = new THREE.Mesh(rt.faceGeometry, rt.backMaterial);
+  rear.position.y = -.096;
+  rear.rotation.x = Math.PI / 2;
+  rear.receiveShadow = true;
+  visual.add(rear);
+
   const indicator = new THREE.Mesh(
     new THREE.RingGeometry(.235, .285, 34),
     new THREE.MeshBasicMaterial({
@@ -467,6 +482,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
     visual,
     body,
     face,
+    rear,
     indicator,
     latestHalo,
     spec,
@@ -484,6 +500,7 @@ function tagActorMeshes(actor: TileActor): void {
   actor.visual.userData.actorKey = actor.key;
   actor.body.userData.actorKey = actor.key;
   actor.face.userData.actorKey = actor.key;
+  actor.rear.userData.actorKey = actor.key;
 }
 
 function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void {
