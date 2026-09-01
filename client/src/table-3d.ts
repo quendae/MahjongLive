@@ -5,6 +5,9 @@ import type { TileFaceMode } from './table-3d-faces';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
 const MODE_KEY = 'mahjong-live:table-3d:v1';
 const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
+// ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
+// Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
+const TILE_FACE_OFFSET = .112;
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 const stageRoot = document.querySelector<HTMLDivElement>('#table-3d-stage');
@@ -433,16 +436,18 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   visual.add(body);
 
   const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
-  face.position.y = .096;
+  face.position.y = TILE_FACE_OFFSET;
   face.rotation.x = -Math.PI / 2;
+  face.renderOrder = 2;
   face.receiveShadow = true;
   visual.add(face);
 
   // A separate physical rear face matters once a hand stands upright: opponents' tile faces point
   // toward their owners, while the centre/camera must see the tile backs rather than bare ivory.
   const rear = new THREE.Mesh(rt.faceGeometry, rt.backMaterial);
-  rear.position.y = -.096;
+  rear.position.y = -TILE_FACE_OFFSET;
   rear.rotation.x = Math.PI / 2;
+  rear.renderOrder = 2;
   rear.receiveShadow = true;
   visual.add(rear);
 
