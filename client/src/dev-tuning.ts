@@ -9,6 +9,7 @@ type DevTuning = {
   camera: CameraSettings;
   left: Rotation;
   right: Rotation;
+  top: Rotation;
   bottom: Rotation;
   tableColor: string;
   tableImage: string | null;
@@ -16,10 +17,11 @@ type DevTuning = {
 };
 
 const DEFAULTS: DevTuning = {
-  camera: { x: 0, y: 7.75, z: 12.75, targetX: 0, targetY: .25, targetZ: .15, fov: 34 },
-  left: { x: -90, y: 0, z: -90 },
-  right: { x: -90, y: 0, z: 90 },
-  bottom: { x: 90, y: 0, z: 0 },
+  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: .25, targetZ: 1.30, fov: 27 },
+  left: { x: -90, y: 0, z: 90 },
+  right: { x: -90, y: -180, z: 90 },
+  top: { x: -90, y: 180, z: 0 },
+  bottom: { x: 73, y: 0, z: 0 },
   tableColor: '#174a36',
   tableImage: null,
   backColor: '#315c49',
@@ -52,6 +54,7 @@ function loadSettings(): DevTuning {
     },
     left: rotation(raw.left, DEFAULTS.left),
     right: rotation(raw.right, DEFAULTS.right),
+    top: rotation(raw.top, DEFAULTS.top),
     bottom: rotation(raw.bottom, DEFAULTS.bottom),
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULTS.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -80,6 +83,15 @@ function setStatus(text: string): void {
 
 function applyDomPreview(): void {
   document.querySelectorAll<HTMLElement>('.mahjong-table').forEach((table) => {
+    // In 3D the uploaded image belongs only to the felt mesh. Never paint it onto the whole
+    // DOM table container, otherwise it visually spills into the frame/background around the mesh.
+    if (table.classList.contains('table-3d-active')) {
+      table.style.backgroundImage = 'none';
+      table.style.backgroundSize = '';
+      table.style.backgroundPosition = '';
+      table.style.backgroundColor = '';
+      return;
+    }
     table.style.backgroundColor = settings.tableColor;
     table.style.backgroundImage = settings.tableImage ? `url("${settings.tableImage}")` : 'none';
     table.style.backgroundSize = settings.tableImage ? 'cover' : '';
@@ -99,26 +111,55 @@ function numberSlider(
   get: () => number,
   set: (value: number) => void,
   suffix = '',
+  defaultValue = get(),
 ): void {
   const row = document.createElement('div');
   row.className = 'dev-tuning-control';
   const name = document.createElement('label');
   name.textContent = label;
-  const input = document.createElement('input');
-  input.type = 'range';
-  input.min = String(min);
-  input.max = String(max);
-  input.step = String(step);
-  input.value = String(get());
-  const out = document.createElement('output');
-  const render = () => { out.textContent = `${Number(input.value).toFixed(step < 1 ? 2 : 0)}${suffix}`; };
-  render();
-  input.addEventListener('input', () => {
-    set(Number(input.value));
-    render();
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(min);
+  slider.max = String(max);
+  slider.step = String(step);
+
+  const numeric = document.createElement('input');
+  numeric.type = 'number';
+  numeric.min = String(min);
+  numeric.max = String(max);
+  numeric.step = String(step);
+  numeric.className = 'dev-tuning-number';
+
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'dev-tuning-reset';
+  reset.textContent = '↺';
+  reset.title = `Reset ${label} to ${defaultValue}${suffix}`;
+
+  const format = (value: number) => step < 1 ? value.toFixed(2) : String(Math.round(value));
+  const sync = (value: number) => {
+    slider.value = String(value);
+    numeric.value = format(value);
+    numeric.title = suffix ? `${format(value)}${suffix}` : format(value);
+  };
+  const commit = (value: number) => {
+    if (!Number.isFinite(value)) return;
+    const bounded = Math.max(min, Math.min(max, value));
+    set(bounded);
+    sync(bounded);
     saveAndBroadcast();
+  };
+
+  sync(get());
+  slider.addEventListener('input', () => commit(Number(slider.value)));
+  numeric.addEventListener('change', () => commit(Number(numeric.value)));
+  numeric.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') commit(Number(numeric.value));
   });
-  row.append(name, input, out);
+  reset.addEventListener('click', () => commit(defaultValue));
+
+  row.append(name, slider, numeric, reset);
   parent.append(row);
 }
 
@@ -132,7 +173,13 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${part(r)}${part(g)}${part(b)}`;
 }
 
-function colorControl(parent: HTMLElement, label: string, get: () => string, set: (value: string) => void): void {
+function colorControl(
+  parent: HTMLElement,
+  label: string,
+  get: () => string,
+  set: (value: string) => void,
+  defaultValue: string,
+): void {
   const row = document.createElement('div');
   row.className = 'dev-tuning-color';
   const name = document.createElement('label');
@@ -145,33 +192,38 @@ function colorControl(parent: HTMLElement, label: string, get: () => string, set
     input.type = 'number'; input.min = '0'; input.max = '255'; input.step = '1';
     return input;
   });
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'dev-tuning-reset';
+  reset.textContent = '↺';
+  reset.title = `Reset ${label}`;
   const syncNums = () => {
     const rgb = hexToRgb(picker.value);
     nums.forEach((input, index) => { input.value = String(rgb[index]); });
   };
-  syncNums();
-  picker.addEventListener('input', () => {
-    set(picker.value);
+  const commit = (value: string) => {
+    picker.value = value;
+    set(value);
     syncNums();
     saveAndBroadcast();
-  });
-  nums.forEach((input) => input.addEventListener('input', () => {
-    const color = rgbToHex(Number(nums[0].value), Number(nums[1].value), Number(nums[2].value));
-    picker.value = color;
-    set(color);
-    saveAndBroadcast();
+  };
+  syncNums();
+  picker.addEventListener('input', () => commit(picker.value));
+  nums.forEach((input) => input.addEventListener('change', () => {
+    commit(rgbToHex(Number(nums[0].value), Number(nums[1].value), Number(nums[2].value)));
   }));
-  row.append(name, picker, ...nums);
+  reset.addEventListener('click', () => commit(defaultValue));
+  row.append(name, picker, ...nums, reset);
   parent.append(row);
 }
 
-function rotationSection(parent: HTMLElement, title: string, target: Rotation): void {
+function rotationSection(parent: HTMLElement, title: string, target: Rotation, defaults: Rotation): void {
   const section = document.createElement('section');
   section.className = 'dev-tuning-section';
   section.innerHTML = `<h3>${title}</h3>`;
-  numberSlider(section, 'Rotate X', -180, 180, 1, () => target.x, (v) => { target.x = v; }, '°');
-  numberSlider(section, 'Rotate Y', -180, 180, 1, () => target.y, (v) => { target.y = v; }, '°');
-  numberSlider(section, 'Rotate Z', -180, 180, 1, () => target.z, (v) => { target.z = v; }, '°');
+  numberSlider(section, 'Rotate X', -180, 180, 1, () => target.x, (v) => { target.x = v; }, '°', defaults.x);
+  numberSlider(section, 'Rotate Y', -180, 180, 1, () => target.y, (v) => { target.y = v; }, '°', defaults.y);
+  numberSlider(section, 'Rotate Z', -180, 180, 1, () => target.z, (v) => { target.z = v; }, '°', defaults.z);
   parent.append(section);
 }
 
@@ -190,23 +242,24 @@ function buildPanel(): HTMLElement {
   const camera = document.createElement('section');
   camera.className = 'dev-tuning-section';
   camera.innerHTML = '<h3>Camera</h3>';
-  numberSlider(camera, 'Position X', -20, 20, .05, () => settings.camera.x, (v) => { settings.camera.x = v; });
-  numberSlider(camera, 'Position Y', .5, 20, .05, () => settings.camera.y, (v) => { settings.camera.y = v; });
-  numberSlider(camera, 'Position Z', -20, 25, .05, () => settings.camera.z, (v) => { settings.camera.z = v; });
-  numberSlider(camera, 'Target X', -6, 6, .05, () => settings.camera.targetX, (v) => { settings.camera.targetX = v; });
-  numberSlider(camera, 'Target Y', -2, 5, .05, () => settings.camera.targetY, (v) => { settings.camera.targetY = v; });
-  numberSlider(camera, 'Target Z', -6, 6, .05, () => settings.camera.targetZ, (v) => { settings.camera.targetZ = v; });
-  numberSlider(camera, 'FOV', 20, 70, 1, () => settings.camera.fov, (v) => { settings.camera.fov = v; }, '°');
+  numberSlider(camera, 'Position X', -20, 20, .05, () => settings.camera.x, (v) => { settings.camera.x = v; }, '', DEFAULTS.camera.x);
+  numberSlider(camera, 'Position Y', .5, 20, .05, () => settings.camera.y, (v) => { settings.camera.y = v; }, '', DEFAULTS.camera.y);
+  numberSlider(camera, 'Position Z', -20, 25, .05, () => settings.camera.z, (v) => { settings.camera.z = v; }, '', DEFAULTS.camera.z);
+  numberSlider(camera, 'Target X', -6, 6, .05, () => settings.camera.targetX, (v) => { settings.camera.targetX = v; }, '', DEFAULTS.camera.targetX);
+  numberSlider(camera, 'Target Y', -2, 5, .05, () => settings.camera.targetY, (v) => { settings.camera.targetY = v; }, '', DEFAULTS.camera.targetY);
+  numberSlider(camera, 'Target Z', -6, 6, .05, () => settings.camera.targetZ, (v) => { settings.camera.targetZ = v; }, '', DEFAULTS.camera.targetZ);
+  numberSlider(camera, 'FOV', 20, 70, 1, () => settings.camera.fov, (v) => { settings.camera.fov = v; }, '°', DEFAULTS.camera.fov);
   root.append(camera);
 
-  rotationSection(root, 'Left opponent tiles', settings.left);
-  rotationSection(root, 'Right opponent tiles', settings.right);
-  rotationSection(root, 'Your tiles', settings.bottom);
+  rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);
+  rotationSection(root, 'Right opponent tiles', settings.right, DEFAULTS.right);
+  rotationSection(root, 'Top opponent tiles', settings.top, DEFAULTS.top);
+  rotationSection(root, 'Your tiles', settings.bottom, DEFAULTS.bottom);
 
   const surfaces = document.createElement('section');
   surfaces.className = 'dev-tuning-section';
   surfaces.innerHTML = '<h3>Table & tile backs</h3>';
-  colorControl(surfaces, 'Table RGB', () => settings.tableColor, (v) => { settings.tableColor = v; });
+  colorControl(surfaces, 'Table RGB', () => settings.tableColor, (v) => { settings.tableColor = v; }, DEFAULTS.tableColor);
 
   const fileRow = document.createElement('div');
   fileRow.className = 'dev-tuning-file';
@@ -258,7 +311,7 @@ function buildPanel(): HTMLElement {
   });
   presetRow.append(presetLabel, preset);
   surfaces.append(presetRow);
-  colorControl(surfaces, 'Back RGB', () => settings.backColor, (v) => { settings.backColor = v; preset.value = ''; });
+  colorControl(surfaces, 'Back RGB', () => settings.backColor, (v) => { settings.backColor = v; preset.value = ''; }, DEFAULTS.backColor);
   surfaces.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The colored back is a physical cap around the rear face; the pattern itself stays slightly inset.</p>');
   root.append(surfaces);
 

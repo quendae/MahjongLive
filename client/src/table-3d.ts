@@ -7,7 +7,7 @@ const MODE_KEY = 'mahjong-live:table-3d:v1';
 const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
 // ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
 // Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
-const TILE_FACE_OFFSET = .112;
+const TILE_FACE_OFFSET = .128;
 const TILE_BACK_OFFSET = .124;
 const OPPONENT_RACK_LEAN = .17;
 const DEV_TUNING_KEY = 'mahjong-live:dev-tuning:v1';
@@ -17,6 +17,7 @@ type DevTuning = {
   camera: { x: number; y: number; z: number; targetX: number; targetY: number; targetZ: number; fov: number };
   left: DevRotation;
   right: DevRotation;
+  top: DevRotation;
   bottom: DevRotation;
   tableColor: string;
   tableImage: string | null;
@@ -24,10 +25,11 @@ type DevTuning = {
 };
 
 const DEFAULT_DEV_TUNING: DevTuning = {
-  camera: { x: 0, y: 7.75, z: 12.75, targetX: 0, targetY: .25, targetZ: .15, fov: 34 },
-  left: { x: -90, y: 0, z: -90 },
-  right: { x: -90, y: 0, z: 90 },
-  bottom: { x: 90, y: 0, z: 0 },
+  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: .25, targetZ: 1.30, fov: 27 },
+  left: { x: -90, y: 0, z: 90 },
+  right: { x: -90, y: -180, z: 90 },
+  top: { x: -90, y: 180, z: 0 },
+  bottom: { x: 73, y: 0, z: 0 },
   tableColor: '#174a36',
   tableImage: null,
   backColor: '#315c49',
@@ -160,6 +162,7 @@ function readDevTuning(): DevTuning {
     },
     left: readRotation(raw.left, DEFAULT_DEV_TUNING.left),
     right: readRotation(raw.right, DEFAULT_DEV_TUNING.right),
+    top: readRotation(raw.top, DEFAULT_DEV_TUNING.top),
     bottom: readRotation(raw.bottom, DEFAULT_DEV_TUNING.bottom),
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -289,7 +292,7 @@ function baseTransform(spec: TileSpec): Transform {
   if (spec.zone === 'hand') {
     const spacing = Math.min(.50, 6.45 / Math.max(1, spec.total - 1));
     transform.x = (spec.index - (spec.total - 1) / 2) * spacing + (spec.drawn ? .15 : 0);
-    transform.z = 4.02;
+    transform.z = 4.24;
     // The human rack stands on the narrow edge. The tile face points toward the bottom player.
     transform.y = .42;
     setConfiguredRotation(transform, readDevTuning().bottom);
@@ -297,8 +300,10 @@ function baseTransform(spec: TileSpec): Transform {
   } else if (spec.zone === 'river') {
     const row = Math.floor(spec.index / 6);
     const col = spec.index % 6;
-    const cross = (col - 2.5) * .52;
-    const depth = 1.16 + row * .67;
+    // Keep the organic placement, but anchor every discard to a predictable outer row so
+    // the centre counter never covers the river.
+    const cross = (col - 2.5) * .48;
+    const depth = 2.05 + row * .55;
     if (spec.side === 'bottom') {
       transform.x = cross;
       transform.z = depth;
@@ -332,15 +337,14 @@ function baseTransform(spec: TileSpec): Transform {
     const tuning = readDevTuning();
     if (spec.side === 'top') {
       transform.x = centered * spacing;
-      transform.z = -4.08;
-      transform.pitch = Math.PI / 2 + OPPONENT_RACK_LEAN;
-      transform.yaw = Math.PI;
+      transform.z = -4.28;
+      setConfiguredRotation(transform, tuning.top);
     } else if (spec.side === 'left') {
-      transform.x = -5.10;
+      transform.x = -5.28;
       transform.z = centered * spacing;
       setConfiguredRotation(transform, tuning.left);
     } else {
-      transform.x = 5.10;
+      transform.x = 5.28;
       transform.z = -centered * spacing;
       setConfiguredRotation(transform, tuning.right);
     }
@@ -349,19 +353,20 @@ function baseTransform(spec: TileSpec): Transform {
     const col = spec.index % 8;
     transform.scale = .80;
     if (spec.side === 'bottom') {
-      transform.x = 4.65 - col * .42;
-      transform.z = 3.46 - row * .56;
+      // Own open melds live in the lower-right corner and grow leftward.
+      transform.x = 5.05 - col * .44;
+      transform.z = 3.48 - row * .58;
     } else if (spec.side === 'top') {
-      transform.x = -4.65 + col * .42;
-      transform.z = -3.46 + row * .56;
+      transform.x = -5.05 + col * .44;
+      transform.z = -3.58 + row * .58;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -4.62 + row * .56;
-      transform.z = 3.42 - col * .42;
+      transform.x = -4.98 + row * .58;
+      transform.z = 3.72 - col * .44;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 4.62 - row * .56;
-      transform.z = -3.42 + col * .42;
+      transform.x = 4.98 - row * .58;
+      transform.z = -3.72 + col * .44;
       transform.yaw = -Math.PI / 2;
     }
   }
@@ -375,9 +380,9 @@ function humanizeTransform(spec: TileSpec, input: Transform): Transform {
   let yaw = 0;
   let tilt = 0;
   if (spec.zone === 'river') {
-    position = spec.latest ? .006 : .014;
-    yaw = .025;
-    tilt = .005;
+    position = spec.latest ? .005 : .010;
+    yaw = .018;
+    tilt = .003;
   } else if (spec.zone === 'meld') {
     position = .008;
     yaw = .015;
@@ -526,6 +531,10 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
     map: texture,
     roughness: .60,
     metalness: 0,
+    side: rt.THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   rt.faceMaterials.set(key, material);
   return material;
@@ -563,7 +572,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
   face.position.y = TILE_FACE_OFFSET;
   face.rotation.x = -Math.PI / 2;
-  face.renderOrder = 2;
+  face.renderOrder = 4;
   face.receiveShadow = true;
   visual.add(face);
 
@@ -976,6 +985,7 @@ function createRuntime(THREE: any): TableRuntime {
   backTexture.colorSpace = THREE.SRGBColorSpace;
   const backMaterial = new THREE.MeshStandardMaterial({
     map: backTexture, color: tuning.backColor, roughness: .58, metalness: 0,
+    side: THREE.DoubleSide,
   });
   const backShellMaterial = new THREE.MeshStandardMaterial({
     color: tuning.backColor, roughness: .58, metalness: 0,
