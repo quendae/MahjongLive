@@ -8,8 +8,30 @@ const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
 // ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
 // Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
 const TILE_FACE_OFFSET = .112;
-const TILE_BACK_OFFSET = .118;
+const TILE_BACK_OFFSET = .124;
 const OPPONENT_RACK_LEAN = .17;
+const DEV_TUNING_KEY = 'mahjong-live:dev-tuning:v1';
+
+type DevRotation = { x: number; y: number; z: number };
+type DevTuning = {
+  camera: { x: number; y: number; z: number; targetX: number; targetY: number; targetZ: number; fov: number };
+  left: DevRotation;
+  right: DevRotation;
+  bottom: DevRotation;
+  tableColor: string;
+  tableImage: string | null;
+  backColor: string;
+};
+
+const DEFAULT_DEV_TUNING: DevTuning = {
+  camera: { x: 0, y: 7.75, z: 12.75, targetX: 0, targetY: .25, targetZ: .15, fov: 34 },
+  left: { x: -90, y: 0, z: -90 },
+  right: { x: -90, y: 0, z: 90 },
+  bottom: { x: 90, y: 0, z: 0 },
+  tableColor: '#174a36',
+  tableImage: null,
+  backColor: '#315c49',
+};
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 const stageRoot = document.querySelector<HTMLDivElement>('#table-3d-stage');
@@ -71,6 +93,7 @@ type TileActor = {
   body: any;
   face: any;
   rear: any;
+  rearShell: any;
   indicator: any;
   latestHalo: any;
   spec: TileSpec;
@@ -87,8 +110,13 @@ type TableRuntime = {
   tileGeometry: any;
   faceGeometry: any;
   backGeometry: any;
+  backShellGeometry: any;
   ivoryMaterial: any;
+  feltMaterial: any;
   backMaterial: any;
+  backShellMaterial: any;
+  tableTexture: any | null;
+  tableTextureSource: string | null;
   faceMaterials: Map<string, any>;
   actors: Map<string, TileActor>;
   raycaster: any;
@@ -106,6 +134,47 @@ type TableRuntime = {
 
 function readFaceMode(): TileFaceMode {
   return localStorage.getItem(TILE_MODE_KEY) === 'beginner' ? 'beginner' : 'classic';
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function readDevTuning(): DevTuning {
+  let raw: any = {};
+  try { raw = JSON.parse(localStorage.getItem(DEV_TUNING_KEY) ?? '{}'); } catch { raw = {}; }
+  const readRotation = (value: any, fallback: DevRotation): DevRotation => ({
+    x: finiteNumber(value?.x, fallback.x),
+    y: finiteNumber(value?.y, fallback.y),
+    z: finiteNumber(value?.z, fallback.z),
+  });
+  return {
+    camera: {
+      x: finiteNumber(raw.camera?.x, DEFAULT_DEV_TUNING.camera.x),
+      y: finiteNumber(raw.camera?.y, DEFAULT_DEV_TUNING.camera.y),
+      z: finiteNumber(raw.camera?.z, DEFAULT_DEV_TUNING.camera.z),
+      targetX: finiteNumber(raw.camera?.targetX, DEFAULT_DEV_TUNING.camera.targetX),
+      targetY: finiteNumber(raw.camera?.targetY, DEFAULT_DEV_TUNING.camera.targetY),
+      targetZ: finiteNumber(raw.camera?.targetZ, DEFAULT_DEV_TUNING.camera.targetZ),
+      fov: finiteNumber(raw.camera?.fov, DEFAULT_DEV_TUNING.camera.fov),
+    },
+    left: readRotation(raw.left, DEFAULT_DEV_TUNING.left),
+    right: readRotation(raw.right, DEFAULT_DEV_TUNING.right),
+    bottom: readRotation(raw.bottom, DEFAULT_DEV_TUNING.bottom),
+    tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
+    tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
+    backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULT_DEV_TUNING.backColor,
+  };
+}
+
+function radians(degrees: number): number {
+  return degrees * Math.PI / 180;
+}
+
+function setConfiguredRotation(transform: Transform, rotation: DevRotation): void {
+  transform.pitch = radians(rotation.x);
+  transform.yaw = radians(rotation.y);
+  transform.roll = radians(rotation.z);
 }
 
 function loadThree(): Promise<any> {
@@ -223,7 +292,7 @@ function baseTransform(spec: TileSpec): Transform {
     transform.z = 4.02;
     // The human rack stands on the narrow edge. The tile face points toward the bottom player.
     transform.y = .42;
-    transform.pitch = Math.PI / 2;
+    setConfiguredRotation(transform, readDevTuning().bottom);
     transform.scale = 1.03;
   } else if (spec.zone === 'river') {
     const row = Math.floor(spec.index / 6);
@@ -258,23 +327,22 @@ function baseTransform(spec: TileSpec): Transform {
   } else if (spec.zone === 'rack') {
     const centered = spec.index - (spec.total - 1) / 2;
     const spacing = .39;
-    // Concealed racks lean slightly toward the table. From the player's lower camera angle this
-    // exposes the coloured backs together with a narrow ivory side, like a physical mahjong rack.
     transform.y = .37;
-    transform.pitch = Math.PI / 2 + OPPONENT_RACK_LEAN;
     transform.scale = .84;
+    const tuning = readDevTuning();
     if (spec.side === 'top') {
       transform.x = centered * spacing;
       transform.z = -4.08;
+      transform.pitch = Math.PI / 2 + OPPONENT_RACK_LEAN;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
       transform.x = -5.10;
       transform.z = centered * spacing;
-      transform.yaw = -Math.PI / 2;
+      setConfiguredRotation(transform, tuning.left);
     } else {
       transform.x = 5.10;
       transform.z = -centered * spacing;
-      transform.yaw = Math.PI / 2;
+      setConfiguredRotation(transform, tuning.right);
     }
   } else {
     const row = Math.floor(spec.index / 8);
@@ -316,12 +384,12 @@ function humanizeTransform(spec: TileSpec, input: Transform): Transform {
     tilt = .004;
   } else if (spec.zone === 'hand') {
     position = .004;
-    yaw = .006;
-    tilt = .002;
+    yaw = 0;
+    tilt = 0;
   } else {
-    position = .005;
-    yaw = .008;
-    tilt = .0025;
+    position = .002;
+    yaw = 0;
+    tilt = 0;
   }
   out.x += signedHash(spec.key, 'x') * position;
   out.z += signedHash(spec.key, 'z') * position;
@@ -392,6 +460,34 @@ function roundedTileGeometry(THREE: any): any {
   return geometry;
 }
 
+function roundedBackShellGeometry(THREE: any): any {
+  const width = .448;
+  const depth = .588;
+  const height = .040;
+  const radius = .058;
+  const x0 = -width / 2;
+  const x1 = width / 2;
+  const y0 = -depth / 2;
+  const y1 = depth / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x0 + radius, y0);
+  shape.lineTo(x1 - radius, y0);
+  shape.quadraticCurveTo(x1, y0, x1, y0 + radius);
+  shape.lineTo(x1, y1 - radius);
+  shape.quadraticCurveTo(x1, y1, x1 - radius, y1);
+  shape.lineTo(x0 + radius, y1);
+  shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
+  shape.lineTo(x0, y0 + radius);
+  shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: height, steps: 1, curveSegments: 6, bevelEnabled: true,
+    bevelSegments: 2, bevelSize: .009, bevelThickness: .009,
+  });
+  geometry.rotateX(-Math.PI / 2);
+  geometry.center();
+  return geometry;
+}
+
 function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: number): any {
   const x0 = -width / 2;
   const x1 = width / 2;
@@ -456,6 +552,14 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   body.receiveShadow = true;
   visual.add(body);
 
+  // A shallow coloured cap overlaps the body bevel. The printed back stays inset, while the
+  // back colour itself wraps onto the side/top/bottom edges like a real two-piece mahjong tile.
+  const rearShell = new THREE.Mesh(rt.backShellGeometry, rt.backShellMaterial);
+  rearShell.position.y = -.103;
+  rearShell.castShadow = true;
+  rearShell.receiveShadow = true;
+  visual.add(rearShell);
+
   const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
   face.position.y = TILE_FACE_OFFSET;
   face.rotation.x = -Math.PI / 2;
@@ -509,6 +613,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
     body,
     face,
     rear,
+    rearShell,
     indicator,
     latestHalo,
     spec,
@@ -527,6 +632,7 @@ function tagActorMeshes(actor: TileActor): void {
   actor.body.userData.actorKey = actor.key;
   actor.face.userData.actorKey = actor.key;
   actor.rear.userData.actorKey = actor.key;
+  actor.rearShell.userData.actorKey = actor.key;
 }
 
 function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void {
@@ -743,9 +849,9 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
 
     if (!actor) {
       let initial = target;
-      if (rt.initialized && drawJustOccurred && rt.drawOrigin && (spec.zone === 'hand' || spec.zone === 'rack')) {
-        initial = { ...rt.drawOrigin };
-      } else if (rt.initialized && spec.zone === 'river' && spec.side !== 'bottom') {
+      // Until a visible wall exists, new draws appear directly in the receiving hand.
+      // This avoids tiles flying in from another player's rack / the synthetic wall origin.
+      if (rt.initialized && spec.zone === 'river' && spec.side !== 'bottom') {
         initial = baseTransform({ ...spec, zone: 'rack', index: 0, total: 1, back: true, latest: false });
       }
       actor = createActor(rt, spec, initial);
@@ -809,9 +915,10 @@ function createRuntime(THREE: any): TableRuntime {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x0b2017, 16, 29);
 
-  const camera = new THREE.PerspectiveCamera(34, 1, .1, 60);
-  camera.position.set(0, 7.75, 12.75);
-  camera.lookAt(0, .25, .15);
+  const tuning = readDevTuning();
+  const camera = new THREE.PerspectiveCamera(tuning.camera.fov, 1, .1, 60);
+  camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
+  camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
 
   scene.add(new THREE.HemisphereLight(0xf3ead7, 0x0b1811, 1.35));
   const key = new THREE.DirectionalLight(0xffefd2, 2.3);
@@ -839,9 +946,14 @@ function createRuntime(THREE: any): TableRuntime {
   base.castShadow = true;
   scene.add(base);
 
+  const feltMaterial = new THREE.MeshStandardMaterial({
+    color: tuning.tableImage ? 0xffffff : tuning.tableColor,
+    roughness: .96,
+    metalness: 0,
+  });
   const felt = new THREE.Mesh(
     new THREE.BoxGeometry(11.48, .18, 9.08),
-    new THREE.MeshStandardMaterial({ color: 0x174a36, roughness: .96, metalness: 0 }),
+    feltMaterial,
   );
   felt.position.y = .02;
   felt.receiveShadow = true;
@@ -852,9 +964,9 @@ function createRuntime(THREE: any): TableRuntime {
 
   const tileGeometry = roundedTileGeometry(THREE);
   const faceGeometry = roundedFaceGeometry(THREE, .39, .53, .038);
-  // The back cap deliberately reaches over the bevel so the green back reads as one continuous
-  // piece instead of a small sticker floating inside a cream border.
-  const backGeometry = roundedFaceGeometry(THREE, .438, .578, .052);
+  // Pattern is intentionally inset; the separate 3D shell provides the coloured edge spill.
+  const backGeometry = roundedFaceGeometry(THREE, .405, .545, .043);
+  const backShellGeometry = roundedBackShellGeometry(THREE);
   const ivoryMaterial = new THREE.MeshStandardMaterial({
     color: 0xf7f1df,
     roughness: .54,
@@ -862,7 +974,12 @@ function createRuntime(THREE: any): TableRuntime {
   });
   const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true, 'classic'));
   backTexture.colorSpace = THREE.SRGBColorSpace;
-  const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: .58, metalness: 0 });
+  const backMaterial = new THREE.MeshStandardMaterial({
+    map: backTexture, color: tuning.backColor, roughness: .58, metalness: 0,
+  });
+  const backShellMaterial = new THREE.MeshStandardMaterial({
+    color: tuning.backColor, roughness: .58, metalness: 0,
+  });
 
   const rt: TableRuntime = {
     THREE,
@@ -873,8 +990,13 @@ function createRuntime(THREE: any): TableRuntime {
     tileGeometry,
     faceGeometry,
     backGeometry,
+    backShellGeometry,
     ivoryMaterial,
+    feltMaterial,
     backMaterial,
+    backShellMaterial,
+    tableTexture: null,
+    tableTextureSource: null,
     faceMaterials: new Map(),
     actors: new Map(),
     raycaster: new THREE.Raycaster(),
@@ -890,8 +1012,46 @@ function createRuntime(THREE: any): TableRuntime {
     faceMode: readFaceMode(),
   };
 
+  applyDevTuning(rt);
   renderer.setAnimationLoop((time: number) => frameRuntime(rt, time));
   return rt;
+}
+
+function syncTableTexture(rt: TableRuntime, source: string | null): void {
+  if (source === rt.tableTextureSource) return;
+  rt.tableTextureSource = source;
+  rt.tableTexture?.dispose?.();
+  rt.tableTexture = null;
+  rt.feltMaterial.map = null;
+  rt.feltMaterial.needsUpdate = true;
+  if (!source) return;
+  new rt.THREE.TextureLoader().load(source, (texture: any) => {
+    if (rt.disposed || rt.tableTextureSource !== source) { texture.dispose(); return; }
+    texture.colorSpace = rt.THREE.SRGBColorSpace;
+    rt.tableTexture = texture;
+    rt.feltMaterial.map = texture;
+    rt.feltMaterial.color.set(0xffffff);
+    rt.feltMaterial.needsUpdate = true;
+  }, undefined, () => {
+    if (rt.tableTextureSource === source) {
+      rt.tableTextureSource = null;
+      rt.feltMaterial.map = null;
+      rt.feltMaterial.color.set(readDevTuning().tableColor);
+      rt.feltMaterial.needsUpdate = true;
+    }
+  });
+}
+
+function applyDevTuning(rt: TableRuntime): void {
+  const tuning = readDevTuning();
+  rt.camera.fov = tuning.camera.fov;
+  rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
+  rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
+  rt.camera.updateProjectionMatrix();
+  rt.backMaterial.color.set(tuning.backColor);
+  rt.backShellMaterial.color.set(tuning.backColor);
+  rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
+  syncTableTexture(rt, tuning.tableImage);
 }
 
 function frameRuntime(rt: TableRuntime, time: number): void {
@@ -962,7 +1122,11 @@ function disposeRuntime(): void {
   rt.tileGeometry.dispose();
   rt.faceGeometry.dispose();
   rt.backGeometry.dispose();
+  rt.backShellGeometry.dispose();
   rt.ivoryMaterial.dispose();
+  rt.feltMaterial.dispose();
+  rt.backShellMaterial.dispose();
+  rt.tableTexture?.dispose?.();
   rt.backMaterial.map?.dispose?.();
   rt.backMaterial.dispose();
   disposeFaceMaterials(rt);
@@ -1016,6 +1180,7 @@ async function reconcile(): Promise<void> {
   rt.table = table;
   table.classList.add('table-3d-active');
   removeFallbackNote(table);
+  applyDevTuning(rt);
   alignStage(rt, table);
   syncActors(rt, table);
   updateModeButton();
@@ -1098,6 +1263,7 @@ observer.observe(app, { childList: true, subtree: true });
 window.addEventListener('resize', scheduleReconcile, { passive: true });
 window.addEventListener('scroll', scheduleReconcile, { passive: true });
 window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
+window.addEventListener('mahjong-live:dev-tuning', scheduleReconcile);
 window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
 window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
 window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });

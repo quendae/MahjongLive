@@ -11,14 +11,14 @@ export function createFaceCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
-  ctx.fillStyle = back ? '#315c49' : '#f7f1df';
+  ctx.fillStyle = back ? '#ffffff' : '#f7f1df';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = back ? '#8fb39f' : '#c8bea9';
+  ctx.strokeStyle = back ? 'rgba(28,54,43,.52)' : '#c8bea9';
   ctx.lineWidth = 5;
   roundRectStroke(ctx, 5, 5, 150, 206, 12);
 
   if (back) {
-    ctx.strokeStyle = 'rgba(232,244,236,.34)';
+    ctx.strokeStyle = 'rgba(29,59,46,.28)';
     ctx.lineWidth = 2;
     roundRectStroke(ctx, 18, 18, 124, 180, 8);
     for (let y = 28; y < 195; y += 18) {
