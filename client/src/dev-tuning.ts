@@ -15,27 +15,43 @@ type DevTuning = {
     faceOffset: number;
     faceRotateX: number;
     faceScale: number;
+    faceTextureRotation: number;
+    bodyColor: string;
+    bodyRoughness: number;
+    faceTint: string;
     ownScale: number;
     opponentScale: number;
     riverScale: number;
     meldScale: number;
+    riverDepth: number;
+    riverRowGap: number;
+    riverColumnGap: number;
   };
   tableGeometry: {
-    woodY: number;
-    feltY: number;
+    frameTopY: number;
+    feltTopY: number;
+    frameWidth: number;
+    frameThickness: number;
+    feltThickness: number;
   };
   ui: {
     playerCardScale: number;
-    playerInset: number;
+    playerInsetTB: number;
+    playerInsetSides: number;
     doraScale: number;
     doraX: number;
     doraY: number;
     centerScale: number;
+    centerOffsetX: number;
+    centerOffsetY: number;
+    centerWidth: number;
+    centerHeight: number;
     reactionScale: number;
     gameLogWidth: number;
   };
   tableColor: string;
   tableImage: string | null;
+  woodColor: string;
   backColor: string;
 };
 
@@ -49,24 +65,37 @@ const DEFAULTS: DevTuning = {
     faceOffset: .128,
     faceRotateX: -90,
     faceScale: 1,
+    faceTextureRotation: 0,
+    bodyColor: '#fffdf5',
+    bodyRoughness: .46,
+    faceTint: '#ffffff',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
     meldScale: 1,
+    riverDepth: 2.05,
+    riverRowGap: .55,
+    riverColumnGap: .48,
   },
-  tableGeometry: { woodY: -.04, feltY: .02 },
+  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .39, frameThickness: .34, feltThickness: .10 },
   ui: {
     playerCardScale: 1,
-    playerInset: 10,
+    playerInsetTB: 10,
+    playerInsetSides: 10,
     doraScale: 1,
     doraX: 24,
     doraY: 24,
     centerScale: 1,
+    centerOffsetX: 0,
+    centerOffsetY: 0,
+    centerWidth: 242,
+    centerHeight: 242,
     reactionScale: 1,
     gameLogWidth: 290,
   },
   tableColor: '#174a36',
   tableImage: null,
+  woodColor: '#3a2b20',
   backColor: '#315c49',
 };
 
@@ -103,27 +132,43 @@ function loadSettings(): DevTuning {
       faceOffset: finite(raw.tiles?.faceOffset, DEFAULTS.tiles.faceOffset),
       faceRotateX: finite(raw.tiles?.faceRotateX, DEFAULTS.tiles.faceRotateX),
       faceScale: finite(raw.tiles?.faceScale, DEFAULTS.tiles.faceScale),
+      faceTextureRotation: finite(raw.tiles?.faceTextureRotation, DEFAULTS.tiles.faceTextureRotation),
+      bodyColor: typeof raw.tiles?.bodyColor === 'string' ? raw.tiles.bodyColor : DEFAULTS.tiles.bodyColor,
+      bodyRoughness: finite(raw.tiles?.bodyRoughness, DEFAULTS.tiles.bodyRoughness),
+      faceTint: typeof raw.tiles?.faceTint === 'string' ? raw.tiles.faceTint : DEFAULTS.tiles.faceTint,
       ownScale: finite(raw.tiles?.ownScale, DEFAULTS.tiles.ownScale),
       opponentScale: finite(raw.tiles?.opponentScale, DEFAULTS.tiles.opponentScale),
       riverScale: finite(raw.tiles?.riverScale, DEFAULTS.tiles.riverScale),
       meldScale: finite(raw.tiles?.meldScale, DEFAULTS.tiles.meldScale),
+      riverDepth: finite(raw.tiles?.riverDepth, DEFAULTS.tiles.riverDepth),
+      riverRowGap: finite(raw.tiles?.riverRowGap, DEFAULTS.tiles.riverRowGap),
+      riverColumnGap: finite(raw.tiles?.riverColumnGap, DEFAULTS.tiles.riverColumnGap),
     },
     tableGeometry: {
-      woodY: finite(raw.tableGeometry?.woodY, DEFAULTS.tableGeometry.woodY),
-      feltY: finite(raw.tableGeometry?.feltY, DEFAULTS.tableGeometry.feltY),
+      frameTopY: finite(raw.tableGeometry?.frameTopY, DEFAULTS.tableGeometry.frameTopY),
+      feltTopY: finite(raw.tableGeometry?.feltTopY, DEFAULTS.tableGeometry.feltTopY),
+      frameWidth: finite(raw.tableGeometry?.frameWidth, DEFAULTS.tableGeometry.frameWidth),
+      frameThickness: finite(raw.tableGeometry?.frameThickness, DEFAULTS.tableGeometry.frameThickness),
+      feltThickness: finite(raw.tableGeometry?.feltThickness, DEFAULTS.tableGeometry.feltThickness),
     },
     ui: {
       playerCardScale: finite(raw.ui?.playerCardScale, DEFAULTS.ui.playerCardScale),
-      playerInset: finite(raw.ui?.playerInset, DEFAULTS.ui.playerInset),
+      playerInsetTB: finite(raw.ui?.playerInsetTB, finite(raw.ui?.playerInset, DEFAULTS.ui.playerInsetTB)),
+      playerInsetSides: finite(raw.ui?.playerInsetSides, finite(raw.ui?.playerInset, DEFAULTS.ui.playerInsetSides)),
       doraScale: finite(raw.ui?.doraScale, DEFAULTS.ui.doraScale),
       doraX: finite(raw.ui?.doraX, DEFAULTS.ui.doraX),
       doraY: finite(raw.ui?.doraY, DEFAULTS.ui.doraY),
       centerScale: finite(raw.ui?.centerScale, DEFAULTS.ui.centerScale),
+      centerOffsetX: finite(raw.ui?.centerOffsetX, DEFAULTS.ui.centerOffsetX),
+      centerOffsetY: finite(raw.ui?.centerOffsetY, DEFAULTS.ui.centerOffsetY),
+      centerWidth: finite(raw.ui?.centerWidth, DEFAULTS.ui.centerWidth),
+      centerHeight: finite(raw.ui?.centerHeight, DEFAULTS.ui.centerHeight),
       reactionScale: finite(raw.ui?.reactionScale, DEFAULTS.ui.reactionScale),
       gameLogWidth: finite(raw.ui?.gameLogWidth, DEFAULTS.ui.gameLogWidth),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULTS.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
+    woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULTS.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULTS.backColor,
   };
 }
@@ -150,11 +195,16 @@ function setStatus(text: string): void {
 function applyDomPreview(): void {
   const rootStyle = document.documentElement.style;
   rootStyle.setProperty('--dev-player-card-scale', String(settings.ui.playerCardScale));
-  rootStyle.setProperty('--dev-player-inset', `${settings.ui.playerInset}px`);
+  rootStyle.setProperty('--dev-player-inset-tb', `${settings.ui.playerInsetTB}px`);
+  rootStyle.setProperty('--dev-player-inset-sides', `${settings.ui.playerInsetSides}px`);
   rootStyle.setProperty('--dev-dora-scale', String(settings.ui.doraScale));
   rootStyle.setProperty('--dev-dora-x', `${settings.ui.doraX}px`);
   rootStyle.setProperty('--dev-dora-y', `${settings.ui.doraY}px`);
   rootStyle.setProperty('--dev-center-scale', String(settings.ui.centerScale));
+  rootStyle.setProperty('--dev-center-offset-x', `${settings.ui.centerOffsetX}px`);
+  rootStyle.setProperty('--dev-center-offset-y', `${settings.ui.centerOffsetY}px`);
+  rootStyle.setProperty('--dev-center-width', `${settings.ui.centerWidth}px`);
+  rootStyle.setProperty('--dev-center-height', `${settings.ui.centerHeight}px`);
   rootStyle.setProperty('--dev-reaction-scale', String(settings.ui.reactionScale));
   rootStyle.setProperty('--dev-game-log-width', `${settings.ui.gameLogWidth}px`);
 
@@ -334,42 +384,65 @@ function buildPanel(): HTMLElement {
 
   const tileSection = document.createElement('section');
   tileSection.className = 'dev-tuning-section';
-  tileSection.innerHTML = '<h3>Tiles & front diagnostic</h3>';
+  tileSection.innerHTML = '<h3>Tiles & front material</h3>';
+  colorControl(tileSection, 'Body RGB', () => settings.tiles.bodyColor, (v) => { settings.tiles.bodyColor = v; }, DEFAULTS.tiles.bodyColor);
+  colorControl(tileSection, 'Front tint', () => settings.tiles.faceTint, (v) => { settings.tiles.faceTint = v; }, DEFAULTS.tiles.faceTint);
+  numberSlider(tileSection, 'Body roughness', .10, 1.00, .01, () => settings.tiles.bodyRoughness, (v) => { settings.tiles.bodyRoughness = v; }, '', DEFAULTS.tiles.bodyRoughness);
   numberSlider(tileSection, 'Front offset', -.30, .30, .002, () => settings.tiles.faceOffset, (v) => { settings.tiles.faceOffset = v; }, '', DEFAULTS.tiles.faceOffset);
   numberSlider(tileSection, 'Front rotate X', -180, 180, 1, () => settings.tiles.faceRotateX, (v) => { settings.tiles.faceRotateX = v; }, '°', DEFAULTS.tiles.faceRotateX);
+  numberSlider(tileSection, 'Texture rotate', -180, 180, 1, () => settings.tiles.faceTextureRotation, (v) => { settings.tiles.faceTextureRotation = v; }, '°', DEFAULTS.tiles.faceTextureRotation);
   numberSlider(tileSection, 'Front scale', .50, 1.50, .01, () => settings.tiles.faceScale, (v) => { settings.tiles.faceScale = v; }, '×', DEFAULTS.tiles.faceScale);
   numberSlider(tileSection, 'Your tile size', .60, 1.50, .01, () => settings.tiles.ownScale, (v) => { settings.tiles.ownScale = v; }, '×', DEFAULTS.tiles.ownScale);
   numberSlider(tileSection, 'Opponent size', .60, 1.50, .01, () => settings.tiles.opponentScale, (v) => { settings.tiles.opponentScale = v; }, '×', DEFAULTS.tiles.opponentScale);
   numberSlider(tileSection, 'Discard size', .50, 1.40, .01, () => settings.tiles.riverScale, (v) => { settings.tiles.riverScale = v; }, '×', DEFAULTS.tiles.riverScale);
   numberSlider(tileSection, 'Meld size', .50, 1.40, .01, () => settings.tiles.meldScale, (v) => { settings.tiles.meldScale = v; }, '×', DEFAULTS.tiles.meldScale);
-  tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front offset moves the printed face along the tile local depth. Rotate X is intentionally exposed so we can find the correct face plane orientation without another code change.</p>');
+  tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');
   root.append(tileSection);
+
+  const river = document.createElement('section');
+  river.className = 'dev-tuning-section';
+  river.innerHTML = '<h3>Discard layout</h3>';
+  numberSlider(river, 'Center distance', 1.20, 3.50, .01, () => settings.tiles.riverDepth, (v) => { settings.tiles.riverDepth = v; }, '', DEFAULTS.tiles.riverDepth);
+  numberSlider(river, 'Row gap', .20, 1.00, .01, () => settings.tiles.riverRowGap, (v) => { settings.tiles.riverRowGap = v; }, '', DEFAULTS.tiles.riverRowGap);
+  numberSlider(river, 'Column gap', .25, .80, .01, () => settings.tiles.riverColumnGap, (v) => { settings.tiles.riverColumnGap = v; }, '', DEFAULTS.tiles.riverColumnGap);
+  river.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Discards are laid out around world-space center (0,0); the DOM center counter is projected onto that same point.</p>');
+  root.append(river);
 
   const geometry = document.createElement('section');
   geometry.className = 'dev-tuning-section';
   geometry.innerHTML = '<h3>Table geometry</h3>';
-  numberSlider(geometry, 'Wood Y', -.40, .30, .005, () => settings.tableGeometry.woodY, (v) => { settings.tableGeometry.woodY = v; }, '', DEFAULTS.tableGeometry.woodY);
-  numberSlider(geometry, 'Felt Y', -.20, .30, .005, () => settings.tableGeometry.feltY, (v) => { settings.tableGeometry.feltY = v; }, '', DEFAULTS.tableGeometry.feltY);
-  geometry.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Default now puts the wooden frame top above the felt surface.</p>');
+  colorControl(geometry, 'Wood RGB', () => settings.woodColor, (v) => { settings.woodColor = v; }, DEFAULTS.woodColor);
+  numberSlider(geometry, 'Frame top Y', -.10, .50, .005, () => settings.tableGeometry.frameTopY, (v) => { settings.tableGeometry.frameTopY = v; }, '', DEFAULTS.tableGeometry.frameTopY);
+  numberSlider(geometry, 'Felt top Y', -.10, .40, .005, () => settings.tableGeometry.feltTopY, (v) => { settings.tableGeometry.feltTopY = v; }, '', DEFAULTS.tableGeometry.feltTopY);
+  numberSlider(geometry, 'Frame width', .15, .85, .01, () => settings.tableGeometry.frameWidth, (v) => { settings.tableGeometry.frameWidth = v; }, '', DEFAULTS.tableGeometry.frameWidth);
+  numberSlider(geometry, 'Frame thickness', .10, .70, .01, () => settings.tableGeometry.frameThickness, (v) => { settings.tableGeometry.frameThickness = v; }, '', DEFAULTS.tableGeometry.frameThickness);
+  numberSlider(geometry, 'Felt thickness', .03, .30, .01, () => settings.tableGeometry.feltThickness, (v) => { settings.tableGeometry.feltThickness = v; }, '', DEFAULTS.tableGeometry.feltThickness);
+  geometry.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Wood is now four physical rails plus a lower underlay; felt is a separate inset slab, so changing height cannot make one full box swallow the other.</p>');
   root.append(geometry);
 
   const ui = document.createElement('section');
   ui.className = 'dev-tuning-section';
   ui.innerHTML = '<h3>UI overlays</h3>';
   numberSlider(ui, 'Player badges', .50, 2.00, .01, () => settings.ui.playerCardScale, (v) => { settings.ui.playerCardScale = v; }, '×', DEFAULTS.ui.playerCardScale);
-  numberSlider(ui, 'Badge inset', 0, 80, 1, () => settings.ui.playerInset, (v) => { settings.ui.playerInset = v; }, 'px', DEFAULTS.ui.playerInset);
+  numberSlider(ui, 'Top/bottom inset', 0, 100, 1, () => settings.ui.playerInsetTB, (v) => { settings.ui.playerInsetTB = v; }, 'px', DEFAULTS.ui.playerInsetTB);
+  numberSlider(ui, 'Side inset', 0, 100, 1, () => settings.ui.playerInsetSides, (v) => { settings.ui.playerInsetSides = v; }, 'px', DEFAULTS.ui.playerInsetSides);
   numberSlider(ui, 'Dora window', .50, 2.50, .01, () => settings.ui.doraScale, (v) => { settings.ui.doraScale = v; }, '×', DEFAULTS.ui.doraScale);
   numberSlider(ui, 'Dora X', 0, 300, 1, () => settings.ui.doraX, (v) => { settings.ui.doraX = v; }, 'px', DEFAULTS.ui.doraX);
   numberSlider(ui, 'Dora Y', 0, 250, 1, () => settings.ui.doraY, (v) => { settings.ui.doraY = v; }, 'px', DEFAULTS.ui.doraY);
-  numberSlider(ui, 'Center panel', .50, 2.00, .01, () => settings.ui.centerScale, (v) => { settings.ui.centerScale = v; }, '×', DEFAULTS.ui.centerScale);
+  numberSlider(ui, 'Center scale', .50, 2.00, .01, () => settings.ui.centerScale, (v) => { settings.ui.centerScale = v; }, '×', DEFAULTS.ui.centerScale);
+  numberSlider(ui, 'Center X offset', -300, 300, 1, () => settings.ui.centerOffsetX, (v) => { settings.ui.centerOffsetX = v; }, 'px', DEFAULTS.ui.centerOffsetX);
+  numberSlider(ui, 'Center Y offset', -250, 250, 1, () => settings.ui.centerOffsetY, (v) => { settings.ui.centerOffsetY = v; }, 'px', DEFAULTS.ui.centerOffsetY);
+  numberSlider(ui, 'Center width', 150, 420, 1, () => settings.ui.centerWidth, (v) => { settings.ui.centerWidth = v; }, 'px', DEFAULTS.ui.centerWidth);
+  numberSlider(ui, 'Center height', 150, 420, 1, () => settings.ui.centerHeight, (v) => { settings.ui.centerHeight = v; }, 'px', DEFAULTS.ui.centerHeight);
   numberSlider(ui, 'Reaction popup', .50, 2.00, .01, () => settings.ui.reactionScale, (v) => { settings.ui.reactionScale = v; }, '×', DEFAULTS.ui.reactionScale);
   numberSlider(ui, 'Game log width', 180, 600, 1, () => settings.ui.gameLogWidth, (v) => { settings.ui.gameLogWidth = v; }, 'px', DEFAULTS.ui.gameLogWidth);
+  ui.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Center X/Y are offsets from the projected 3D world center, not from the browser viewport center.</p>');
   root.append(ui);
 
   const surfaces = document.createElement('section');
   surfaces.className = 'dev-tuning-section';
-  surfaces.innerHTML = '<h3>Table & tile backs</h3>';
-  colorControl(surfaces, 'Table RGB', () => settings.tableColor, (v) => { settings.tableColor = v; }, DEFAULTS.tableColor);
+  surfaces.innerHTML = '<h3>Felt & tile backs</h3>';
+  colorControl(surfaces, 'Felt RGB', () => settings.tableColor, (v) => { settings.tableColor = v; }, DEFAULTS.tableColor);
 
   const fileRow = document.createElement('div');
   fileRow.className = 'dev-tuning-file';

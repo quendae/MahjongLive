@@ -23,24 +23,37 @@ type DevTuning = {
     faceOffset: number;
     faceRotateX: number;
     faceScale: number;
+    faceTextureRotation: number;
+    bodyColor: string;
+    bodyRoughness: number;
+    faceTint: string;
     ownScale: number;
     opponentScale: number;
     riverScale: number;
     meldScale: number;
+    riverDepth: number;
+    riverRowGap: number;
+    riverColumnGap: number;
   };
-  tableGeometry: { woodY: number; feltY: number };
+  tableGeometry: { frameTopY: number; feltTopY: number; frameWidth: number; frameThickness: number; feltThickness: number };
   ui: {
     playerCardScale: number;
-    playerInset: number;
+    playerInsetTB: number;
+    playerInsetSides: number;
     doraScale: number;
     doraX: number;
     doraY: number;
     centerScale: number;
+    centerOffsetX: number;
+    centerOffsetY: number;
+    centerWidth: number;
+    centerHeight: number;
     reactionScale: number;
     gameLogWidth: number;
   };
   tableColor: string;
   tableImage: string | null;
+  woodColor: string;
   backColor: string;
 };
 
@@ -54,24 +67,37 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     faceOffset: .128,
     faceRotateX: -90,
     faceScale: 1,
+    faceTextureRotation: 0,
+    bodyColor: '#fffdf5',
+    bodyRoughness: .46,
+    faceTint: '#ffffff',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
     meldScale: 1,
+    riverDepth: 2.05,
+    riverRowGap: .55,
+    riverColumnGap: .48,
   },
-  tableGeometry: { woodY: -.04, feltY: .02 },
+  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .39, frameThickness: .34, feltThickness: .10 },
   ui: {
     playerCardScale: 1,
-    playerInset: 10,
+    playerInsetTB: 10,
+    playerInsetSides: 10,
     doraScale: 1,
     doraX: 24,
     doraY: 24,
     centerScale: 1,
+    centerOffsetX: 0,
+    centerOffsetY: 0,
+    centerWidth: 242,
+    centerHeight: 242,
     reactionScale: 1,
     gameLogWidth: 290,
   },
   tableColor: '#174a36',
   tableImage: null,
+  woodColor: '#3a2b20',
   backColor: '#315c49',
 };
 
@@ -149,8 +175,11 @@ type TableRuntime = {
   scene: any;
   camera: any;
   actorRoot: any;
-  base: any;
+  frame: any;
+  underlay: any;
   felt: any;
+  tableBoxGeometry: any;
+  woodMaterial: any;
   tileGeometry: any;
   faceGeometry: any;
   backGeometry: any;
@@ -210,27 +239,43 @@ function readDevTuning(): DevTuning {
       faceOffset: finiteNumber(raw.tiles?.faceOffset, DEFAULT_DEV_TUNING.tiles.faceOffset),
       faceRotateX: finiteNumber(raw.tiles?.faceRotateX, DEFAULT_DEV_TUNING.tiles.faceRotateX),
       faceScale: finiteNumber(raw.tiles?.faceScale, DEFAULT_DEV_TUNING.tiles.faceScale),
+      faceTextureRotation: finiteNumber(raw.tiles?.faceTextureRotation, DEFAULT_DEV_TUNING.tiles.faceTextureRotation),
+      bodyColor: typeof raw.tiles?.bodyColor === 'string' ? raw.tiles.bodyColor : DEFAULT_DEV_TUNING.tiles.bodyColor,
+      bodyRoughness: finiteNumber(raw.tiles?.bodyRoughness, DEFAULT_DEV_TUNING.tiles.bodyRoughness),
+      faceTint: typeof raw.tiles?.faceTint === 'string' ? raw.tiles.faceTint : DEFAULT_DEV_TUNING.tiles.faceTint,
       ownScale: finiteNumber(raw.tiles?.ownScale, DEFAULT_DEV_TUNING.tiles.ownScale),
       opponentScale: finiteNumber(raw.tiles?.opponentScale, DEFAULT_DEV_TUNING.tiles.opponentScale),
       riverScale: finiteNumber(raw.tiles?.riverScale, DEFAULT_DEV_TUNING.tiles.riverScale),
       meldScale: finiteNumber(raw.tiles?.meldScale, DEFAULT_DEV_TUNING.tiles.meldScale),
+      riverDepth: finiteNumber(raw.tiles?.riverDepth, DEFAULT_DEV_TUNING.tiles.riverDepth),
+      riverRowGap: finiteNumber(raw.tiles?.riverRowGap, DEFAULT_DEV_TUNING.tiles.riverRowGap),
+      riverColumnGap: finiteNumber(raw.tiles?.riverColumnGap, DEFAULT_DEV_TUNING.tiles.riverColumnGap),
     },
     tableGeometry: {
-      woodY: finiteNumber(raw.tableGeometry?.woodY, DEFAULT_DEV_TUNING.tableGeometry.woodY),
-      feltY: finiteNumber(raw.tableGeometry?.feltY, DEFAULT_DEV_TUNING.tableGeometry.feltY),
+      frameTopY: finiteNumber(raw.tableGeometry?.frameTopY, DEFAULT_DEV_TUNING.tableGeometry.frameTopY),
+      feltTopY: finiteNumber(raw.tableGeometry?.feltTopY, DEFAULT_DEV_TUNING.tableGeometry.feltTopY),
+      frameWidth: finiteNumber(raw.tableGeometry?.frameWidth, DEFAULT_DEV_TUNING.tableGeometry.frameWidth),
+      frameThickness: finiteNumber(raw.tableGeometry?.frameThickness, DEFAULT_DEV_TUNING.tableGeometry.frameThickness),
+      feltThickness: finiteNumber(raw.tableGeometry?.feltThickness, DEFAULT_DEV_TUNING.tableGeometry.feltThickness),
     },
     ui: {
       playerCardScale: finiteNumber(raw.ui?.playerCardScale, DEFAULT_DEV_TUNING.ui.playerCardScale),
-      playerInset: finiteNumber(raw.ui?.playerInset, DEFAULT_DEV_TUNING.ui.playerInset),
+      playerInsetTB: finiteNumber(raw.ui?.playerInsetTB, finiteNumber(raw.ui?.playerInset, DEFAULT_DEV_TUNING.ui.playerInsetTB)),
+      playerInsetSides: finiteNumber(raw.ui?.playerInsetSides, finiteNumber(raw.ui?.playerInset, DEFAULT_DEV_TUNING.ui.playerInsetSides)),
       doraScale: finiteNumber(raw.ui?.doraScale, DEFAULT_DEV_TUNING.ui.doraScale),
       doraX: finiteNumber(raw.ui?.doraX, DEFAULT_DEV_TUNING.ui.doraX),
       doraY: finiteNumber(raw.ui?.doraY, DEFAULT_DEV_TUNING.ui.doraY),
       centerScale: finiteNumber(raw.ui?.centerScale, DEFAULT_DEV_TUNING.ui.centerScale),
+      centerOffsetX: finiteNumber(raw.ui?.centerOffsetX, DEFAULT_DEV_TUNING.ui.centerOffsetX),
+      centerOffsetY: finiteNumber(raw.ui?.centerOffsetY, DEFAULT_DEV_TUNING.ui.centerOffsetY),
+      centerWidth: finiteNumber(raw.ui?.centerWidth, DEFAULT_DEV_TUNING.ui.centerWidth),
+      centerHeight: finiteNumber(raw.ui?.centerHeight, DEFAULT_DEV_TUNING.ui.centerHeight),
       reactionScale: finiteNumber(raw.ui?.reactionScale, DEFAULT_DEV_TUNING.ui.reactionScale),
       gameLogWidth: finiteNumber(raw.ui?.gameLogWidth, DEFAULT_DEV_TUNING.ui.gameLogWidth),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
+    woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULT_DEV_TUNING.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULT_DEV_TUNING.backColor,
   };
 }
@@ -368,8 +413,8 @@ function baseTransform(spec: TileSpec): Transform {
     const col = spec.index % 6;
     // Keep the organic placement, but anchor every discard to a predictable outer row so
     // the centre counter never covers the river.
-    const cross = (col - 2.5) * .48;
-    const depth = 2.05 + row * .55;
+    const cross = (col - 2.5) * tuning.tiles.riverColumnGap;
+    const depth = tuning.tiles.riverDepth + row * tuning.tiles.riverRowGap;
     if (spec.side === 'bottom') {
       transform.x = cross;
       transform.z = depth;
@@ -573,7 +618,14 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
-  return new THREE.ShapeGeometry(shape, 8);
+  const geometry = new THREE.ShapeGeometry(shape, 8);
+  const positions = geometry.getAttribute('position');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    uvs.setXY(index, (positions.getX(index) - x0) / width, (positions.getY(index) - y0) / depth);
+  }
+  uvs.needsUpdate = true;
+  return geometry;
 }
 
 function disposeFaceMaterials(rt: TableRuntime): void {
@@ -589,12 +641,16 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   const key = `${rt.faceMode}:${label ?? 'blank'}`;
   const cached = rt.faceMaterials.get(key);
   if (cached) return cached;
+  const tuning = readDevTuning();
   const texture = new rt.THREE.CanvasTexture(createFaceCanvas(label, false, rt.faceMode));
   texture.colorSpace = rt.THREE.SRGBColorSpace;
   texture.anisotropy = Math.min(8, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.center.set(.5, .5);
+  texture.rotation = radians(tuning.tiles.faceTextureRotation);
   const material = new rt.THREE.MeshStandardMaterial({
     map: texture,
-    roughness: .60,
+    color: tuning.tiles.faceTint,
+    roughness: .56,
     metalness: 0,
     side: rt.THREE.DoubleSide,
     polygonOffset: true,
@@ -972,6 +1028,7 @@ function alignStage(rt: TableRuntime, table: HTMLElement): void {
   rt.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
   rt.camera.aspect = rect.width / rect.height;
   rt.camera.updateProjectionMatrix();
+  syncWorldUiAnchor(rt);
 }
 
 function createRuntime(THREE: any): TableRuntime {
@@ -1013,25 +1070,31 @@ function createRuntime(THREE: any): TableRuntime {
   fill.position.set(4.6, 4.5, -4.5);
   scene.add(fill);
 
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(12.25, .48, 9.85),
-    new THREE.MeshStandardMaterial({ color: 0x3a2b20, roughness: .74, metalness: .015 }),
-  );
-  base.position.y = tuning.tableGeometry.woodY;
-  base.receiveShadow = true;
-  base.castShadow = true;
-  scene.add(base);
+  const tableBoxGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const woodMaterial = new THREE.MeshStandardMaterial({
+    color: tuning.woodColor, roughness: .72, metalness: .015,
+  });
+  const frame = new THREE.Group();
+  for (const name of ['frame-top', 'frame-bottom', 'frame-left', 'frame-right']) {
+    const rail = new THREE.Mesh(tableBoxGeometry, woodMaterial);
+    rail.name = name;
+    rail.castShadow = true;
+    rail.receiveShadow = true;
+    frame.add(rail);
+  }
+  scene.add(frame);
+
+  const underlay = new THREE.Mesh(tableBoxGeometry, woodMaterial);
+  underlay.castShadow = true;
+  underlay.receiveShadow = true;
+  scene.add(underlay);
 
   const feltMaterial = new THREE.MeshStandardMaterial({
     color: tuning.tableImage ? 0xffffff : tuning.tableColor,
     roughness: .96,
     metalness: 0,
   });
-  const felt = new THREE.Mesh(
-    new THREE.BoxGeometry(11.48, .18, 9.08),
-    feltMaterial,
-  );
-  felt.position.y = tuning.tableGeometry.feltY;
+  const felt = new THREE.Mesh(tableBoxGeometry, feltMaterial);
   felt.receiveShadow = true;
   scene.add(felt);
 
@@ -1044,8 +1107,8 @@ function createRuntime(THREE: any): TableRuntime {
   const backGeometry = roundedFaceGeometry(THREE, .405, .545, .043);
   const backShellGeometry = roundedBackShellGeometry(THREE);
   const ivoryMaterial = new THREE.MeshStandardMaterial({
-    color: 0xf7f1df,
-    roughness: .54,
+    color: tuning.tiles.bodyColor,
+    roughness: tuning.tiles.bodyRoughness,
     metalness: 0,
   });
   const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true, 'classic'));
@@ -1064,8 +1127,11 @@ function createRuntime(THREE: any): TableRuntime {
     scene,
     camera,
     actorRoot,
-    base,
+    frame,
+    underlay,
     felt,
+    tableBoxGeometry,
+    woodMaterial,
     tileGeometry,
     faceGeometry,
     backGeometry,
@@ -1094,6 +1160,55 @@ function createRuntime(THREE: any): TableRuntime {
   applyDevTuning(rt);
   renderer.setAnimationLoop((time: number) => frameRuntime(rt, time));
   return rt;
+}
+
+function applyTableGeometry(rt: TableRuntime, tuning: DevTuning): void {
+  const outerWidth = 12.25;
+  const outerDepth = 9.85;
+  const frameWidth = Math.max(.12, Math.min(1.2, tuning.tableGeometry.frameWidth));
+  const frameThickness = Math.max(.06, tuning.tableGeometry.frameThickness);
+  const feltThickness = Math.max(.02, tuning.tableGeometry.feltThickness);
+  const innerWidth = Math.max(1, outerWidth - frameWidth * 2);
+  const innerDepth = Math.max(1, outerDepth - frameWidth * 2);
+  const railY = tuning.tableGeometry.frameTopY - frameThickness / 2;
+
+  const top = rt.frame.getObjectByName('frame-top');
+  const bottom = rt.frame.getObjectByName('frame-bottom');
+  const left = rt.frame.getObjectByName('frame-left');
+  const right = rt.frame.getObjectByName('frame-right');
+  top?.scale.set(outerWidth, frameThickness, frameWidth);
+  bottom?.scale.set(outerWidth, frameThickness, frameWidth);
+  left?.scale.set(frameWidth, frameThickness, innerDepth);
+  right?.scale.set(frameWidth, frameThickness, innerDepth);
+  top?.position.set(0, railY, -(outerDepth / 2 - frameWidth / 2));
+  bottom?.position.set(0, railY, outerDepth / 2 - frameWidth / 2);
+  left?.position.set(-(outerWidth / 2 - frameWidth / 2), railY, 0);
+  right?.position.set(outerWidth / 2 - frameWidth / 2, railY, 0);
+
+  rt.felt.scale.set(innerWidth - .02, feltThickness, innerDepth - .02);
+  rt.felt.position.set(0, tuning.tableGeometry.feltTopY - feltThickness / 2, 0);
+
+  // The underlay is deliberately below both top surfaces. It gives the table visible body/depth
+  // without ever intersecting the felt from above when the dev sliders are moved.
+  const frameBottom = tuning.tableGeometry.frameTopY - frameThickness;
+  const feltBottom = tuning.tableGeometry.feltTopY - feltThickness;
+  const underlayTop = Math.min(frameBottom, feltBottom) - .025;
+  const underlayThickness = .22;
+  rt.underlay.scale.set(outerWidth - .04, underlayThickness, outerDepth - .04);
+  rt.underlay.position.set(0, underlayTop - underlayThickness / 2, 0);
+}
+
+function syncWorldUiAnchor(rt: TableRuntime): void {
+  if (!rt.table) return;
+  const rect = rt.table.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return;
+  rt.camera.updateMatrixWorld(true);
+  const anchor = new rt.THREE.Vector3(0, rt.felt.position.y + rt.felt.scale.y / 2, 0);
+  anchor.project(rt.camera);
+  const x = (anchor.x * .5 + .5) * rect.width;
+  const y = (-anchor.y * .5 + .5) * rect.height;
+  rt.table.style.setProperty('--table-3d-world-center-x', `${x.toFixed(2)}px`);
+  rt.table.style.setProperty('--table-3d-world-center-y', `${y.toFixed(2)}px`);
 }
 
 function syncTableTexture(rt: TableRuntime, source: string | null): void {
@@ -1127,17 +1242,29 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
   rt.camera.updateProjectionMatrix();
-  rt.base.position.y = tuning.tableGeometry.woodY;
-  rt.felt.position.y = tuning.tableGeometry.feltY;
+  rt.woodMaterial.color.set(tuning.woodColor);
+  rt.ivoryMaterial.color.set(tuning.tiles.bodyColor);
+  rt.ivoryMaterial.roughness = tuning.tiles.bodyRoughness;
+  rt.ivoryMaterial.needsUpdate = true;
+  applyTableGeometry(rt, tuning);
   rt.backMaterial.color.set(tuning.backColor);
   rt.backShellMaterial.color.set(tuning.backColor);
   rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
+  for (const material of rt.faceMaterials.values()) {
+    material.color?.set?.(tuning.tiles.faceTint);
+    if (material.map) {
+      material.map.center.set(.5, .5);
+      material.map.rotation = radians(tuning.tiles.faceTextureRotation);
+      material.map.needsUpdate = true;
+    }
+  }
   for (const actor of rt.actors.values()) {
     actor.face.position.y = tuning.tiles.faceOffset;
     actor.face.rotation.x = radians(tuning.tiles.faceRotateX);
     actor.face.scale.setScalar(tuning.tiles.faceScale);
   }
   syncTableTexture(rt, tuning.tableImage);
+  syncWorldUiAnchor(rt);
 }
 
 function frameRuntime(rt: TableRuntime, time: number): void {
@@ -1205,6 +1332,8 @@ function disposeRuntime(): void {
   rt.renderer.setAnimationLoop(null);
   stage.classList.remove('is-active');
   stage.replaceChildren();
+  rt.tableBoxGeometry.dispose();
+  rt.woodMaterial.dispose();
   rt.tileGeometry.dispose();
   rt.faceGeometry.dispose();
   rt.backGeometry.dispose();

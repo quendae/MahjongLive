@@ -170,9 +170,13 @@
 
 .table-3d-active .table-center.classic-table-counter {
   z-index: 13;
-  width: 242px;
-  height: 242px;
-  min-height: 242px;
+  left: calc(var(--table-3d-world-center-x, 50%) + var(--dev-center-offset-x, 0px));
+  top: calc(var(--table-3d-world-center-y, 50%) + var(--dev-center-offset-y, 0px));
+  width: min(var(--dev-center-width, 242px), calc(100% - 48px));
+  height: min(var(--dev-center-height, 242px), calc(100% - 48px));
+  min-height: 0;
+  transform: translate(-50%, -50%) scale(var(--dev-center-scale, 1));
+  transform-origin: center;
   padding: 70px 40px 52px;
   border: 2px solid rgba(224, 201, 145, .24);
   border-radius: 20px;
@@ -369,10 +373,10 @@
   transform-origin: center;
 }
 
-.table-3d-active .player-top { top: var(--dev-player-inset, 10px); }
-.table-3d-active .player-bottom { bottom: var(--dev-player-inset, 10px); }
-.table-3d-active .player-left { left: var(--dev-player-inset, 10px); }
-.table-3d-active .player-right { right: var(--dev-player-inset, 10px); }
+.table-3d-active .player-top { top: var(--dev-player-inset-tb, 10px); }
+.table-3d-active .player-bottom { bottom: var(--dev-player-inset-tb, 10px); }
+.table-3d-active .player-left { left: var(--dev-player-inset-sides, 10px); }
+.table-3d-active .player-right { right: var(--dev-player-inset-sides, 10px); }
 
 .table-3d-active .table-dora-tray {
   left: var(--dev-dora-x, 24px);
@@ -382,8 +386,15 @@
 }
 
 .table-3d-active .table-center.classic-table-counter {
-  scale: var(--dev-center-scale, 1);
+  transform: translate(-50%, -50%) scale(var(--dev-center-scale, 1));
   transform-origin: center;
+}
+
+@media (max-width: 760px) {
+  .table-3d-active .table-center.classic-table-counter {
+    width: min(var(--dev-center-width, 190px), 190px);
+    height: min(var(--dev-center-height, 190px), 190px);
+  }
 }
 
 .table-3d-active .reaction-popup {

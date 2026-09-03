@@ -11,9 +11,9 @@ export function createFaceCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
-  ctx.fillStyle = back ? '#ffffff' : '#f7f1df';
+  ctx.fillStyle = back ? '#ffffff' : '#fffdf8';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = back ? 'rgba(28,54,43,.52)' : '#c8bea9';
+  ctx.strokeStyle = back ? 'rgba(28,54,43,.52)' : '#d5cec0';
   ctx.lineWidth = 5;
   roundRectStroke(ctx, 5, 5, 150, 206, 12);
 
