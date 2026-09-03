@@ -19,6 +19,26 @@ type DevTuning = {
   right: DevRotation;
   top: DevRotation;
   bottom: DevRotation;
+  tiles: {
+    faceOffset: number;
+    faceRotateX: number;
+    faceScale: number;
+    ownScale: number;
+    opponentScale: number;
+    riverScale: number;
+    meldScale: number;
+  };
+  tableGeometry: { woodY: number; feltY: number };
+  ui: {
+    playerCardScale: number;
+    playerInset: number;
+    doraScale: number;
+    doraX: number;
+    doraY: number;
+    centerScale: number;
+    reactionScale: number;
+    gameLogWidth: number;
+  };
   tableColor: string;
   tableImage: string | null;
   backColor: string;
@@ -30,6 +50,26 @@ const DEFAULT_DEV_TUNING: DevTuning = {
   right: { x: -90, y: -180, z: 90 },
   top: { x: -90, y: 180, z: 0 },
   bottom: { x: 73, y: 0, z: 0 },
+  tiles: {
+    faceOffset: .128,
+    faceRotateX: -90,
+    faceScale: 1,
+    ownScale: 1,
+    opponentScale: 1,
+    riverScale: 1,
+    meldScale: 1,
+  },
+  tableGeometry: { woodY: -.04, feltY: .02 },
+  ui: {
+    playerCardScale: 1,
+    playerInset: 10,
+    doraScale: 1,
+    doraX: 24,
+    doraY: 24,
+    centerScale: 1,
+    reactionScale: 1,
+    gameLogWidth: 290,
+  },
   tableColor: '#174a36',
   tableImage: null,
   backColor: '#315c49',
@@ -109,6 +149,8 @@ type TableRuntime = {
   scene: any;
   camera: any;
   actorRoot: any;
+  base: any;
+  felt: any;
   tileGeometry: any;
   faceGeometry: any;
   backGeometry: any;
@@ -164,6 +206,29 @@ function readDevTuning(): DevTuning {
     right: readRotation(raw.right, DEFAULT_DEV_TUNING.right),
     top: readRotation(raw.top, DEFAULT_DEV_TUNING.top),
     bottom: readRotation(raw.bottom, DEFAULT_DEV_TUNING.bottom),
+    tiles: {
+      faceOffset: finiteNumber(raw.tiles?.faceOffset, DEFAULT_DEV_TUNING.tiles.faceOffset),
+      faceRotateX: finiteNumber(raw.tiles?.faceRotateX, DEFAULT_DEV_TUNING.tiles.faceRotateX),
+      faceScale: finiteNumber(raw.tiles?.faceScale, DEFAULT_DEV_TUNING.tiles.faceScale),
+      ownScale: finiteNumber(raw.tiles?.ownScale, DEFAULT_DEV_TUNING.tiles.ownScale),
+      opponentScale: finiteNumber(raw.tiles?.opponentScale, DEFAULT_DEV_TUNING.tiles.opponentScale),
+      riverScale: finiteNumber(raw.tiles?.riverScale, DEFAULT_DEV_TUNING.tiles.riverScale),
+      meldScale: finiteNumber(raw.tiles?.meldScale, DEFAULT_DEV_TUNING.tiles.meldScale),
+    },
+    tableGeometry: {
+      woodY: finiteNumber(raw.tableGeometry?.woodY, DEFAULT_DEV_TUNING.tableGeometry.woodY),
+      feltY: finiteNumber(raw.tableGeometry?.feltY, DEFAULT_DEV_TUNING.tableGeometry.feltY),
+    },
+    ui: {
+      playerCardScale: finiteNumber(raw.ui?.playerCardScale, DEFAULT_DEV_TUNING.ui.playerCardScale),
+      playerInset: finiteNumber(raw.ui?.playerInset, DEFAULT_DEV_TUNING.ui.playerInset),
+      doraScale: finiteNumber(raw.ui?.doraScale, DEFAULT_DEV_TUNING.ui.doraScale),
+      doraX: finiteNumber(raw.ui?.doraX, DEFAULT_DEV_TUNING.ui.doraX),
+      doraY: finiteNumber(raw.ui?.doraY, DEFAULT_DEV_TUNING.ui.doraY),
+      centerScale: finiteNumber(raw.ui?.centerScale, DEFAULT_DEV_TUNING.ui.centerScale),
+      reactionScale: finiteNumber(raw.ui?.reactionScale, DEFAULT_DEV_TUNING.ui.reactionScale),
+      gameLogWidth: finiteNumber(raw.ui?.gameLogWidth, DEFAULT_DEV_TUNING.ui.gameLogWidth),
+    },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULT_DEV_TUNING.backColor,
@@ -279,6 +344,7 @@ function signedHash(key: string, salt: string): number {
 }
 
 function baseTransform(spec: TileSpec): Transform {
+  const tuning = readDevTuning();
   const transform: Transform = {
     x: 0,
     y: .24,
@@ -295,8 +361,8 @@ function baseTransform(spec: TileSpec): Transform {
     transform.z = 4.24;
     // The human rack stands on the narrow edge. The tile face points toward the bottom player.
     transform.y = .42;
-    setConfiguredRotation(transform, readDevTuning().bottom);
-    transform.scale = 1.03;
+    setConfiguredRotation(transform, tuning.bottom);
+    transform.scale = 1.03 * tuning.tiles.ownScale;
   } else if (spec.zone === 'river') {
     const row = Math.floor(spec.index / 6);
     const col = spec.index % 6;
@@ -320,10 +386,10 @@ function baseTransform(spec: TileSpec): Transform {
       transform.z = -cross;
       transform.yaw = -Math.PI / 2;
     }
-    transform.scale = .88;
+    transform.scale = .88 * tuning.tiles.riverScale;
     if (spec.latest) {
       transform.y += .09;
-      transform.scale = .94;
+      transform.scale = .94 * tuning.tiles.riverScale;
       if (spec.side === 'bottom') transform.z -= .15;
       if (spec.side === 'top') transform.z += .15;
       if (spec.side === 'left') transform.x += .15;
@@ -333,8 +399,7 @@ function baseTransform(spec: TileSpec): Transform {
     const centered = spec.index - (spec.total - 1) / 2;
     const spacing = .39;
     transform.y = .37;
-    transform.scale = .84;
-    const tuning = readDevTuning();
+    transform.scale = .84 * tuning.tiles.opponentScale;
     if (spec.side === 'top') {
       transform.x = centered * spacing;
       transform.z = -4.28;
@@ -351,7 +416,7 @@ function baseTransform(spec: TileSpec): Transform {
   } else {
     const row = Math.floor(spec.index / 8);
     const col = spec.index % 8;
-    transform.scale = .80;
+    transform.scale = .80 * tuning.tiles.meldScale;
     if (spec.side === 'bottom') {
       // Own open melds live in the lower-right corner and grow leftward.
       transform.x = 5.05 - col * .44;
@@ -569,9 +634,11 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   rearShell.receiveShadow = true;
   visual.add(rearShell);
 
+  const faceTuning = readDevTuning().tiles;
   const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
-  face.position.y = TILE_FACE_OFFSET;
-  face.rotation.x = -Math.PI / 2;
+  face.position.y = faceTuning.faceOffset;
+  face.rotation.x = radians(faceTuning.faceRotateX);
+  face.scale.setScalar(faceTuning.faceScale);
   face.renderOrder = 4;
   face.receiveShadow = true;
   visual.add(face);
@@ -950,7 +1017,7 @@ function createRuntime(THREE: any): TableRuntime {
     new THREE.BoxGeometry(12.25, .48, 9.85),
     new THREE.MeshStandardMaterial({ color: 0x3a2b20, roughness: .74, metalness: .015 }),
   );
-  base.position.y = -.29;
+  base.position.y = tuning.tableGeometry.woodY;
   base.receiveShadow = true;
   base.castShadow = true;
   scene.add(base);
@@ -964,7 +1031,7 @@ function createRuntime(THREE: any): TableRuntime {
     new THREE.BoxGeometry(11.48, .18, 9.08),
     feltMaterial,
   );
-  felt.position.y = .02;
+  felt.position.y = tuning.tableGeometry.feltY;
   felt.receiveShadow = true;
   scene.add(felt);
 
@@ -997,6 +1064,8 @@ function createRuntime(THREE: any): TableRuntime {
     scene,
     camera,
     actorRoot,
+    base,
+    felt,
     tileGeometry,
     faceGeometry,
     backGeometry,
@@ -1058,9 +1127,16 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
   rt.camera.updateProjectionMatrix();
+  rt.base.position.y = tuning.tableGeometry.woodY;
+  rt.felt.position.y = tuning.tableGeometry.feltY;
   rt.backMaterial.color.set(tuning.backColor);
   rt.backShellMaterial.color.set(tuning.backColor);
   rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
+  for (const actor of rt.actors.values()) {
+    actor.face.position.y = tuning.tiles.faceOffset;
+    actor.face.rotation.x = radians(tuning.tiles.faceRotateX);
+    actor.face.scale.setScalar(tuning.tiles.faceScale);
+  }
   syncTableTexture(rt, tuning.tableImage);
 }
 

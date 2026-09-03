@@ -11,6 +11,29 @@ type DevTuning = {
   right: Rotation;
   top: Rotation;
   bottom: Rotation;
+  tiles: {
+    faceOffset: number;
+    faceRotateX: number;
+    faceScale: number;
+    ownScale: number;
+    opponentScale: number;
+    riverScale: number;
+    meldScale: number;
+  };
+  tableGeometry: {
+    woodY: number;
+    feltY: number;
+  };
+  ui: {
+    playerCardScale: number;
+    playerInset: number;
+    doraScale: number;
+    doraX: number;
+    doraY: number;
+    centerScale: number;
+    reactionScale: number;
+    gameLogWidth: number;
+  };
   tableColor: string;
   tableImage: string | null;
   backColor: string;
@@ -22,6 +45,26 @@ const DEFAULTS: DevTuning = {
   right: { x: -90, y: -180, z: 90 },
   top: { x: -90, y: 180, z: 0 },
   bottom: { x: 73, y: 0, z: 0 },
+  tiles: {
+    faceOffset: .128,
+    faceRotateX: -90,
+    faceScale: 1,
+    ownScale: 1,
+    opponentScale: 1,
+    riverScale: 1,
+    meldScale: 1,
+  },
+  tableGeometry: { woodY: -.04, feltY: .02 },
+  ui: {
+    playerCardScale: 1,
+    playerInset: 10,
+    doraScale: 1,
+    doraX: 24,
+    doraY: 24,
+    centerScale: 1,
+    reactionScale: 1,
+    gameLogWidth: 290,
+  },
   tableColor: '#174a36',
   tableImage: null,
   backColor: '#315c49',
@@ -56,6 +99,29 @@ function loadSettings(): DevTuning {
     right: rotation(raw.right, DEFAULTS.right),
     top: rotation(raw.top, DEFAULTS.top),
     bottom: rotation(raw.bottom, DEFAULTS.bottom),
+    tiles: {
+      faceOffset: finite(raw.tiles?.faceOffset, DEFAULTS.tiles.faceOffset),
+      faceRotateX: finite(raw.tiles?.faceRotateX, DEFAULTS.tiles.faceRotateX),
+      faceScale: finite(raw.tiles?.faceScale, DEFAULTS.tiles.faceScale),
+      ownScale: finite(raw.tiles?.ownScale, DEFAULTS.tiles.ownScale),
+      opponentScale: finite(raw.tiles?.opponentScale, DEFAULTS.tiles.opponentScale),
+      riverScale: finite(raw.tiles?.riverScale, DEFAULTS.tiles.riverScale),
+      meldScale: finite(raw.tiles?.meldScale, DEFAULTS.tiles.meldScale),
+    },
+    tableGeometry: {
+      woodY: finite(raw.tableGeometry?.woodY, DEFAULTS.tableGeometry.woodY),
+      feltY: finite(raw.tableGeometry?.feltY, DEFAULTS.tableGeometry.feltY),
+    },
+    ui: {
+      playerCardScale: finite(raw.ui?.playerCardScale, DEFAULTS.ui.playerCardScale),
+      playerInset: finite(raw.ui?.playerInset, DEFAULTS.ui.playerInset),
+      doraScale: finite(raw.ui?.doraScale, DEFAULTS.ui.doraScale),
+      doraX: finite(raw.ui?.doraX, DEFAULTS.ui.doraX),
+      doraY: finite(raw.ui?.doraY, DEFAULTS.ui.doraY),
+      centerScale: finite(raw.ui?.centerScale, DEFAULTS.ui.centerScale),
+      reactionScale: finite(raw.ui?.reactionScale, DEFAULTS.ui.reactionScale),
+      gameLogWidth: finite(raw.ui?.gameLogWidth, DEFAULTS.ui.gameLogWidth),
+    },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULTS.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULTS.backColor,
@@ -82,6 +148,16 @@ function setStatus(text: string): void {
 }
 
 function applyDomPreview(): void {
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--dev-player-card-scale', String(settings.ui.playerCardScale));
+  rootStyle.setProperty('--dev-player-inset', `${settings.ui.playerInset}px`);
+  rootStyle.setProperty('--dev-dora-scale', String(settings.ui.doraScale));
+  rootStyle.setProperty('--dev-dora-x', `${settings.ui.doraX}px`);
+  rootStyle.setProperty('--dev-dora-y', `${settings.ui.doraY}px`);
+  rootStyle.setProperty('--dev-center-scale', String(settings.ui.centerScale));
+  rootStyle.setProperty('--dev-reaction-scale', String(settings.ui.reactionScale));
+  rootStyle.setProperty('--dev-game-log-width', `${settings.ui.gameLogWidth}px`);
+
   document.querySelectorAll<HTMLElement>('.mahjong-table').forEach((table) => {
     // In 3D the uploaded image belongs only to the felt mesh. Never paint it onto the whole
     // DOM table container, otherwise it visually spills into the frame/background around the mesh.
@@ -255,6 +331,40 @@ function buildPanel(): HTMLElement {
   rotationSection(root, 'Right opponent tiles', settings.right, DEFAULTS.right);
   rotationSection(root, 'Top opponent tiles', settings.top, DEFAULTS.top);
   rotationSection(root, 'Your tiles', settings.bottom, DEFAULTS.bottom);
+
+  const tileSection = document.createElement('section');
+  tileSection.className = 'dev-tuning-section';
+  tileSection.innerHTML = '<h3>Tiles & front diagnostic</h3>';
+  numberSlider(tileSection, 'Front offset', -.30, .30, .002, () => settings.tiles.faceOffset, (v) => { settings.tiles.faceOffset = v; }, '', DEFAULTS.tiles.faceOffset);
+  numberSlider(tileSection, 'Front rotate X', -180, 180, 1, () => settings.tiles.faceRotateX, (v) => { settings.tiles.faceRotateX = v; }, '°', DEFAULTS.tiles.faceRotateX);
+  numberSlider(tileSection, 'Front scale', .50, 1.50, .01, () => settings.tiles.faceScale, (v) => { settings.tiles.faceScale = v; }, '×', DEFAULTS.tiles.faceScale);
+  numberSlider(tileSection, 'Your tile size', .60, 1.50, .01, () => settings.tiles.ownScale, (v) => { settings.tiles.ownScale = v; }, '×', DEFAULTS.tiles.ownScale);
+  numberSlider(tileSection, 'Opponent size', .60, 1.50, .01, () => settings.tiles.opponentScale, (v) => { settings.tiles.opponentScale = v; }, '×', DEFAULTS.tiles.opponentScale);
+  numberSlider(tileSection, 'Discard size', .50, 1.40, .01, () => settings.tiles.riverScale, (v) => { settings.tiles.riverScale = v; }, '×', DEFAULTS.tiles.riverScale);
+  numberSlider(tileSection, 'Meld size', .50, 1.40, .01, () => settings.tiles.meldScale, (v) => { settings.tiles.meldScale = v; }, '×', DEFAULTS.tiles.meldScale);
+  tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front offset moves the printed face along the tile local depth. Rotate X is intentionally exposed so we can find the correct face plane orientation without another code change.</p>');
+  root.append(tileSection);
+
+  const geometry = document.createElement('section');
+  geometry.className = 'dev-tuning-section';
+  geometry.innerHTML = '<h3>Table geometry</h3>';
+  numberSlider(geometry, 'Wood Y', -.40, .30, .005, () => settings.tableGeometry.woodY, (v) => { settings.tableGeometry.woodY = v; }, '', DEFAULTS.tableGeometry.woodY);
+  numberSlider(geometry, 'Felt Y', -.20, .30, .005, () => settings.tableGeometry.feltY, (v) => { settings.tableGeometry.feltY = v; }, '', DEFAULTS.tableGeometry.feltY);
+  geometry.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Default now puts the wooden frame top above the felt surface.</p>');
+  root.append(geometry);
+
+  const ui = document.createElement('section');
+  ui.className = 'dev-tuning-section';
+  ui.innerHTML = '<h3>UI overlays</h3>';
+  numberSlider(ui, 'Player badges', .50, 2.00, .01, () => settings.ui.playerCardScale, (v) => { settings.ui.playerCardScale = v; }, '×', DEFAULTS.ui.playerCardScale);
+  numberSlider(ui, 'Badge inset', 0, 80, 1, () => settings.ui.playerInset, (v) => { settings.ui.playerInset = v; }, 'px', DEFAULTS.ui.playerInset);
+  numberSlider(ui, 'Dora window', .50, 2.50, .01, () => settings.ui.doraScale, (v) => { settings.ui.doraScale = v; }, '×', DEFAULTS.ui.doraScale);
+  numberSlider(ui, 'Dora X', 0, 300, 1, () => settings.ui.doraX, (v) => { settings.ui.doraX = v; }, 'px', DEFAULTS.ui.doraX);
+  numberSlider(ui, 'Dora Y', 0, 250, 1, () => settings.ui.doraY, (v) => { settings.ui.doraY = v; }, 'px', DEFAULTS.ui.doraY);
+  numberSlider(ui, 'Center panel', .50, 2.00, .01, () => settings.ui.centerScale, (v) => { settings.ui.centerScale = v; }, '×', DEFAULTS.ui.centerScale);
+  numberSlider(ui, 'Reaction popup', .50, 2.00, .01, () => settings.ui.reactionScale, (v) => { settings.ui.reactionScale = v; }, '×', DEFAULTS.ui.reactionScale);
+  numberSlider(ui, 'Game log width', 180, 600, 1, () => settings.ui.gameLogWidth, (v) => { settings.ui.gameLogWidth = v; }, 'px', DEFAULTS.ui.gameLogWidth);
+  root.append(ui);
 
   const surfaces = document.createElement('section');
   surfaces.className = 'dev-tuning-section';

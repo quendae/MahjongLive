@@ -62,3 +62,14 @@
   .dev-tuning-panel { top: 8px; right: 8px; max-height: calc(100vh - 16px); width: calc(100vw - 16px); }
   .dev-tuning-control { grid-template-columns: 78px minmax(0, 1fr) 68px 30px; }
 }
+
+/* Expanded diagnostic grouping */
+.dev-tuning-section {
+  padding-left: 9px;
+  border-left: 2px solid rgba(216,193,126,.13);
+}
+.dev-tuning-section h3 {
+  padding: 3px 5px;
+  border-radius: 5px;
+  background: rgba(216,193,126,.045);
+}

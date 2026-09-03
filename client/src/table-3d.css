@@ -357,3 +357,36 @@
 @media (prefers-reduced-motion: reduce) {
   .table-3d-toggle.is-loading .mode-dot { animation: none; }
 }
+
+/* Expanded dev diagnostic overrides */
+.game-layout:has(.mahjong-table.table-3d-active) {
+  grid-template-columns: minmax(0, 1fr) var(--dev-game-log-width, 290px);
+}
+
+.table-3d-active .human-card,
+.table-3d-active .opponent-card {
+  scale: var(--dev-player-card-scale, 1);
+  transform-origin: center;
+}
+
+.table-3d-active .player-top { top: var(--dev-player-inset, 10px); }
+.table-3d-active .player-bottom { bottom: var(--dev-player-inset, 10px); }
+.table-3d-active .player-left { left: var(--dev-player-inset, 10px); }
+.table-3d-active .player-right { right: var(--dev-player-inset, 10px); }
+
+.table-3d-active .table-dora-tray {
+  left: var(--dev-dora-x, 24px);
+  top: var(--dev-dora-y, 24px);
+  scale: var(--dev-dora-scale, 1);
+  transform-origin: top left;
+}
+
+.table-3d-active .table-center.classic-table-counter {
+  scale: var(--dev-center-scale, 1);
+  transform-origin: center;
+}
+
+.table-3d-active .reaction-popup {
+  scale: var(--dev-reaction-scale, 1);
+  transform-origin: center;
+}
