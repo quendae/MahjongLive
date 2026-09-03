@@ -35,6 +35,17 @@ jobs:
           PY
       - name: Apply UI polish changes
         run: node scripts/apply-ui-polish-v2.mjs
+      - name: Normalize beginner badge calls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('client/src/table-3d-faces.ts')
+          s = p.read_text().replace(
+            "drawBeginnerBadge(ctx, honor.beginner, honor.color, honor.beginner.length > 1);",
+            "drawBeginnerBadge(ctx, honor.beginner, honor.color);",
+          )
+          p.write_text(s)
+          PY
       - name: Typecheck client
         run: pnpm client:typecheck
       - name: Build client
