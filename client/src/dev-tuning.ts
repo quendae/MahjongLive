@@ -223,6 +223,34 @@ if (settings.tiles.bodyColor.toLowerCase() === '#ffffff') settings.tiles.bodyCol
 if (settings.tiles.faceTint.toLowerCase() === '#ffffff') settings.tiles.faceTint = '#fbfbfb';
 let panel: HTMLElement | null = null;
 
+type PerformanceDetail = {
+  fps?: number;
+  loopHz?: number;
+  rafHz?: number;
+  frameMs?: number;
+  rafFrameMs?: number;
+  renderMs?: number;
+  gpuMs?: number | null;
+  gpuTimerSupported?: boolean;
+  calls?: number;
+  triangles?: number;
+  actors?: number;
+  moving?: number;
+  instancedRivers?: number;
+  pixelRatio?: number;
+  visibility?: string;
+};
+
+type PerformanceCapture = {
+  startedAt: number;
+  startedIso: string;
+  lines: string[];
+  samples: number;
+};
+
+let performanceCapture: PerformanceCapture | null = null;
+let lastPerformanceDetail: PerformanceDetail | null = null;
+
 function syncDevOpenClass(): void {
   document.body.classList.toggle('dev-tuning-open', Boolean(panel && !panel.hidden));
 }
@@ -242,6 +270,98 @@ function saveAndBroadcast(message = ''): void {
 function setStatus(text: string): void {
   const status = panel?.querySelector<HTMLElement>('.dev-tuning-status');
   if (status) status.textContent = text;
+}
+
+function performanceNumber(value: number | null | undefined, digits = 2): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '';
+}
+
+function updatePerformanceCaptureUi(): void {
+  const start = panel?.querySelector<HTMLButtonElement>('.perf-log-start');
+  const stop = panel?.querySelector<HTMLButtonElement>('.perf-log-stop');
+  const state = panel?.querySelector<HTMLElement>('.perf-log-state');
+  if (start) start.disabled = Boolean(performanceCapture);
+  if (stop) stop.disabled = !performanceCapture;
+  if (state) {
+    state.textContent = performanceCapture
+      ? `Recording · ${performanceCapture.samples} samples`
+      : 'Not recording';
+    state.classList.toggle('is-recording', Boolean(performanceCapture));
+  }
+}
+
+function appendPerformanceSample(detail: PerformanceDetail): void {
+  const capture = performanceCapture;
+  if (!capture) return;
+  const now = new Date();
+  const elapsed = (performance.now() - capture.startedAt) / 1000;
+  capture.lines.push([
+    elapsed.toFixed(3),
+    now.toISOString(),
+    detail.visibility ?? document.visibilityState,
+    performanceNumber(detail.loopHz ?? detail.fps),
+    performanceNumber(detail.rafHz),
+    performanceNumber(detail.frameMs, 3),
+    performanceNumber(detail.rafFrameMs, 3),
+    performanceNumber(detail.renderMs, 3),
+    performanceNumber(detail.gpuMs, 3),
+    String(detail.gpuTimerSupported ?? false),
+    String(detail.calls ?? ''),
+    String(detail.triangles ?? ''),
+    String(detail.actors ?? ''),
+    String(detail.moving ?? ''),
+    String(detail.instancedRivers ?? ''),
+    performanceNumber(detail.pixelRatio),
+  ].join('\t'));
+  capture.samples += 1;
+  updatePerformanceCaptureUi();
+}
+
+function startPerformanceCapture(): void {
+  if (performanceCapture) return;
+  const started = new Date();
+  performanceCapture = {
+    startedAt: performance.now(),
+    startedIso: started.toISOString(),
+    samples: 0,
+    lines: [
+      'MahjongLive performance session',
+      `START\t${started.toISOString()}`,
+      `userAgent\t${navigator.userAgent}`,
+      `platform\t${navigator.platform}`,
+      `screen\t${screen.width}x${screen.height}\tavail=${screen.availWidth}x${screen.availHeight}\tcolorDepth=${screen.colorDepth}`,
+      `devicePixelRatio\t${devicePixelRatio}`,
+      `hardwareConcurrency\t${navigator.hardwareConcurrency ?? ''}`,
+      `visibilityAtStart\t${document.visibilityState}`,
+      `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}`,
+      '',
+      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_river_tiles\tpixel_ratio',
+    ],
+  };
+  document.body.classList.add('perf-capture-active');
+  updatePerformanceCaptureUi();
+  setStatus('Performance capture started. You can close Dev; logging continues.');
+}
+
+function stopPerformanceCapture(): void {
+  const capture = performanceCapture;
+  if (!capture) return;
+  const ended = new Date();
+  capture.lines.push('', `END\t${ended.toISOString()}\tduration_s=${((performance.now() - capture.startedAt) / 1000).toFixed(3)}\tsamples=${capture.samples}`);
+  const blob = new Blob([`${capture.lines.join('\n')}\n`], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = capture.startedIso.replace(/[:.]/g, '-');
+  link.href = url;
+  link.download = `mahjonglive-performance-${stamp}.txt`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  performanceCapture = null;
+  document.body.classList.remove('perf-capture-active');
+  updatePerformanceCaptureUi();
+  setStatus(`Performance log saved (${capture.samples} samples).`);
 }
 
 function applyDomPreview(): void {
@@ -589,8 +709,21 @@ function buildPanel(): HTMLElement {
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The renderer has no 60 FPS limiter and follows the browser requestAnimationFrame cadence, so a foreground window on a 120 Hz display can render at ~120 FPS. The diagnostics above separate frame interval from CPU render submission time. Background color is essentially free; tile count/draw calls and per-tile CPU work are the important costs. Pixel ratio has the biggest GPU cost. Shadow quality: 0=off, 1=512, 2=1024, 3=2048.</p>');
+  const perfLog = document.createElement('div');
+  perfLog.className = 'perf-log-controls';
+  const perfStart = document.createElement('button');
+  perfStart.type = 'button'; perfStart.className = 'dev-tuning-action perf-log-start'; perfStart.textContent = 'Start performance log';
+  const perfStop = document.createElement('button');
+  perfStop.type = 'button'; perfStop.className = 'dev-tuning-action perf-log-stop'; perfStop.textContent = 'Stop & save .txt';
+  const perfState = document.createElement('span');
+  perfState.className = 'perf-log-state';
+  perfStart.addEventListener('click', startPerformanceCapture);
+  perfStop.addEventListener('click', stopPerformanceCapture);
+  perfLog.append(perfStart, perfStop, perfState);
+  graphics.append(perfLog);
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Static discard bodies/rear shells are instanced so river growth adds far fewer draw calls. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
   root.append(graphics);
+  requestAnimationFrame(updatePerformanceCaptureUi);
 
   rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);
   rotationSection(root, 'Right opponent tiles', settings.right, DEFAULTS.right);
@@ -846,18 +979,18 @@ window.addEventListener('keydown', (event) => {
   if (panel) { panel.hidden = !panel.hidden; syncDevOpenClass(); }
 });
 window.addEventListener('mahjong-live:fps', (event) => {
-  const detail = (event as CustomEvent<{
-    fps?: number; frameMs?: number; renderMs?: number; calls?: number; triangles?: number;
-    actors?: number; moving?: number; pixelRatio?: number;
-  }>).detail;
+  const detail = (event as CustomEvent<PerformanceDetail>).detail;
+  if (!detail) return;
+  lastPerformanceDetail = detail;
+  appendPerformanceSample(detail);
   const target = panel?.querySelector<HTMLElement>('.dev-fps-value');
-  if (!target || !detail) return;
-  const fps = Number.isFinite(detail.fps) ? Math.round(detail.fps ?? 0) : 0;
-  const frameMs = Number.isFinite(detail.frameMs) ? (detail.frameMs ?? 0).toFixed(2) : '--';
-  const renderMs = Number.isFinite(detail.renderMs) ? (detail.renderMs ?? 0).toFixed(2) : '--';
-  target.textContent = `${fps} FPS · ${frameMs}ms frame · ${renderMs}ms render · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
-  target.title = `${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio`;
-  target.classList.toggle('fps-low', fps > 0 && fps < 55);
+  if (!target) return;
+  const loopHz = Number.isFinite(detail.loopHz ?? detail.fps) ? Math.round(detail.loopHz ?? detail.fps ?? 0) : 0;
+  const rafHz = Number.isFinite(detail.rafHz) ? Math.round(detail.rafHz ?? 0) : 0;
+  const gpuMs = Number.isFinite(detail.gpuMs) ? `${(detail.gpuMs ?? 0).toFixed(2)}ms GPU` : 'GPU n/a';
+  target.textContent = `Loop ${loopHz} · RAF ${rafHz} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
+  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched river · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · ${detail.visibility ?? document.visibilityState}`;
+  target.classList.toggle('fps-low', loopHz > 0 && loopHz < 55);
 });
 ensureUi();
 syncDevOpenClass();

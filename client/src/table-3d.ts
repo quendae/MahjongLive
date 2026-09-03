@@ -238,6 +238,24 @@ type TableRuntime = {
   lastFrameAt: number;
   frameIntervalTotal: number;
   renderTimeTotal: number;
+  rafHandle: number;
+  rafFrames: number;
+  rafSampleStart: number;
+  rafLastAt: number;
+  rafIntervalTotal: number;
+  rafHz: number;
+  rafFrameMs: number;
+  gl: any;
+  gpuTimerExt: any | null;
+  gpuQuery: any | null;
+  gpuQueryActive: boolean;
+  gpuMs: number | null;
+  staticRiverBodies: any;
+  staticRiverShells: any;
+  staticRiverCapacity: number;
+  staticRiverCount: number;
+  staticRiverDirty: boolean;
+  pickMeshes: any[];
 };
 
 function readFaceMode(): TileFaceMode {
@@ -1124,8 +1142,44 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
   }
 
   for (const actor of unused) removeActor(rt, actor);
+  rt.pickMeshes = [...rt.actors.values()]
+    .filter((actor) => actor.spec.selectable)
+    .flatMap((actor) => [actor.body, actor.face]);
+  rt.staticRiverDirty = true;
+  syncStaticRiverInstances(rt);
   rt.lastRemainingDraws = draws;
   rt.initialized = true;
+}
+
+function syncStaticRiverInstances(rt: TableRuntime): void {
+  if (!rt.staticRiverDirty) return;
+  rt.staticRiverDirty = false;
+  const THREE = rt.THREE;
+  const bodyMatrix = new THREE.Matrix4();
+  const shellMatrix = new THREE.Matrix4();
+  const shellLocal = new THREE.Matrix4().makeTranslation(0, -.103, 0);
+  let count = 0;
+
+  for (const actor of rt.actors.values()) {
+    const canBatch = actor.spec.zone === 'river' && !actor.motion && count < rt.staticRiverCapacity;
+    actor.body.visible = !canBatch;
+    actor.rearShell.visible = !canBatch;
+    if (!canBatch) continue;
+
+    actor.group.updateMatrix();
+    actor.visual.updateMatrix();
+    bodyMatrix.multiplyMatrices(actor.group.matrix, actor.visual.matrix);
+    rt.staticRiverBodies.setMatrixAt(count, bodyMatrix);
+    shellMatrix.multiplyMatrices(bodyMatrix, shellLocal);
+    rt.staticRiverShells.setMatrixAt(count, shellMatrix);
+    count += 1;
+  }
+
+  rt.staticRiverCount = count;
+  rt.staticRiverBodies.count = count;
+  rt.staticRiverShells.count = count;
+  rt.staticRiverBodies.instanceMatrix.needsUpdate = true;
+  rt.staticRiverShells.instanceMatrix.needsUpdate = true;
 }
 
 function removeActor(rt: TableRuntime, actor: TileActor): void {
@@ -1248,6 +1302,30 @@ function createRuntime(THREE: any): TableRuntime {
     color: tuning.backColor, roughness: .58, metalness: 0,
   });
 
+  // Static discards are the population that grows throughout a round. Keep their unique SVG
+  // fronts as normal meshes, but batch the shared ivory bodies and coloured rear shells into two
+  // draw calls instead of two extra draw calls per discard.
+  const staticRiverCapacity = 96;
+  const staticRiverBodies = new THREE.InstancedMesh(tileGeometry, ivoryMaterial, staticRiverCapacity);
+  staticRiverBodies.count = 0;
+  staticRiverBodies.castShadow = true;
+  staticRiverBodies.receiveShadow = true;
+  staticRiverBodies.frustumCulled = false;
+  staticRiverBodies.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  actorRoot.add(staticRiverBodies);
+  const staticRiverShells = new THREE.InstancedMesh(backShellGeometry, backShellMaterial, staticRiverCapacity);
+  staticRiverShells.count = 0;
+  staticRiverShells.castShadow = false;
+  staticRiverShells.receiveShadow = false;
+  staticRiverShells.frustumCulled = false;
+  staticRiverShells.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  actorRoot.add(staticRiverShells);
+
+  const gl = renderer.getContext();
+  const gpuTimerExt = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
+    ? gl.getExtension('EXT_disjoint_timer_query_webgl2')
+    : null;
+
   const rt: TableRuntime = {
     THREE,
     renderer,
@@ -1290,10 +1368,29 @@ function createRuntime(THREE: any): TableRuntime {
     lastFrameAt: 0,
     frameIntervalTotal: 0,
     renderTimeTotal: 0,
+    rafHandle: 0,
+    rafFrames: 0,
+    rafSampleStart: performance.now(),
+    rafLastAt: 0,
+    rafIntervalTotal: 0,
+    rafHz: 0,
+    rafFrameMs: 0,
+    gl,
+    gpuTimerExt,
+    gpuQuery: null,
+    gpuQueryActive: false,
+    gpuMs: null,
+    staticRiverBodies,
+    staticRiverShells,
+    staticRiverCapacity,
+    staticRiverCount: 0,
+    staticRiverDirty: true,
+    pickMeshes: [],
   };
 
   applyDevTuning(rt);
   renderer.setAnimationLoop((time: number) => frameRuntime(rt, time));
+  rt.rafHandle = requestAnimationFrame((time) => browserRafProbe(rt, time));
   return rt;
 }
 
@@ -1523,9 +1620,60 @@ function applyDevTuning(rt: TableRuntime): void {
   syncWorldUiAnchor(rt);
 }
 
+function browserRafProbe(rt: TableRuntime, time: number): void {
+  if (rt.disposed) return;
+  if (rt.rafLastAt > 0) rt.rafIntervalTotal += time - rt.rafLastAt;
+  rt.rafLastAt = time;
+  rt.rafFrames += 1;
+  const sampleMs = time - rt.rafSampleStart;
+  if (sampleMs >= 600) {
+    const intervals = Math.max(1, rt.rafFrames - 1);
+    rt.rafHz = rt.rafFrames * 1000 / sampleMs;
+    rt.rafFrameMs = rt.rafIntervalTotal / intervals;
+    rt.rafFrames = 0;
+    rt.rafSampleStart = time;
+    rt.rafIntervalTotal = 0;
+  }
+  rt.rafHandle = requestAnimationFrame((next) => browserRafProbe(rt, next));
+}
+
+function pollGpuTimer(rt: TableRuntime): void {
+  const ext = rt.gpuTimerExt;
+  const query = rt.gpuQuery;
+  if (!ext || !query || rt.gpuQueryActive) return;
+  const gl = rt.gl;
+  const available = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE);
+  if (!available) return;
+  const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+  if (!disjoint) {
+    const ns = gl.getQueryParameter(query, gl.QUERY_RESULT);
+    if (typeof ns === 'number' && Number.isFinite(ns)) rt.gpuMs = ns / 1_000_000;
+  }
+  gl.deleteQuery(query);
+  rt.gpuQuery = null;
+}
+
+function beginGpuTimer(rt: TableRuntime): boolean {
+  const ext = rt.gpuTimerExt;
+  if (!ext || rt.gpuQuery) return false;
+  const query = rt.gl.createQuery();
+  if (!query) return false;
+  rt.gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+  rt.gpuQuery = query;
+  rt.gpuQueryActive = true;
+  return true;
+}
+
+function endGpuTimer(rt: TableRuntime): void {
+  if (!rt.gpuTimerExt || !rt.gpuQueryActive) return;
+  rt.gl.endQuery(rt.gpuTimerExt.TIME_ELAPSED_EXT);
+  rt.gpuQueryActive = false;
+}
+
 function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
+  pollGpuTimer(rt);
   if (rt.lastFrameAt > 0) rt.frameIntervalTotal += time - rt.lastFrameAt;
   rt.lastFrameAt = time;
 
@@ -1562,6 +1710,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
       if (progress >= 1) {
         actor.motion = null;
         applyTransform(actor, motion.target);
+        if (actor.spec.zone === 'river') rt.staticRiverDirty = true;
       }
     }
 
@@ -1611,24 +1760,36 @@ function frameRuntime(rt: TableRuntime, time: number): void {
     }
   }
 
+  if (rt.staticRiverDirty) syncStaticRiverInstances(rt);
+
   const renderStarted = performance.now();
+  const gpuTimerStarted = beginGpuTimer(rt);
   rt.renderer.render(rt.scene, rt.camera);
+  if (gpuTimerStarted) endGpuTimer(rt);
   rt.renderTimeTotal += performance.now() - renderStarted;
   rt.fpsFrames += 1;
   const sampleMs = time - rt.fpsSampleStart;
   if (sampleMs >= 600) {
-    if (document.body.classList.contains('dev-tuning-open')) {
+    if (document.body.classList.contains('dev-tuning-open') || document.body.classList.contains('perf-capture-active')) {
       const intervals = Math.max(1, rt.fpsFrames - 1);
       const frameMs = rt.frameIntervalTotal / intervals;
+      const loopHz = rt.fpsFrames * 1000 / sampleMs;
       window.dispatchEvent(new CustomEvent('mahjong-live:fps', { detail: {
-        fps: rt.fpsFrames * 1000 / sampleMs,
+        fps: loopHz,
+        loopHz,
+        rafHz: rt.rafHz,
         frameMs,
+        rafFrameMs: rt.rafFrameMs,
         renderMs: rt.renderTimeTotal / Math.max(1, rt.fpsFrames),
+        gpuMs: rt.gpuMs,
+        gpuTimerSupported: Boolean(rt.gpuTimerExt),
         calls: rt.renderer.info.render.calls,
         triangles: rt.renderer.info.render.triangles,
         actors: rt.actors.size,
         moving: movingCount,
+        instancedRivers: rt.staticRiverCount,
         pixelRatio: rt.renderer.getPixelRatio(),
+        visibility: document.visibilityState,
       } }));
     }
     rt.fpsFrames = 0;
@@ -1655,6 +1816,11 @@ function disposeRuntime(): void {
   runtime = null;
   rt.disposed = true;
   rt.renderer.setAnimationLoop(null);
+  cancelAnimationFrame(rt.rafHandle);
+  if (rt.gpuQuery) {
+    try { rt.gl.deleteQuery(rt.gpuQuery); } catch {}
+    rt.gpuQuery = null;
+  }
   stage.classList.remove('is-active');
   stage.replaceChildren();
   rt.tableBoxGeometry.dispose();
@@ -1753,10 +1919,7 @@ function pickActor(event: PointerEvent): TileActor | null {
   rt.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   rt.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   rt.raycaster.setFromCamera(rt.pointer, rt.camera);
-  const pickMeshes = [...rt.actors.values()]
-    .filter((actor) => actor.spec.selectable)
-    .flatMap((actor) => [actor.body, actor.face]);
-  const hit = rt.raycaster.intersectObjects(pickMeshes, false)[0];
+  const hit = rt.raycaster.intersectObjects(rt.pickMeshes, false)[0];
   if (!hit) return null;
   const key = hit.object?.userData?.actorKey as string | undefined;
   return key ? rt.actors.get(key) ?? null : null;

@@ -128,3 +128,15 @@ body.dev-tuning-open .game-log { display: block; }
   width: 100%; height: 100%; border-radius: 9px;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.24), inset 2px 2px 5px rgba(255,255,255,.25);
 }
+
+
+/* Performance capture */
+.perf-log-controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px;
+  padding: 8px; border: 1px solid rgba(139,215,169,.13); border-radius: 9px; background: rgba(139,215,169,.035);
+}
+.perf-log-controls .dev-tuning-action:disabled { opacity: .42; cursor: default; }
+.perf-log-state { color: #8fa99b; font-size: 10px; font-variant-numeric: tabular-nums; }
+.perf-log-state.is-recording { color: #8bd7a9; }
+.perf-log-state.is-recording::before { content: '● '; color: #e26d63; }
+.dev-tuning-head .dev-fps-value { margin-left: 6px; max-width: 330px; overflow: hidden; text-overflow: ellipsis; }
