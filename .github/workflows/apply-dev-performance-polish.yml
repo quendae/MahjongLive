@@ -1,0 +1,38 @@
+name: Apply dev and performance polish
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-dev-performance-polish.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply polish patch
+        run: python scripts/apply-dev-performance-polish.py
+      - name: Typecheck client
+        run: pnpm client:typecheck
+      - name: Build client
+        run: pnpm client:build
+      - name: Commit directly to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/main.ts client/src/style.css client/src/dev-tuning.ts client/src/dev-tuning.css client/src/table-3d.ts
+          git commit -m "Refine dev controls, performance and table presentation"
+          git push
