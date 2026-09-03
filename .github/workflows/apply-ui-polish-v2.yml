@@ -1,0 +1,38 @@
+name: Apply UI polish v2
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-ui-polish-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply UI polish changes
+        run: node scripts/apply-ui-polish-v2.mjs
+      - name: Typecheck client
+        run: pnpm client:typecheck
+      - name: Build client
+        run: pnpm client:build
+      - name: Commit directly to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/clarity.ts client/src/table-3d-faces.ts client/src/main.ts client/src/dev-tuning.ts client/src/dev-tuning.css client/src/table-3d.ts
+          git commit -m "Polish table visuals and dev diagnostics"
+          git push
