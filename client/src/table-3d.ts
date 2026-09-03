@@ -720,7 +720,11 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   const cached = rt.faceMaterials.get(key);
   if (cached) return cached;
   const tuning = readDevTuning();
-  const texture = new rt.THREE.CanvasTexture(createFaceCanvas(label, false, rt.faceMode));
+  let texture: any = null;
+  const canvas = createFaceCanvas(label, false, rt.faceMode, () => {
+    if (texture) texture.needsUpdate = true;
+  });
+  texture = new rt.THREE.CanvasTexture(canvas);
   texture.colorSpace = rt.THREE.SRGBColorSpace;
   texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.center.set(.5, .5);
