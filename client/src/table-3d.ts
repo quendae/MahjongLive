@@ -34,6 +34,9 @@ type DevTuning = {
     riverDepth: number;
     riverRowGap: number;
     riverColumnGap: number;
+    riverJitter: number;
+    riverYawJitter: number;
+    riverTiltJitter: number;
   };
   tableGeometry: { frameTopY: number; feltTopY: number; frameWidth: number; frameThickness: number; feltThickness: number };
   ui: {
@@ -58,44 +61,47 @@ type DevTuning = {
 };
 
 const DEFAULT_DEV_TUNING: DevTuning = {
-  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: .25, targetZ: 1.30, fov: 27 },
-  left: { x: -90, y: 0, z: 90 },
-  right: { x: -90, y: -180, z: 90 },
+  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: -.65, targetZ: .15, fov: 27 },
+  left: { x: -90, y: 0, z: -90 },
+  right: { x: -90, y: 0, z: 90 },
   top: { x: -90, y: 180, z: 0 },
-  bottom: { x: 73, y: 0, z: 0 },
+  bottom: { x: 90, y: 0, z: 0 },
   tiles: {
     faceOffset: .128,
     faceRotateX: -90,
-    faceScale: 1,
+    faceScale: 1.1,
     faceTextureRotation: 0,
-    bodyColor: '#fffdf5',
+    bodyColor: '#ffffff',
     bodyRoughness: .46,
     faceTint: '#ffffff',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
     meldScale: 1,
-    riverDepth: 2.05,
+    riverDepth: 2.14,
     riverRowGap: .55,
-    riverColumnGap: .48,
+    riverColumnGap: .45,
+    riverJitter: .028,
+    riverYawJitter: 3.2,
+    riverTiltJitter: .7,
   },
-  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .39, frameThickness: .34, feltThickness: .10 },
+  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
-    playerCardScale: 1,
+    playerCardScale: 1.5,
     playerInsetTB: 10,
-    playerInsetSides: 10,
-    doraScale: 1,
+    playerInsetSides: 57,
+    doraScale: 1.29,
     doraX: 24,
     doraY: 24,
-    centerScale: 1,
+    centerScale: .92,
     centerOffsetX: 0,
-    centerOffsetY: 0,
-    centerWidth: 242,
-    centerHeight: 242,
+    centerOffsetY: -10,
+    centerWidth: 309,
+    centerHeight: 265,
     reactionScale: 1,
     gameLogWidth: 290,
   },
-  tableColor: '#174a36',
+  tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
@@ -250,6 +256,9 @@ function readDevTuning(): DevTuning {
       riverDepth: finiteNumber(raw.tiles?.riverDepth, DEFAULT_DEV_TUNING.tiles.riverDepth),
       riverRowGap: finiteNumber(raw.tiles?.riverRowGap, DEFAULT_DEV_TUNING.tiles.riverRowGap),
       riverColumnGap: finiteNumber(raw.tiles?.riverColumnGap, DEFAULT_DEV_TUNING.tiles.riverColumnGap),
+      riverJitter: finiteNumber(raw.tiles?.riverJitter, DEFAULT_DEV_TUNING.tiles.riverJitter),
+      riverYawJitter: finiteNumber(raw.tiles?.riverYawJitter, DEFAULT_DEV_TUNING.tiles.riverYawJitter),
+      riverTiltJitter: finiteNumber(raw.tiles?.riverTiltJitter, DEFAULT_DEV_TUNING.tiles.riverTiltJitter),
     },
     tableGeometry: {
       frameTopY: finiteNumber(raw.tableGeometry?.frameTopY, DEFAULT_DEV_TUNING.tableGeometry.frameTopY),
@@ -388,6 +397,24 @@ function signedHash(key: string, salt: string): number {
   return hash01(`${key}:${salt}`) * 2 - 1;
 }
 
+function reactionClaimAvailable(): boolean {
+  const dock = app.querySelector<HTMLElement>('.action-dock:not(.presentation-dock)');
+  if (!dock) return false;
+  return [...dock.querySelectorAll<HTMLElement>('[data-ui-action]')].some((button) =>
+    ['ron', 'pon', 'chi', 'daiminkan'].includes(button.dataset.uiAction ?? ''));
+}
+
+function rackSlot(spec: TileSpec): { slot: number; drawn: boolean } {
+  // A normal riichi concealed hand has 1 (mod 3) tiles; the just-drawn tile makes it 2 (mod 3).
+  // Keep the resting tiles in the exact same slots and reserve a separated end slot for the draw,
+  // so receiving a tile never makes the whole hand shuffle sideways.
+  const hasDrawnSlot = spec.total > 1 && spec.total % 3 === 2;
+  const baseCount = Math.max(1, hasDrawnSlot ? spec.total - 1 : spec.total);
+  const drawn = hasDrawnSlot && (spec.drawn || spec.index >= baseCount);
+  const slot = drawn ? (baseCount - 1) / 2 + 1.35 : spec.index - (baseCount - 1) / 2;
+  return { slot, drawn };
+}
+
 function baseTransform(spec: TileSpec): Transform {
   const tuning = readDevTuning();
   const transform: Transform = {
@@ -401,8 +428,8 @@ function baseTransform(spec: TileSpec): Transform {
   };
 
   if (spec.zone === 'hand') {
-    const spacing = Math.min(.50, 6.45 / Math.max(1, spec.total - 1));
-    transform.x = (spec.index - (spec.total - 1) / 2) * spacing + (spec.drawn ? .15 : 0);
+    const { slot } = rackSlot(spec);
+    transform.x = slot * .50;
     transform.z = 4.24;
     // The human rack stands on the narrow edge. The tile face points toward the bottom player.
     transform.y = .42;
@@ -421,61 +448,55 @@ function baseTransform(spec: TileSpec): Transform {
     } else if (spec.side === 'top') {
       transform.x = -cross;
       transform.z = -depth;
-      transform.yaw = Math.PI;
+      // Discards are oriented toward the player who threw them, not toward table centre.
+      transform.yaw = 0;
     } else if (spec.side === 'left') {
       transform.x = -depth;
       transform.z = cross;
-      transform.yaw = Math.PI / 2;
+      transform.yaw = -Math.PI / 2;
     } else {
       transform.x = depth;
       transform.z = -cross;
-      transform.yaw = -Math.PI / 2;
+      transform.yaw = Math.PI / 2;
     }
+    // The latest discard stays in its row. A conditional halo is enough feedback.
     transform.scale = .88 * tuning.tiles.riverScale;
-    if (spec.latest) {
-      transform.y += .09;
-      transform.scale = .94 * tuning.tiles.riverScale;
-      if (spec.side === 'bottom') transform.z -= .15;
-      if (spec.side === 'top') transform.z += .15;
-      if (spec.side === 'left') transform.x += .15;
-      if (spec.side === 'right') transform.x -= .15;
-    }
   } else if (spec.zone === 'rack') {
-    const centered = spec.index - (spec.total - 1) / 2;
+    const { slot } = rackSlot(spec);
     const spacing = .39;
     transform.y = .37;
     transform.scale = .84 * tuning.tiles.opponentScale;
     if (spec.side === 'top') {
-      transform.x = centered * spacing;
+      transform.x = slot * spacing;
       transform.z = -4.28;
       setConfiguredRotation(transform, tuning.top);
     } else if (spec.side === 'left') {
       transform.x = -5.28;
-      transform.z = centered * spacing;
+      transform.z = slot * spacing;
       setConfiguredRotation(transform, tuning.left);
     } else {
       transform.x = 5.28;
-      transform.z = -centered * spacing;
+      transform.z = -slot * spacing;
       setConfiguredRotation(transform, tuning.right);
     }
   } else {
     const row = Math.floor(spec.index / 8);
     const col = spec.index % 8;
     transform.scale = .80 * tuning.tiles.meldScale;
+    // Every player's open sets start in that player's lower-right corner and grow away from it.
     if (spec.side === 'bottom') {
-      // Own open melds live in the lower-right corner and grow leftward.
-      transform.x = 5.05 - col * .44;
-      transform.z = 3.48 - row * .58;
+      transform.x = 5.20 - col * .44;
+      transform.z = 3.72 - row * .58;
     } else if (spec.side === 'top') {
-      transform.x = -5.05 + col * .44;
-      transform.z = -3.58 + row * .58;
+      transform.x = -5.20 + col * .44;
+      transform.z = -3.72 + row * .58;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -4.98 + row * .58;
+      transform.x = -5.20 + row * .58;
       transform.z = 3.72 - col * .44;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 4.98 - row * .58;
+      transform.x = 5.20 - row * .58;
       transform.z = -3.72 + col * .44;
       transform.yaw = -Math.PI / 2;
     }
@@ -486,13 +507,14 @@ function baseTransform(spec: TileSpec): Transform {
 
 function humanizeTransform(spec: TileSpec, input: Transform): Transform {
   const out = { ...input };
+  const tuning = readDevTuning();
   let position = 0;
   let yaw = 0;
   let tilt = 0;
   if (spec.zone === 'river') {
-    position = spec.latest ? .005 : .010;
-    yaw = .018;
-    tilt = .003;
+    position = tuning.tiles.riverJitter;
+    yaw = radians(tuning.tiles.riverYawJitter);
+    tilt = radians(tuning.tiles.riverTiltJitter);
   } else if (spec.zone === 'meld') {
     position = .008;
     yaw = .015;
@@ -735,7 +757,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   );
   latestHalo.rotation.x = -Math.PI / 2;
   latestHalo.position.y = -.106;
-  latestHalo.visible = spec.latest;
+  latestHalo.visible = spec.latest && reactionClaimAvailable();
   visual.add(latestHalo);
 
   const actor: TileActor = {
@@ -772,7 +794,7 @@ function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void 
   actor.spec = spec;
   if (changedFace) actor.face.material = materialForFace(rt, spec.label, spec.back);
   actor.indicator.visible = spec.advised;
-  actor.latestHalo.visible = spec.latest;
+  actor.latestHalo.visible = spec.latest && reactionClaimAvailable();
 }
 
 function rekeyActor(rt: TableRuntime, actor: TileActor, key: string): void {
@@ -952,6 +974,17 @@ function syntheticDrawOrigin(draws: number): Transform {
   };
 }
 
+function rackInsertOrigin(spec: TileSpec, target: Transform): Transform {
+  const initial = { ...target };
+  const distance = spec.zone === 'hand' ? .72 : .58;
+  // Slide the new tile in from just beyond the free end of that player's rack.
+  if (spec.side === 'left') initial.z += distance;
+  else if (spec.side === 'right') initial.z -= distance;
+  else initial.x += distance;
+  initial.y += .045;
+  return initial;
+}
+
 function syncActors(rt: TableRuntime, table: HTMLElement): void {
   syncFaceMode(rt);
   const draws = remainingDraws();
@@ -981,15 +1014,17 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
 
     if (!actor) {
       let initial = target;
-      // Until a visible wall exists, new draws appear directly in the receiving hand.
-      // This avoids tiles flying in from another player's rack / the synthetic wall origin.
-      if (rt.initialized && spec.zone === 'river' && spec.side !== 'bottom') {
+      if (rt.initialized && (spec.zone === 'hand' || spec.zone === 'rack')) {
+        // Keep every existing tile fixed; only the newly received tile slides into its reserved slot.
+        initial = rackInsertOrigin(spec, target);
+      } else if (rt.initialized && spec.zone === 'river' && spec.side !== 'bottom') {
         initial = baseTransform({ ...spec, zone: 'rack', index: 0, total: 1, back: true, latest: false });
       }
       actor = createActor(rt, spec, initial);
       rt.actors.set(spec.key, actor);
       const shouldTravel = rt.initialized && transformsDiffer(initial, target);
-      beginMotion(actor, target, now, shouldTravel ? .62 : 0, shouldTravel ? 350 : 0);
+      const rackInsert = spec.zone === 'hand' || spec.zone === 'rack';
+      beginMotion(actor, target, now, shouldTravel ? (rackInsert ? .04 : .62) : 0, shouldTravel ? (rackInsert ? 260 : 350) : 0);
       refreshActor(rt, actor, spec);
       continue;
     }
@@ -1222,6 +1257,10 @@ function syncTableTexture(rt: TableRuntime, source: string | null): void {
   new rt.THREE.TextureLoader().load(source, (texture: any) => {
     if (rt.disposed || rt.tableTextureSource !== source) { texture.dispose(); return; }
     texture.colorSpace = rt.THREE.SRGBColorSpace;
+    texture.anisotropy = Math.min(2, rt.renderer.capabilities.getMaxAnisotropy());
+    texture.generateMipmaps = true;
+    texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
+    texture.magFilter = rt.THREE.LinearFilter;
     rt.tableTexture = texture;
     rt.feltMaterial.map = texture;
     rt.feltMaterial.color.set(0xffffff);
@@ -1270,6 +1309,8 @@ function applyDevTuning(rt: TableRuntime): void {
 function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
+  const hoverOffset = new rt.THREE.Vector3();
+  const inverseRotation = new rt.THREE.Quaternion();
   for (const actor of rt.actors.values()) {
     if (actor.motion) {
       const motion = actor.motion;
@@ -1294,15 +1335,19 @@ function frameRuntime(rt: TableRuntime, time: number): void {
 
     const hovered = rt.hoveredKey === actor.key && actor.spec.selectable;
     const pressed = rt.pressedKey === actor.key && hovered;
-    const hoverY = hovered ? (pressed ? .10 : .19) : 0;
-    actor.visual.position.y += (hoverY - actor.visual.position.y) * .22;
-    const targetTiltX = hovered ? -.06 : 0;
+    const hoverY = hovered ? (pressed ? .08 : .16) : 0;
+    // Lift in world Y regardless of how the tile itself is rotated. Previously local-Y pushed
+    // standing tiles toward the camera instead of visibly raising them above the rack.
+    hoverOffset.set(0, hoverY, 0).applyQuaternion(inverseRotation.copy(actor.group.quaternion).invert());
+    actor.visual.position.lerp(hoverOffset, .22);
+    const targetTiltX = hovered ? -.04 : 0;
     const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
     actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
     actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
     actor.indicator.visible = actor.spec.advised || hovered;
-    actor.latestHalo.visible = actor.spec.latest;
-    if (actor.spec.latest && !reducedMotion) {
+    const claimableLatest = actor.spec.latest && reactionClaimAvailable();
+    actor.latestHalo.visible = claimableLatest;
+    if (claimableLatest && !reducedMotion) {
       const pulse = 1 + Math.sin(time / 180) * .055;
       actor.latestHalo.scale.setScalar(pulse);
     } else {

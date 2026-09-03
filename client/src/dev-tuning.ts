@@ -26,6 +26,9 @@ type DevTuning = {
     riverDepth: number;
     riverRowGap: number;
     riverColumnGap: number;
+    riverJitter: number;
+    riverYawJitter: number;
+    riverTiltJitter: number;
   };
   tableGeometry: {
     frameTopY: number;
@@ -56,44 +59,47 @@ type DevTuning = {
 };
 
 const DEFAULTS: DevTuning = {
-  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: .25, targetZ: 1.30, fov: 27 },
-  left: { x: -90, y: 0, z: 90 },
-  right: { x: -90, y: -180, z: 90 },
+  camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: -.65, targetZ: .15, fov: 27 },
+  left: { x: -90, y: 0, z: -90 },
+  right: { x: -90, y: 0, z: 90 },
   top: { x: -90, y: 180, z: 0 },
-  bottom: { x: 73, y: 0, z: 0 },
+  bottom: { x: 90, y: 0, z: 0 },
   tiles: {
     faceOffset: .128,
     faceRotateX: -90,
-    faceScale: 1,
+    faceScale: 1.1,
     faceTextureRotation: 0,
-    bodyColor: '#fffdf5',
+    bodyColor: '#ffffff',
     bodyRoughness: .46,
     faceTint: '#ffffff',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
     meldScale: 1,
-    riverDepth: 2.05,
+    riverDepth: 2.14,
     riverRowGap: .55,
-    riverColumnGap: .48,
+    riverColumnGap: .45,
+    riverJitter: .028,
+    riverYawJitter: 3.2,
+    riverTiltJitter: .7,
   },
-  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .39, frameThickness: .34, feltThickness: .10 },
+  tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
-    playerCardScale: 1,
+    playerCardScale: 1.5,
     playerInsetTB: 10,
-    playerInsetSides: 10,
-    doraScale: 1,
+    playerInsetSides: 57,
+    doraScale: 1.29,
     doraX: 24,
     doraY: 24,
-    centerScale: 1,
+    centerScale: .92,
     centerOffsetX: 0,
-    centerOffsetY: 0,
-    centerWidth: 242,
-    centerHeight: 242,
+    centerOffsetY: -10,
+    centerWidth: 309,
+    centerHeight: 265,
     reactionScale: 1,
     gameLogWidth: 290,
   },
-  tableColor: '#174a36',
+  tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
@@ -143,6 +149,9 @@ function loadSettings(): DevTuning {
       riverDepth: finite(raw.tiles?.riverDepth, DEFAULTS.tiles.riverDepth),
       riverRowGap: finite(raw.tiles?.riverRowGap, DEFAULTS.tiles.riverRowGap),
       riverColumnGap: finite(raw.tiles?.riverColumnGap, DEFAULTS.tiles.riverColumnGap),
+      riverJitter: finite(raw.tiles?.riverJitter, DEFAULTS.tiles.riverJitter),
+      riverYawJitter: finite(raw.tiles?.riverYawJitter, DEFAULTS.tiles.riverYawJitter),
+      riverTiltJitter: finite(raw.tiles?.riverTiltJitter, DEFAULTS.tiles.riverTiltJitter),
     },
     tableGeometry: {
       frameTopY: finite(raw.tableGeometry?.frameTopY, DEFAULTS.tableGeometry.frameTopY),
@@ -343,6 +352,25 @@ function colorControl(
   parent.append(row);
 }
 
+async function optimizedTableImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not create image canvas');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/webp', .82);
+  } finally {
+    bitmap.close?.();
+  }
+}
+
 function rotationSection(parent: HTMLElement, title: string, target: Rotation, defaults: Rotation): void {
   const section = document.createElement('section');
   section.className = 'dev-tuning-section';
@@ -405,7 +433,10 @@ function buildPanel(): HTMLElement {
   numberSlider(river, 'Center distance', 1.20, 3.50, .01, () => settings.tiles.riverDepth, (v) => { settings.tiles.riverDepth = v; }, '', DEFAULTS.tiles.riverDepth);
   numberSlider(river, 'Row gap', .20, 1.00, .01, () => settings.tiles.riverRowGap, (v) => { settings.tiles.riverRowGap = v; }, '', DEFAULTS.tiles.riverRowGap);
   numberSlider(river, 'Column gap', .25, .80, .01, () => settings.tiles.riverColumnGap, (v) => { settings.tiles.riverColumnGap = v; }, '', DEFAULTS.tiles.riverColumnGap);
-  river.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Discards are laid out around world-space center (0,0); the DOM center counter is projected onto that same point.</p>');
+  numberSlider(river, 'Position variation', 0, .10, .002, () => settings.tiles.riverJitter, (v) => { settings.tiles.riverJitter = v; }, '', DEFAULTS.tiles.riverJitter);
+  numberSlider(river, 'Yaw variation', 0, 10, .1, () => settings.tiles.riverYawJitter, (v) => { settings.tiles.riverYawJitter = v; }, '°', DEFAULTS.tiles.riverYawJitter);
+  numberSlider(river, 'Tilt variation', 0, 4, .1, () => settings.tiles.riverTiltJitter, (v) => { settings.tiles.riverTiltJitter = v; }, '°', DEFAULTS.tiles.riverTiltJitter);
+  river.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Rows stay rigid enough to read, while deterministic position/angle variation keeps discards from looking computer-perfect.</p>');
   root.append(river);
 
   const geometry = document.createElement('section');
@@ -452,20 +483,22 @@ function buildPanel(): HTMLElement {
   file.type = 'file'; file.accept = 'image/*';
   const clear = document.createElement('button');
   clear.type = 'button'; clear.className = 'dev-tuning-action'; clear.textContent = 'Clear';
-  file.addEventListener('change', () => {
+  file.addEventListener('change', async () => {
     const selected = file.files?.[0];
     if (!selected) return;
-    if (selected.size > 3_000_000) {
-      setStatus('Image is over 3 MB. Use a smaller texture for localStorage.');
+    if (selected.size > 12_000_000) {
+      setStatus('Image is over 12 MB. Choose a smaller source image.');
       file.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      settings.tableImage = typeof reader.result === 'string' ? reader.result : null;
-      saveAndBroadcast(`Loaded ${selected.name}`);
-    };
-    reader.readAsDataURL(selected);
+    setStatus(`Optimizing ${selected.name} for the 3D felt…`);
+    try {
+      settings.tableImage = await optimizedTableImage(selected);
+      saveAndBroadcast(`Loaded optimized texture: ${selected.name}`);
+    } catch {
+      setStatus('Could not decode/optimize that image.');
+      file.value = '';
+    }
   });
   clear.addEventListener('click', () => {
     settings.tableImage = null;

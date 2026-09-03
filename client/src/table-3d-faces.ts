@@ -13,11 +13,13 @@ export function createFaceCanvas(
 
   ctx.fillStyle = back ? '#ffffff' : '#fffdf8';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = back ? 'rgba(28,54,43,.52)' : '#d5cec0';
-  ctx.lineWidth = 5;
-  roundRectStroke(ctx, 5, 5, 150, 206, 12);
 
+  // Fronts should read like a single porcelain/ivory surface. Keep the decorative border only
+  // on tile backs; the old grey rounded front outline made every face look like an inset sticker.
   if (back) {
+    ctx.strokeStyle = 'rgba(28,54,43,.52)';
+    ctx.lineWidth = 5;
+    roundRectStroke(ctx, 5, 5, 150, 206, 12);
     ctx.strokeStyle = 'rgba(29,59,46,.28)';
     ctx.lineWidth = 2;
     roundRectStroke(ctx, 18, 18, 124, 180, 8);
