@@ -589,7 +589,7 @@ function buildPanel(): HTMLElement {
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The browser animation loop is VSync-capped, so a 60 Hz display normally reports ~60 FPS even when the GPU could render far more. These sliders change GPU headroom/quality; FPS will only drop once the renderer can no longer sustain the display refresh. Pixel ratio has the biggest cost. Shadow quality: 0=off, 1=512, 2=1024, 3=2048.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The renderer has no 60 FPS limiter and follows the browser requestAnimationFrame cadence, so a foreground window on a 120 Hz display can render at ~120 FPS. The diagnostics above separate frame interval from CPU render submission time. Background color is essentially free; tile count/draw calls and per-tile CPU work are the important costs. Pixel ratio has the biggest GPU cost. Shadow quality: 0=off, 1=512, 2=1024, 3=2048.</p>');
   root.append(graphics);
 
   rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);
@@ -846,12 +846,18 @@ window.addEventListener('keydown', (event) => {
   if (panel) { panel.hidden = !panel.hidden; syncDevOpenClass(); }
 });
 window.addEventListener('mahjong-live:fps', (event) => {
-  const detail = (event as CustomEvent<{ fps?: number; calls?: number; triangles?: number; pixelRatio?: number }>).detail;
+  const detail = (event as CustomEvent<{
+    fps?: number; frameMs?: number; renderMs?: number; calls?: number; triangles?: number;
+    actors?: number; moving?: number; pixelRatio?: number;
+  }>).detail;
   const target = panel?.querySelector<HTMLElement>('.dev-fps-value');
   if (!target || !detail) return;
   const fps = Number.isFinite(detail.fps) ? Math.round(detail.fps ?? 0) : 0;
-  target.textContent = `${fps} FPS · ${detail.calls ?? 0} calls · ${(detail.pixelRatio ?? 1).toFixed(2)}×`;
-  target.classList.toggle('fps-low', fps > 0 && fps < 45);
+  const frameMs = Number.isFinite(detail.frameMs) ? (detail.frameMs ?? 0).toFixed(2) : '--';
+  const renderMs = Number.isFinite(detail.renderMs) ? (detail.renderMs ?? 0).toFixed(2) : '--';
+  target.textContent = `${fps} FPS · ${frameMs}ms frame · ${renderMs}ms render · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
+  target.title = `${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio`;
+  target.classList.toggle('fps-low', fps > 0 && fps < 55);
 });
 ensureUi();
 syncDevOpenClass();

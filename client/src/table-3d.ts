@@ -235,6 +235,9 @@ type TableRuntime = {
   faceMode: TileFaceMode;
   fpsFrames: number;
   fpsSampleStart: number;
+  lastFrameAt: number;
+  frameIntervalTotal: number;
+  renderTimeTotal: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -732,11 +735,11 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.center.set(.5, .5);
   texture.rotation = radians(tuning.tiles.faceTextureRotation);
-  const material = new rt.THREE.MeshStandardMaterial({
+  // Printed artwork does not need a PBR shader. Lambert keeps the same scene lighting while
+  // making the many unique SVG face materials substantially cheaper to render.
+  const material = new rt.THREE.MeshLambertMaterial({
     map: texture,
     color: tuning.tiles.faceTint,
-    roughness: .56,
-    metalness: 0,
     side: rt.THREE.DoubleSide,
     polygonOffset: true,
     polygonOffsetFactor: -1,
@@ -771,8 +774,10 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   // back colour itself wraps onto the side/top/bottom edges like a real two-piece mahjong tile.
   const rearShell = new THREE.Mesh(rt.backShellGeometry, rt.backShellMaterial);
   rearShell.position.y = -.103;
-  rearShell.castShadow = true;
-  rearShell.receiveShadow = true;
+  // The ivory body already supplies the silhouette in the shadow map; shadowing the thin rear
+  // cap a second time only duplicates work for every tile.
+  rearShell.castShadow = false;
+  rearShell.receiveShadow = false;
   visual.add(rearShell);
 
   const faceTuning = readDevTuning().tiles;
@@ -781,7 +786,8 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   face.rotation.x = radians(faceTuning.faceRotateX);
   face.scale.setScalar(faceTuning.faceScale);
   face.renderOrder = 4;
-  face.receiveShadow = true;
+  face.receiveShadow = false;
+  face.visible = !spec.back;
   visual.add(face);
 
   // A separate physical rear face matters once a hand stands upright: opponents' tile faces point
@@ -790,7 +796,8 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   rear.position.y = -TILE_BACK_OFFSET;
   rear.rotation.x = Math.PI / 2;
   rear.renderOrder = 2;
-  rear.receiveShadow = true;
+  rear.receiveShadow = false;
+  rear.visible = spec.back;
   visual.add(rear);
 
   const indicator = new THREE.Mesh(
@@ -840,6 +847,14 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   tagActorMeshes(actor);
   applyTransform(actor, initial);
   rt.actorRoot.add(group);
+  const feltTop = rt.felt.position.y + rt.felt.scale.y / 2 + .008;
+  const inverse = new THREE.Quaternion().copy(group.quaternion).invert();
+  const ground = new THREE.Vector3(0, feltTop - group.position.y, 0).applyQuaternion(inverse);
+  const groundRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  indicator.position.copy(ground);
+  latestHalo.position.copy(ground);
+  indicator.quaternion.copy(inverse).multiply(groundRotation);
+  latestHalo.quaternion.copy(inverse).multiply(groundRotation);
   return actor;
 }
 
@@ -856,6 +871,11 @@ function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void 
   const changedFace = actor.spec.label !== spec.label || actor.spec.back !== spec.back;
   actor.spec = spec;
   if (changedFace) actor.face.material = materialForFace(rt, spec.label, spec.back);
+  // The body already closes both sides. Draw only the printed plane that can actually be seen:
+  // artwork on face-up tiles, patterned rear on concealed opponent tiles. This removes one draw
+  // call per tile, which matters a lot once rivers fill up.
+  actor.face.visible = !spec.back;
+  actor.rear.visible = spec.back;
   actor.indicator.visible = spec.advised;
   actor.latestHalo.visible = spec.latest && reactionClaimAvailable();
 }
@@ -1220,8 +1240,8 @@ function createRuntime(THREE: any): TableRuntime {
     roughness: tuning.tiles.bodyRoughness,
     metalness: 0,
   });
-  const backMaterial = new THREE.MeshStandardMaterial({
-    color: tuning.backColor, roughness: .62, metalness: 0,
+  const backMaterial = new THREE.MeshLambertMaterial({
+    color: tuning.backColor,
     side: THREE.DoubleSide,
   });
   const backShellMaterial = new THREE.MeshStandardMaterial({
@@ -1267,6 +1287,9 @@ function createRuntime(THREE: any): TableRuntime {
     faceMode: readFaceMode(),
     fpsFrames: 0,
     fpsSampleStart: performance.now(),
+    lastFrameAt: 0,
+    frameIntervalTotal: 0,
+    renderTimeTotal: 0,
   };
 
   applyDevTuning(rt);
@@ -1503,12 +1526,25 @@ function applyDevTuning(rt: TableRuntime): void {
 function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
+  if (rt.lastFrameAt > 0) rt.frameIntervalTotal += time - rt.lastFrameAt;
+  rt.lastFrameAt = time;
+
+  // The old loop recomputed two inverse quaternions and all halo transforms for *every* tile on
+  // every refresh tick. At 120 Hz and a full table that CPU bookkeeping was more expensive than
+  // changing resolution or the background. Static actors now do almost no per-frame work.
   const hoverOffset = new rt.THREE.Vector3();
   const groundOffset = new rt.THREE.Vector3();
   const inverseRotation = new rt.THREE.Quaternion();
   const groundRotation = new rt.THREE.Quaternion().setFromEuler(new rt.THREE.Euler(-Math.PI / 2, 0, 0));
+  const feltTop = rt.felt.position.y + rt.felt.scale.y / 2 + .008;
+  const anyClaim = reactionClaimAvailable();
+  let movingCount = 0;
+
   for (const actor of rt.actors.values()) {
+    let transformMoved = false;
     if (actor.motion) {
+      movingCount += 1;
+      transformMoved = true;
       const motion = actor.motion;
       const progress = Math.max(0, Math.min(1, (time - motion.startedAt) / motion.duration));
       const eased = progress * progress * (3 - 2 * progress);
@@ -1529,52 +1565,76 @@ function frameRuntime(rt: TableRuntime, time: number): void {
       }
     }
 
-    // Keep halos on the felt in world space. They no longer rotate/lift with the tile, so the
-    // highlight reads as a pool of light underneath instead of a ring behind the face.
-    const feltTop = rt.felt.position.y + rt.felt.scale.y / 2 + .008;
-    inverseRotation.copy(actor.group.quaternion).invert();
-    groundOffset.set(0, feltTop - actor.group.position.y, 0).applyQuaternion(inverseRotation);
-    actor.indicator.position.copy(groundOffset);
-    actor.latestHalo.position.copy(groundOffset);
-    actor.indicator.quaternion.copy(inverseRotation).multiply(groundRotation);
-    actor.latestHalo.quaternion.copy(inverseRotation).multiply(groundRotation);
-
     const hovered = rt.hoveredKey === actor.key && actor.spec.selectable;
     const pressed = rt.pressedKey === actor.key && hovered;
-    const hoverY = hovered ? (pressed ? .08 : .16) : 0;
-    // Lift in world Y regardless of how the tile itself is rotated. Previously local-Y pushed
-    // standing tiles toward the camera instead of visibly raising them above the rack.
-    hoverOffset.set(0, hoverY, 0).applyQuaternion(inverseRotation.copy(actor.group.quaternion).invert());
-    actor.visual.position.lerp(hoverOffset, .22);
-    const targetTiltX = hovered ? -.04 : 0;
-    const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
-    actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
-    actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
+    const visualSettling = hovered
+      || actor.visual.position.lengthSq() > .000002
+      || Math.abs(actor.visual.rotation.x) > .0005
+      || Math.abs(actor.visual.rotation.z) > .0005;
+
+    // Ground-space halo compensation is only required while the actor itself changes transform.
+    // Static discards keep the already-correct local transform instead of recalculating it 120x/s.
+    if (transformMoved) {
+      inverseRotation.copy(actor.group.quaternion).invert();
+      groundOffset.set(0, feltTop - actor.group.position.y, 0).applyQuaternion(inverseRotation);
+      actor.indicator.position.copy(groundOffset);
+      actor.latestHalo.position.copy(groundOffset);
+      actor.indicator.quaternion.copy(inverseRotation).multiply(groundRotation);
+      actor.latestHalo.quaternion.copy(inverseRotation).multiply(groundRotation);
+    }
+
+    if (visualSettling) {
+      const hoverY = hovered ? (pressed ? .08 : .16) : 0;
+      inverseRotation.copy(actor.group.quaternion).invert();
+      hoverOffset.set(0, hoverY, 0).applyQuaternion(inverseRotation);
+      actor.visual.position.lerp(hoverOffset, .22);
+      const targetTiltX = hovered ? -.04 : 0;
+      const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
+      actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
+      actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
+      if (!hovered && actor.visual.position.lengthSq() < .000002
+        && Math.abs(actor.visual.rotation.x) < .0005 && Math.abs(actor.visual.rotation.z) < .0005) {
+        actor.visual.position.set(0, 0, 0);
+        actor.visual.rotation.x = 0;
+        actor.visual.rotation.z = 0;
+      }
+    }
+
     actor.indicator.visible = actor.spec.advised || hovered;
-    const claimableLatest = actor.spec.latest && reactionClaimAvailable();
+    const claimableLatest = actor.spec.latest && anyClaim;
     actor.latestHalo.visible = claimableLatest;
     if (claimableLatest && !reducedMotion) {
       const pulse = 1 + Math.sin(time / 180) * .055;
       actor.latestHalo.scale.setScalar(pulse);
-    } else {
+    } else if (actor.latestHalo.scale.x !== 1) {
       actor.latestHalo.scale.setScalar(1);
     }
   }
 
+  const renderStarted = performance.now();
   rt.renderer.render(rt.scene, rt.camera);
+  rt.renderTimeTotal += performance.now() - renderStarted;
   rt.fpsFrames += 1;
   const sampleMs = time - rt.fpsSampleStart;
   if (sampleMs >= 600) {
     if (document.body.classList.contains('dev-tuning-open')) {
+      const intervals = Math.max(1, rt.fpsFrames - 1);
+      const frameMs = rt.frameIntervalTotal / intervals;
       window.dispatchEvent(new CustomEvent('mahjong-live:fps', { detail: {
         fps: rt.fpsFrames * 1000 / sampleMs,
+        frameMs,
+        renderMs: rt.renderTimeTotal / Math.max(1, rt.fpsFrames),
         calls: rt.renderer.info.render.calls,
         triangles: rt.renderer.info.render.triangles,
+        actors: rt.actors.size,
+        moving: movingCount,
         pixelRatio: rt.renderer.getPixelRatio(),
       } }));
     }
     rt.fpsFrames = 0;
     rt.fpsSampleStart = time;
+    rt.frameIntervalTotal = 0;
+    rt.renderTimeTotal = 0;
   }
 }
 
