@@ -30,6 +30,7 @@ jobs:
           p = Path('scripts/apply-ui-polish-v2.mjs')
           s = p.read_text()
           s = s.replace("saveAndBroadcast(`Scene background: ${scenePreset.selectedOptions[0]?.textContent ?? ''}`);", "saveAndBroadcast('Scene background: ' + (scenePreset.selectedOptions[0]?.textContent ?? ''));" )
+          s = s.replace("${wide ? 18 : 24}", r"\${wide ? 18 : 24}")
           p.write_text(s)
           PY
       - name: Apply UI polish changes
