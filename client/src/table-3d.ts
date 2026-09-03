@@ -8,7 +8,7 @@ const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
 // ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
 // Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
 const TILE_FACE_OFFSET = .128;
-const TILE_BACK_OFFSET = .124;
+const TILE_BACK_OFFSET = .142;
 const OPPONENT_RACK_LEAN = .17;
 const DEV_TUNING_KEY = 'mahjong-live:dev-tuning:v1';
 
@@ -40,6 +40,7 @@ type DevTuning = {
     meldGap: number;
     meldRowGap: number;
     calledTileRotation: number;
+    calledTileGap: number;
   };
   tableGeometry: { frameTopY: number; feltTopY: number; frameWidth: number; frameThickness: number; feltThickness: number };
   ui: {
@@ -57,6 +58,7 @@ type DevTuning = {
     reactionScale: number;
     gameLogWidth: number;
   };
+  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
   tableColor: string;
   tableImage: string | null;
   woodColor: string;
@@ -94,6 +96,7 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     meldGap: .36,
     meldRowGap: .48,
     calledTileRotation: 90,
+    calledTileGap: .10,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -111,6 +114,7 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     reactionScale: 1,
     gameLogWidth: 290,
   },
+  graphics: { pixelRatio: 1.35, shadowQuality: 1, anisotropy: 4 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -211,6 +215,7 @@ type TableRuntime = {
   feltMaterial: any;
   backMaterial: any;
   backShellMaterial: any;
+  keyLight: any;
   tableTexture: any | null;
   tableTextureSource: string | null;
   backTexture: any | null;
@@ -228,6 +233,8 @@ type TableRuntime = {
   drawOrigin: Transform | null;
   lastRemainingDraws: number;
   faceMode: TileFaceMode;
+  fpsFrames: number;
+  fpsSampleStart: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -282,6 +289,7 @@ function readDevTuning(): DevTuning {
       meldGap: finiteNumber(raw.tiles?.meldGap, DEFAULT_DEV_TUNING.tiles.meldGap),
       meldRowGap: finiteNumber(raw.tiles?.meldRowGap, DEFAULT_DEV_TUNING.tiles.meldRowGap),
       calledTileRotation: finiteNumber(raw.tiles?.calledTileRotation, DEFAULT_DEV_TUNING.tiles.calledTileRotation),
+      calledTileGap: finiteNumber(raw.tiles?.calledTileGap, DEFAULT_DEV_TUNING.tiles.calledTileGap),
     },
     tableGeometry: {
       frameTopY: finiteNumber(raw.tableGeometry?.frameTopY, DEFAULT_DEV_TUNING.tableGeometry.frameTopY),
@@ -304,6 +312,11 @@ function readDevTuning(): DevTuning {
       centerHeight: finiteNumber(raw.ui?.centerHeight, DEFAULT_DEV_TUNING.ui.centerHeight),
       reactionScale: finiteNumber(raw.ui?.reactionScale, DEFAULT_DEV_TUNING.ui.reactionScale),
       gameLogWidth: finiteNumber(raw.ui?.gameLogWidth, DEFAULT_DEV_TUNING.ui.gameLogWidth),
+    },
+    graphics: {
+      pixelRatio: finiteNumber(raw.graphics?.pixelRatio, DEFAULT_DEV_TUNING.graphics.pixelRatio),
+      shadowQuality: finiteNumber(raw.graphics?.shadowQuality, DEFAULT_DEV_TUNING.graphics.shadowQuality),
+      anisotropy: finiteNumber(raw.graphics?.anisotropy, DEFAULT_DEV_TUNING.graphics.anisotropy),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -480,8 +493,8 @@ function baseTransform(spec: TileSpec): Transform {
     } else if (spec.side === 'top') {
       transform.x = -cross;
       transform.z = -depth;
-      // Discards are oriented toward the player who threw them, not toward table centre.
-      transform.yaw = 0;
+      // The opposite player sees the tile upright from their seat, so their river is 180° from ours.
+      transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
       transform.x = -depth;
       transform.z = cross;
@@ -536,6 +549,11 @@ function baseTransform(spec: TileSpec): Transform {
     }
     if (spec.called) {
       transform.yaw += radians(tuning.tiles.calledTileRotation);
+      const extra = tuning.tiles.calledTileGap;
+      if (spec.side === 'bottom') transform.x += extra;
+      else if (spec.side === 'top') transform.x -= extra;
+      else if (spec.side === 'left') transform.z += extra;
+      else transform.z -= extra;
       transform.y += .012;
     }
   }
@@ -704,7 +722,7 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   const tuning = readDevTuning();
   const texture = new rt.THREE.CanvasTexture(createFaceCanvas(label, false, rt.faceMode));
   texture.colorSpace = rt.THREE.SRGBColorSpace;
-  texture.anisotropy = Math.min(8, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.center.set(.5, .5);
   texture.rotation = radians(tuning.tiles.faceTextureRotation);
   const material = new rt.THREE.MeshStandardMaterial({
@@ -1107,21 +1125,28 @@ function alignStage(rt: TableRuntime, table: HTMLElement): void {
   syncWorldUiAnchor(rt);
 }
 
+function shadowMapSize(level: number): number {
+  if (level <= 0) return 0;
+  if (level <= 1) return 512;
+  if (level <= 2) return 1024;
+  return 2048;
+}
+
 function createRuntime(THREE: any): TableRuntime {
+  const tuning = readDevTuning();
   const renderer = new THREE.WebGLRenderer({
     alpha: false,
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, tuning.graphics.pixelRatio));
+  renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'table-3d-canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
   stage.replaceChildren(renderer.domElement);
 
-  const tuning = readDevTuning();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(tuning.sceneColor);
   scene.fog = new THREE.Fog(tuning.sceneColor, 16, 29);
@@ -1132,8 +1157,9 @@ function createRuntime(THREE: any): TableRuntime {
   scene.add(new THREE.HemisphereLight(0xf8fbff, 0x0d1712, 1.28));
   const key = new THREE.DirectionalLight(0xffffff, 2.18);
   key.position.set(-4.8, 11, 7.2);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  const initialShadowSize = shadowMapSize(tuning.graphics.shadowQuality);
+  key.castShadow = initialShadowSize > 0;
+  if (initialShadowSize > 0) key.shadow.mapSize.set(initialShadowSize, initialShadowSize);
   key.shadow.camera.near = 1;
   key.shadow.camera.far = 28;
   key.shadow.camera.left = -8;
@@ -1214,6 +1240,7 @@ function createRuntime(THREE: any): TableRuntime {
     feltMaterial,
     backMaterial,
     backShellMaterial,
+    keyLight: key,
     tableTexture: null,
     tableTextureSource: null,
     backTexture: null,
@@ -1231,6 +1258,8 @@ function createRuntime(THREE: any): TableRuntime {
     drawOrigin: null,
     lastRemainingDraws: remainingDraws(),
     faceMode: readFaceMode(),
+    fpsFrames: 0,
+    fpsSampleStart: performance.now(),
   };
 
   applyDevTuning(rt);
@@ -1298,7 +1327,7 @@ function syncTableTexture(rt: TableRuntime, source: string | null): void {
   new rt.THREE.TextureLoader().load(source, (texture: any) => {
     if (rt.disposed || rt.tableTextureSource !== source) { texture.dispose(); return; }
     texture.colorSpace = rt.THREE.SRGBColorSpace;
-    texture.anisotropy = Math.min(2, rt.renderer.capabilities.getMaxAnisotropy());
+    texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
     texture.generateMipmaps = true;
     texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
     texture.magFilter = rt.THREE.LinearFilter;
@@ -1386,7 +1415,7 @@ function backTextureKey(tuning: DevTuning): string {
 
 function configureBackTexture(rt: TableRuntime, texture: any): void {
   texture.colorSpace = rt.THREE.SRGBColorSpace;
-  texture.anisotropy = Math.min(8, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.generateMipmaps = true;
   texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
   texture.magFilter = rt.THREE.LinearFilter;
@@ -1421,6 +1450,21 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
   rt.camera.updateProjectionMatrix();
+  rt.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, tuning.graphics.pixelRatio));
+  const shadowSize = shadowMapSize(tuning.graphics.shadowQuality);
+  rt.renderer.shadowMap.enabled = shadowSize > 0;
+  rt.keyLight.castShadow = shadowSize > 0;
+  if (shadowSize > 0 && rt.keyLight.shadow.mapSize.width !== shadowSize) {
+    rt.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
+    rt.keyLight.shadow.map?.dispose?.();
+    rt.keyLight.shadow.map = null;
+  }
+  const maxAnisotropy = rt.renderer.capabilities.getMaxAnisotropy();
+  if (rt.tableTexture) rt.tableTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
+  if (rt.backTexture) rt.backTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
+  for (const material of rt.faceMaterials.values()) {
+    if (material.map) material.map.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
+  }
   rt.scene.background?.set?.(tuning.sceneColor);
   rt.scene.fog?.color?.set?.(tuning.sceneColor);
   rt.woodMaterial.color.set(tuning.woodColor);
@@ -1511,6 +1555,20 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   }
 
   rt.renderer.render(rt.scene, rt.camera);
+  rt.fpsFrames += 1;
+  const sampleMs = time - rt.fpsSampleStart;
+  if (sampleMs >= 600) {
+    if (document.body.classList.contains('dev-tuning-open')) {
+      window.dispatchEvent(new CustomEvent('mahjong-live:fps', { detail: {
+        fps: rt.fpsFrames * 1000 / sampleMs,
+        calls: rt.renderer.info.render.calls,
+        triangles: rt.renderer.info.render.triangles,
+        pixelRatio: rt.renderer.getPixelRatio(),
+      } }));
+    }
+    rt.fpsFrames = 0;
+    rt.fpsSampleStart = time;
+  }
 }
 
 function lerp(a: number, b: number, t: number): number {

@@ -386,13 +386,11 @@ function advisorStrip(): string {
 
 function actionBar(): string {
   if (!current) return '';
-  if (presentationLocked) {
-    return `
-      <div class="action-dock presentation-dock">
-        <div class="presentation-pulse"><i></i><span>${presentationCaptionText || 'Resolving table actions…'}</span></div>
-      </div>
-    `;
-  }
+  // Presentation captions used to announce every bot draw/discard in a large dock below the
+  // table. The 3D movement already communicates this and the extra text leaked information while
+  // consuming valuable vertical space, so automated presentation frames stay visually silent.
+  if (presentationLocked) return '';
+
   const prompt = current.prompt;
   if (prompt.kind === 'round-ended' || prompt.kind === 'match-ended') return '';
 
@@ -412,16 +410,11 @@ function actionBar(): string {
     buttons.push(actionButton('Pass', 'pass', 'action-pass'));
   }
 
-  const hint = prompt.kind === 'turn'
-    ? riichiMode
-      ? 'Choose a highlighted discard to declare Riichi.'
-      : 'Choose a tile from your hand to discard.'
-    : 'Respond to the latest discard.';
-
+  const advisor = advisorStrip();
+  if (buttons.length === 0 && !advisor) return '';
   return `
-    <div class="action-dock">
-      <div class="action-hint">${hint}</div>
-      ${advisorStrip()}
+    <div class="action-dock action-dock-compact">
+      ${advisor}
       <div class="action-buttons">${buttons.join('')}</div>
     </div>
   `;

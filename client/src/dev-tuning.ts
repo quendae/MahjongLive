@@ -32,6 +32,7 @@ type DevTuning = {
     meldGap: number;
     meldRowGap: number;
     calledTileRotation: number;
+    calledTileGap: number;
   };
   tableGeometry: {
     frameTopY: number;
@@ -55,6 +56,7 @@ type DevTuning = {
     reactionScale: number;
     gameLogWidth: number;
   };
+  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
   tableColor: string;
   tableImage: string | null;
   woodColor: string;
@@ -92,6 +94,7 @@ const DEFAULTS: DevTuning = {
     meldGap: .36,
     meldRowGap: .48,
     calledTileRotation: 90,
+    calledTileGap: .10,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -109,6 +112,7 @@ const DEFAULTS: DevTuning = {
     reactionScale: 1,
     gameLogWidth: 290,
   },
+  graphics: { pixelRatio: 1.35, shadowQuality: 1, anisotropy: 4 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -169,6 +173,7 @@ function loadSettings(): DevTuning {
       meldGap: finite(raw.tiles?.meldGap, DEFAULTS.tiles.meldGap),
       meldRowGap: finite(raw.tiles?.meldRowGap, DEFAULTS.tiles.meldRowGap),
       calledTileRotation: finite(raw.tiles?.calledTileRotation, DEFAULTS.tiles.calledTileRotation),
+      calledTileGap: finite(raw.tiles?.calledTileGap, DEFAULTS.tiles.calledTileGap),
     },
     tableGeometry: {
       frameTopY: finite(raw.tableGeometry?.frameTopY, DEFAULTS.tableGeometry.frameTopY),
@@ -191,6 +196,11 @@ function loadSettings(): DevTuning {
       centerHeight: finite(raw.ui?.centerHeight, DEFAULTS.ui.centerHeight),
       reactionScale: finite(raw.ui?.reactionScale, DEFAULTS.ui.reactionScale),
       gameLogWidth: finite(raw.ui?.gameLogWidth, DEFAULTS.ui.gameLogWidth),
+    },
+    graphics: {
+      pixelRatio: finite(raw.graphics?.pixelRatio, DEFAULTS.graphics.pixelRatio),
+      shadowQuality: finite(raw.graphics?.shadowQuality, DEFAULTS.graphics.shadowQuality),
+      anisotropy: finite(raw.graphics?.anisotropy, DEFAULTS.graphics.anisotropy),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULTS.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -220,6 +230,7 @@ function saveAndBroadcast(message = ''): void {
     setStatus('Could not persist settings — the uploaded image may be too large.');
   }
   applyDomPreview();
+  updateBackPreview();
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: settings }));
   if (message) setStatus(message);
 }
@@ -337,6 +348,66 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${part(r)}${part(g)}${part(b)}`;
 }
 
+function rgbToHsv(rgb: [number, number, number]): [number, number, number] {
+  const [r0, g0, b0] = rgb.map((value) => value / 255) as [number, number, number];
+  const max = Math.max(r0, g0, b0);
+  const min = Math.min(r0, g0, b0);
+  const delta = max - min;
+  let h = 0;
+  if (delta > 0) {
+    if (max === r0) h = 60 * (((g0 - b0) / delta) % 6);
+    else if (max === g0) h = 60 * ((b0 - r0) / delta + 2);
+    else h = 60 * ((r0 - g0) / delta + 4);
+  }
+  if (h < 0) h += 360;
+  const s = max === 0 ? 0 : delta / max;
+  return [h, s, max];
+}
+
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let rgb: [number, number, number];
+  if (h < 60) rgb = [c, x, 0];
+  else if (h < 120) rgb = [x, c, 0];
+  else if (h < 180) rgb = [0, c, x];
+  else if (h < 240) rgb = [0, x, c];
+  else if (h < 300) rgb = [x, 0, c];
+  else rgb = [c, 0, x];
+  return rgb.map((value) => Math.round((value + m) * 255)) as [number, number, number];
+}
+
+function updateBackPreview(): void {
+  const preview = panel?.querySelector<HTMLElement>('.dev-back-preview');
+  if (!preview) return;
+  preview.style.backgroundColor = settings.backColor;
+  preview.style.backgroundPosition = 'center';
+  preview.style.backgroundRepeat = 'repeat';
+  const strength = Math.max(0, Math.min(1, settings.backPatternStrength));
+  const dark = (alpha: number) => `rgba(4,12,8,${(alpha * strength).toFixed(3)})`;
+  const light = (alpha: number) => `rgba(255,255,255,${(alpha * strength).toFixed(3)})`;
+  if (settings.backPattern === 'custom' && settings.backImage) {
+    preview.style.backgroundImage = `url("${settings.backImage}")`;
+    preview.style.backgroundSize = 'cover';
+  } else if (settings.backPattern === 'ribbed') {
+    preview.style.backgroundImage = `repeating-linear-gradient(90deg, ${dark(.34)} 0 3px, ${light(.22)} 3px 4px, transparent 4px 11px)`;
+    preview.style.backgroundSize = 'auto';
+  } else if (settings.backPattern === 'woven') {
+    preview.style.backgroundImage = `repeating-linear-gradient(45deg, ${dark(.24)} 0 2px, transparent 2px 10px), repeating-linear-gradient(-45deg, ${light(.18)} 0 2px, transparent 2px 12px)`;
+    preview.style.backgroundSize = 'auto';
+  } else if (settings.backPattern === 'diamond' || settings.backPattern === 'classic') {
+    preview.style.backgroundImage = `linear-gradient(45deg, transparent 44%, ${dark(.26)} 45% 55%, transparent 56%), linear-gradient(-45deg, transparent 44%, ${light(.18)} 45% 55%, transparent 56%)`;
+    preview.style.backgroundSize = settings.backPattern === 'classic' ? '26px 26px' : '20px 20px';
+  } else if (settings.backPattern === 'waves') {
+    preview.style.backgroundImage = `repeating-radial-gradient(ellipse at 0 50%, transparent 0 9px, ${dark(.25)} 10px 12px, transparent 13px 22px)`;
+    preview.style.backgroundSize = '42px 24px';
+  } else {
+    preview.style.backgroundImage = 'none';
+    preview.style.backgroundSize = 'auto';
+  }
+}
+
 function colorControl(
   parent: HTMLElement,
   label: string,
@@ -345,40 +416,94 @@ function colorControl(
   defaultValue: string,
 ): void {
   const row = document.createElement('div');
-  row.className = 'dev-tuning-color';
+  row.className = 'dev-tuning-color dev-color-control';
   const name = document.createElement('label');
   name.textContent = label;
-  const picker = document.createElement('input');
-  picker.type = 'color';
-  picker.value = get();
+
+  const swatch = document.createElement('button');
+  swatch.type = 'button';
+  swatch.className = 'dev-color-swatch';
+  swatch.title = `Open ${label} color picker`;
+
   const nums = [0, 1, 2].map(() => {
     const input = document.createElement('input');
     input.type = 'number'; input.min = '0'; input.max = '255'; input.step = '1';
     return input;
   });
   const reset = document.createElement('button');
-  reset.type = 'button';
-  reset.className = 'dev-tuning-reset';
-  reset.textContent = '↺';
-  reset.title = `Reset ${label}`;
-  const syncNums = () => {
-    const rgb = hexToRgb(picker.value);
+  reset.type = 'button'; reset.className = 'dev-tuning-reset'; reset.textContent = '↺'; reset.title = `Reset ${label}`;
+
+  const popover = document.createElement('div');
+  popover.className = 'dev-color-popover';
+  popover.hidden = true;
+  const sv = document.createElement('div');
+  sv.className = 'dev-color-sv';
+  const marker = document.createElement('i');
+  sv.append(marker);
+  const hue = document.createElement('input');
+  hue.type = 'range'; hue.min = '0'; hue.max = '359'; hue.step = '1'; hue.className = 'dev-color-hue';
+  const hex = document.createElement('input');
+  hex.className = 'dev-color-hex'; hex.maxLength = 7; hex.spellcheck = false;
+  popover.append(sv, hue, hex);
+  row.append(name, swatch, ...nums, reset, popover);
+  parent.append(row);
+
+  let [h, s, v] = rgbToHsv(hexToRgb(get()));
+  const paint = (value: string, updateHsv = true) => {
+    if (updateHsv) [h, s, v] = rgbToHsv(hexToRgb(value));
+    swatch.style.background = value;
+    const rgb = hexToRgb(value);
     nums.forEach((input, index) => { input.value = String(rgb[index]); });
+    hex.value = value.toUpperCase();
+    hue.value = String(Math.round(h));
+    sv.style.setProperty('--picker-hue', String(h));
+    marker.style.left = `${s * 100}%`;
+    marker.style.top = `${(1 - v) * 100}%`;
   };
-  const commit = (value: string) => {
-    picker.value = value;
-    set(value);
-    syncNums();
+  const commit = (value: string, updateHsv = true) => {
+    const normalized = /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : get();
+    set(normalized);
+    paint(normalized, updateHsv);
     saveAndBroadcast();
   };
-  syncNums();
-  picker.addEventListener('input', () => commit(picker.value));
-  nums.forEach((input) => input.addEventListener('change', () => {
-    commit(rgbToHex(Number(nums[0].value), Number(nums[1].value), Number(nums[2].value)));
-  }));
+  paint(get());
+
+  const setSvFromPointer = (event: PointerEvent) => {
+    const rect = sv.getBoundingClientRect();
+    s = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    v = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const rgb = hsvToRgb(h, s, v);
+    commit(rgbToHex(...rgb), false);
+  };
+  sv.addEventListener('pointerdown', (event) => {
+    sv.setPointerCapture(event.pointerId);
+    setSvFromPointer(event);
+  });
+  sv.addEventListener('pointermove', (event) => {
+    if (sv.hasPointerCapture(event.pointerId)) setSvFromPointer(event);
+  });
+  hue.addEventListener('input', () => {
+    h = Number(hue.value);
+    const rgb = hsvToRgb(h, s, v);
+    commit(rgbToHex(...rgb), false);
+  });
+  nums.forEach((input) => input.addEventListener('change', () => commit(rgbToHex(Number(nums[0].value), Number(nums[1].value), Number(nums[2].value)))));
+  hex.addEventListener('change', () => {
+    let value = hex.value.trim();
+    if (!value.startsWith('#')) value = `#${value}`;
+    if (/^#[0-9a-f]{6}$/i.test(value)) commit(value);
+    else paint(get());
+  });
   reset.addEventListener('click', () => commit(defaultValue));
-  row.append(name, picker, ...nums, reset);
-  parent.append(row);
+  swatch.addEventListener('click', (event) => {
+    event.stopPropagation();
+    document.querySelectorAll<HTMLElement>('.dev-color-popover').forEach((other) => { if (other !== popover) other.hidden = true; });
+    popover.hidden = !popover.hidden;
+  });
+  popover.addEventListener('pointerdown', (event) => event.stopPropagation());
+  document.addEventListener('pointerdown', (event) => {
+    if (!row.contains(event.target as Node)) popover.hidden = true;
+  });
 }
 
 async function optimizedBackImage(file: File): Promise<string> {
@@ -436,6 +561,7 @@ function buildPanel(): HTMLElement {
   root.innerHTML = `
     <div class="dev-tuning-head">
       <strong>3D Dev Tuning</strong>
+      <span class="dev-fps-value">FPS --</span>
       <span>F2</span>
       <button type="button" class="dev-tuning-close">×</button>
     </div>
@@ -452,6 +578,15 @@ function buildPanel(): HTMLElement {
   numberSlider(camera, 'Target Z', -6, 6, .05, () => settings.camera.targetZ, (v) => { settings.camera.targetZ = v; }, '', DEFAULTS.camera.targetZ);
   numberSlider(camera, 'FOV', 20, 70, 1, () => settings.camera.fov, (v) => { settings.camera.fov = v; }, '°', DEFAULTS.camera.fov);
   root.append(camera);
+
+  const graphics = document.createElement('section');
+  graphics.className = 'dev-tuning-section';
+  graphics.innerHTML = '<h3>Performance & graphics</h3>';
+  numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
+  numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
+  numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Pixel ratio has the biggest FPS impact. Shadow quality: 0=off, 1=512, 2=1024, 3=2048. Raise filtering for sharper angled tile/table textures.</p>');
+  root.append(graphics);
 
   rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);
   rotationSection(root, 'Right opponent tiles', settings.right, DEFAULTS.right);
@@ -475,6 +610,7 @@ function buildPanel(): HTMLElement {
   numberSlider(tileSection, 'Meld gap', .30, .55, .01, () => settings.tiles.meldGap, (v) => { settings.tiles.meldGap = v; }, '', DEFAULTS.tiles.meldGap);
   numberSlider(tileSection, 'Meld row gap', .38, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
   numberSlider(tileSection, 'Called tile turn', -180, 180, 1, () => settings.tiles.calledTileRotation, (v) => { settings.tiles.calledTileRotation = v; }, '°', DEFAULTS.tiles.calledTileRotation);
+  numberSlider(tileSection, 'Called tile gap', 0, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
   tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');
   root.append(tileSection);
 
@@ -547,8 +683,8 @@ function buildPanel(): HTMLElement {
   root.append(sceneSection);
 
   const surfaces = document.createElement('section');
-  surfaces.className = 'dev-tuning-section';
-  surfaces.innerHTML = '<h3>Felt & tile backs</h3>';
+  surfaces.className = 'dev-tuning-section dev-back-section';
+  surfaces.innerHTML = '<h3>Felt & tile backs</h3><div class="dev-back-preview-card"><div class="dev-back-preview-shell"><div class="dev-back-preview"></div></div><span>Back preview</span></div>';
   colorControl(surfaces, 'Felt RGB', () => settings.tableColor, (v) => { settings.tableColor = v; }, DEFAULTS.tableColor);
 
   const fileRow = document.createElement('div');
@@ -656,6 +792,7 @@ function buildPanel(): HTMLElement {
   surfaces.append(backFileRow);
   surfaces.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Patterns are generated at runtime and tinted by Back RGB. Custom images are optimized before being stored.</p>');
   root.append(surfaces);
+  requestAnimationFrame(updateBackPreview);
 
   const actions = document.createElement('div');
   actions.className = 'dev-tuning-actions';
@@ -703,6 +840,14 @@ window.addEventListener('keydown', (event) => {
   event.preventDefault();
   ensureUi();
   if (panel) { panel.hidden = !panel.hidden; syncDevOpenClass(); }
+});
+window.addEventListener('mahjong-live:fps', (event) => {
+  const detail = (event as CustomEvent<{ fps?: number; calls?: number; triangles?: number; pixelRatio?: number }>).detail;
+  const target = panel?.querySelector<HTMLElement>('.dev-fps-value');
+  if (!target || !detail) return;
+  const fps = Number.isFinite(detail.fps) ? Math.round(detail.fps ?? 0) : 0;
+  target.textContent = `${fps} FPS · ${detail.calls ?? 0} calls · ${(detail.pixelRatio ?? 1).toFixed(2)}×`;
+  target.classList.toggle('fps-low', fps > 0 && fps < 45);
 });
 ensureUi();
 syncDevOpenClass();

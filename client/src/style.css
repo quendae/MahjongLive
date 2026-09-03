@@ -94,7 +94,7 @@ button:focus-visible, [role="button"]:focus-visible {
 
 .mahjong-table {
   position: relative;
-  height: clamp(620px, calc(100vh - 170px), 850px);
+  height: clamp(620px, calc(100vh - 108px), 940px);
   min-height: 620px;
   overflow: hidden;
   border: 10px solid #3d2f23;
@@ -243,7 +243,7 @@ button:focus-visible, [role="button"]:focus-visible {
 .action-pass { color: #9eb0a5; }
 
 .game-log {
-  height: clamp(620px, calc(100vh - 170px), 850px);
+  height: clamp(620px, calc(100vh - 108px), 940px);
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 16px;
@@ -376,3 +376,14 @@ button:focus-visible, [role="button"]:focus-visible {
   .action-dock { min-height: 48px; margin-top: 4px; padding: 5px 8px; }
   .game-log { display: none; }
 }
+
+
+/* The normal discard hint/presentation ticker was removed: only actual decision buttons reserve
+   space below the table now. */
+.action-dock-compact {
+  min-height: 54px;
+  margin-top: 8px;
+  justify-content: flex-end;
+  padding: 7px 10px;
+}
+.action-dock-compact .advisor-strip { margin-right: auto; }
