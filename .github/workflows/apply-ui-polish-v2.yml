@@ -23,6 +23,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Repair one-shot script quoting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-ui-polish-v2.mjs')
+          s = p.read_text()
+          s = s.replace("saveAndBroadcast(`Scene background: ${scenePreset.selectedOptions[0]?.textContent ?? ''}`);", "saveAndBroadcast('Scene background: ' + (scenePreset.selectedOptions[0]?.textContent ?? ''));" )
+          p.write_text(s)
+          PY
       - name: Apply UI polish changes
         run: node scripts/apply-ui-polish-v2.mjs
       - name: Typecheck client
