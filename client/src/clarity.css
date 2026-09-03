@@ -14,29 +14,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 16px;
-  padding: 0 3px;
-  border: 1px solid rgba(31, 40, 35, .18);
-  border-radius: 5px;
+  min-width: 26px;
+  height: 21px;
+  padding: 0 5px;
+  border: 1px solid rgba(31, 40, 35, .2);
+  border-radius: 6px;
   color: #243329;
-  background: rgba(255, 253, 245, .88);
-  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+  background: rgba(255, 253, 245, .95);
+  box-shadow: 0 1px 3px rgba(0,0,0,.14);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: 8px;
-  font-weight: 850;
+  font-size: 11px;
+  font-weight: 900;
   line-height: 1;
-  letter-spacing: .02em;
+  letter-spacing: .015em;
 }
 
 .tile-compact .tile-learning-label {
   right: 1px;
   top: 1px;
-  min-width: 11px;
-  height: 10px;
+  min-width: 14px;
+  height: 12px;
   padding: 0 2px;
   border-radius: 3px;
-  font-size: 5px;
+  font-size: 6px;
 }
 
 .clarity-source-hidden {

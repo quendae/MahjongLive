@@ -4,7 +4,7 @@
   display: none;
   overflow: hidden;
   pointer-events: none;
-  border-radius: 30px;
+  border-radius: 24px;
   contain: strict;
 }
 
@@ -20,14 +20,18 @@
 }
 
 .game-layout:has(.mahjong-table.table-3d-active) {
-  grid-template-columns: minmax(0, 1fr) 230px;
-  max-width: 1660px;
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 16vw);
+  gap: 12px;
+  padding: 12px 14px 18px;
 }
 
 .mahjong-table.table-3d-active {
   isolation: auto;
-  height: clamp(700px, calc(100vh - 140px), 940px);
+  height: clamp(700px, calc(100vh - 132px), 980px);
   min-height: 700px;
+  border-radius: 24px;
   background: #102f23;
 }
 
@@ -124,34 +128,68 @@
 
 .table-3d-active .table-dora-tray {
   z-index: 15;
-  top: 48px;
-  min-height: 39px;
-  background: rgba(5, 16, 11, .84);
+  left: 24px;
+  right: auto;
+  top: 24px;
+  transform: none;
+  min-height: 64px;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 14px;
+  background: rgba(5, 16, 11, .88);
+  box-shadow: 0 9px 24px rgba(0,0,0,.24);
   backdrop-filter: none;
+}
+
+.table-3d-active .dora-tray-title {
+  font-size: 11px;
+  letter-spacing: .18em;
+}
+
+.table-3d-active .dora-tray-tiles {
+  gap: 5px;
+}
+
+.table-3d-active .table-dora-tray .tile {
+  width: 42px;
+  height: 56px;
+  border-radius: 7px;
+}
+
+.table-3d-active .table-dora-tray .tile-rank { font-size: 21px; }
+.table-3d-active .table-dora-tray .tile-suit { font-size: 12px; }
+.table-3d-active .table-dora-tray .tile-honor { font-size: 27px; }
+.table-3d-active .table-dora-tray .tile-learning-label {
+  right: 3px;
+  top: 3px;
+  min-width: 25px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 10px;
 }
 
 .table-3d-active .table-center.classic-table-counter {
   z-index: 13;
-  width: 178px;
-  height: 178px;
-  min-height: 178px;
-  padding: 52px 30px 38px;
-  border: 2px solid rgba(224, 201, 145, .22);
-  border-radius: 15px;
+  width: 242px;
+  height: 242px;
+  min-height: 242px;
+  padding: 70px 40px 52px;
+  border: 2px solid rgba(224, 201, 145, .24);
+  border-radius: 20px;
   background:
     radial-gradient(circle at 50% 45%, rgba(41, 72, 55, .38), transparent 58%),
     linear-gradient(145deg, rgba(7, 22, 15, .94), rgba(3, 13, 9, .98));
   box-shadow:
-    0 13px 35px rgba(0,0,0,.28),
+    0 16px 42px rgba(0,0,0,.31),
     inset 0 0 0 1px rgba(255,255,255,.025),
-    inset 0 0 28px rgba(0,0,0,.22);
+    inset 0 0 34px rgba(0,0,0,.24);
   backdrop-filter: none;
 }
 
 .table-3d-active .round-title {
   position: relative;
   z-index: 2;
-  font-size: 24px;
+  font-size: 36px;
   line-height: 1;
 }
 
@@ -160,32 +198,38 @@
   z-index: 2;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 2px;
-  margin: 6px 0 0;
-  font-size: 7px;
-  line-height: 1.25;
+  gap: 4px;
+  margin: 9px 0 0;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .table-3d-active .turn-indicator {
   position: absolute;
   z-index: 2;
-  left: 22px;
-  right: 22px;
-  bottom: 25px;
+  left: 28px;
+  right: 28px;
+  bottom: 34px;
   margin: 0;
-  font-size: 8px;
+  font-size: 12px;
+  font-weight: 650;
   color: #dce7e0;
 }
 
 .table-3d-active .counter-score {
-  min-width: 67px;
-  padding: 2px 4px;
-  background: rgba(255,255,255,.025);
-  font-size: 6px;
+  min-width: 88px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+  font-size: 9px;
 }
 
-.table-3d-active .counter-score b { font-size: 9px; }
-.table-3d-active .counter-score strong { font-size: 7px; }
+.table-3d-active .counter-score b { font-size: 14px; }
+.table-3d-active .counter-score strong { font-size: 11px; }
+.table-3d-active .counter-score-bottom { bottom: 7px; }
+.table-3d-active .counter-score-top { top: 7px; }
+.table-3d-active .counter-score-left { left: 6px; }
+.table-3d-active .counter-score-right { right: 6px; }
 
 .table-3d-active .reaction-popup {
   z-index: 20;
@@ -262,6 +306,10 @@
 @media (max-width: 760px) {
   #table-3d-stage { border-radius: 20px; }
 
+  .game-layout:has(.mahjong-table.table-3d-active) {
+    padding: 8px;
+  }
+
   .mahjong-table.table-3d-active {
     min-height: 610px;
     height: clamp(610px, 78vh, 760px);
@@ -279,15 +327,31 @@
   }
 
   .table-3d-active .table-center.classic-table-counter {
-    width: 154px;
-    height: 154px;
-    min-height: 154px;
-    padding: 43px 24px 34px;
+    width: 190px;
+    height: 190px;
+    min-height: 190px;
+    padding: 54px 29px 42px;
   }
 
-  .table-3d-active .round-title { font-size: 21px; }
-  .table-3d-active .counter-score { min-width: 58px; }
-  .table-3d-active .table-dora-tray { top: 43px; }
+  .table-3d-active .round-title { font-size: 27px; }
+  .table-3d-active .center-meta { font-size: 9px; }
+  .table-3d-active .turn-indicator { bottom: 27px; font-size: 10px; }
+  .table-3d-active .counter-score { min-width: 70px; font-size: 7px; }
+  .table-3d-active .counter-score b { font-size: 11px; }
+  .table-3d-active .counter-score strong { font-size: 9px; }
+
+  .table-3d-active .table-dora-tray {
+    left: 14px;
+    top: 14px;
+    min-height: 50px;
+    padding: 6px 8px;
+  }
+
+  .table-3d-active .dora-tray-title { font-size: 9px; }
+  .table-3d-active .table-dora-tray .tile { width: 34px; height: 45px; }
+  .table-3d-active .table-dora-tray .tile-rank { font-size: 17px; }
+  .table-3d-active .table-dora-tray .tile-suit { font-size: 10px; }
+  .table-3d-active .table-dora-tray .tile-honor { font-size: 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
