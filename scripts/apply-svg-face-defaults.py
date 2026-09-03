@@ -41,8 +41,13 @@ patch('client/src/dev-tuning.ts', [
 # readDevTuning() is cached separately from the dev panel, so migrate legacy exact values there too.
 patch('client/src/table-3d.ts', [
     (
-        "  if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;\n  devTuningCache = parsed;",
         "  if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;\n"
+        "  if (parsed.left.x === -90 && parsed.left.z === -90 && parsed.left.y === 0) parsed.left.y = 180;\n"
+        "  if (parsed.right.x === -90 && parsed.right.z === 90 && parsed.right.y === 0) parsed.right.y = 180;\n"
+        "  devTuningCache = parsed;",
+        "  if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;\n"
+        "  if (parsed.left.x === -90 && parsed.left.z === -90 && parsed.left.y === 0) parsed.left.y = 180;\n"
+        "  if (parsed.right.x === -90 && parsed.right.z === 90 && parsed.right.y === 0) parsed.right.y = 180;\n"
         "  if (Math.abs(parsed.tiles.faceScale - 1.1) < .0001) parsed.tiles.faceScale = .87;\n"
         "  if (parsed.tiles.bodyColor.toLowerCase() === '#ffffff') parsed.tiles.bodyColor = '#fbfbfb';\n"
         "  if (parsed.tiles.faceTint.toLowerCase() === '#ffffff') parsed.tiles.faceTint = '#fbfbfb';\n"
