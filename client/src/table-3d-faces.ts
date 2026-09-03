@@ -100,20 +100,20 @@ function drawBeginnerBadge(
   color: string,
   wide = false,
 ): void {
-  const width = wide ? 66 : 44;
-  const height = 30;
-  const x = 160 - width - 11;
-  const y = 11;
+  const width = wide ? 98 : 60;
+  const height = 43;
+  const x = 160 - width - 8;
+  const y = 8;
   ctx.save();
-  ctx.fillStyle = 'rgba(255,253,245,.94)';
-  ctx.strokeStyle = 'rgba(35,48,40,.2)';
-  ctx.lineWidth = 2;
+  ctx.fillStyle = 'rgba(255,253,245,.97)';
+  ctx.strokeStyle = 'rgba(35,48,40,.24)';
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.roundRect(x, y, width, height, 8);
+  ctx.roundRect(x, y, width, height, 10);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = color;
-  ctx.font = `800 ${wide ? 13 : 18}px Inter, Arial, sans-serif`;
+  ctx.font = `850 ${wide ? 18 : 24}px Inter, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + width / 2, y + height / 2 + .5);
