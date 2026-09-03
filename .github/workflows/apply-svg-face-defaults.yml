@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
 
+# One-shot tuning workflow; removed after the generated commit lands.
 jobs:
   apply:
     runs-on: ubuntu-latest
