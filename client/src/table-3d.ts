@@ -8,6 +8,8 @@ const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
 // ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
 // Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
 const TILE_FACE_OFFSET = .112;
+const TILE_BACK_OFFSET = .118;
+const OPPONENT_RACK_LEAN = .17;
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 const stageRoot = document.querySelector<HTMLDivElement>('#table-3d-stage');
@@ -84,6 +86,7 @@ type TableRuntime = {
   actorRoot: any;
   tileGeometry: any;
   faceGeometry: any;
+  backGeometry: any;
   ivoryMaterial: any;
   backMaterial: any;
   faceMaterials: Map<string, any>;
@@ -254,12 +257,12 @@ function baseTransform(spec: TileSpec): Transform {
     }
   } else if (spec.zone === 'rack') {
     const centered = spec.index - (spec.total - 1) / 2;
-    const spacing = .35;
-    // Opponent concealed tiles also stand upright. Pitch gives the long face its vertical height;
-    // yaw then turns that face toward the owner of the rack rather than toward the table centre.
-    transform.y = .34;
-    transform.pitch = Math.PI / 2;
-    transform.scale = .76;
+    const spacing = .39;
+    // Concealed racks lean slightly toward the table. From the player's lower camera angle this
+    // exposes the coloured backs together with a narrow ivory side, like a physical mahjong rack.
+    transform.y = .37;
+    transform.pitch = Math.PI / 2 + OPPONENT_RACK_LEAN;
+    transform.scale = .84;
     if (spec.side === 'top') {
       transform.x = centered * spacing;
       transform.z = -4.08;
@@ -389,6 +392,24 @@ function roundedTileGeometry(THREE: any): any {
   return geometry;
 }
 
+function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: number): any {
+  const x0 = -width / 2;
+  const x1 = width / 2;
+  const y0 = -depth / 2;
+  const y1 = depth / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x0 + radius, y0);
+  shape.lineTo(x1 - radius, y0);
+  shape.quadraticCurveTo(x1, y0, x1, y0 + radius);
+  shape.lineTo(x1, y1 - radius);
+  shape.quadraticCurveTo(x1, y1, x1 - radius, y1);
+  shape.lineTo(x0 + radius, y1);
+  shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
+  shape.lineTo(x0, y0 + radius);
+  shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  return new THREE.ShapeGeometry(shape, 8);
+}
+
 function disposeFaceMaterials(rt: TableRuntime): void {
   for (const material of rt.faceMaterials.values()) {
     material.map?.dispose?.();
@@ -444,8 +465,8 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
 
   // A separate physical rear face matters once a hand stands upright: opponents' tile faces point
   // toward their owners, while the centre/camera must see the tile backs rather than bare ivory.
-  const rear = new THREE.Mesh(rt.faceGeometry, rt.backMaterial);
-  rear.position.y = -TILE_FACE_OFFSET;
+  const rear = new THREE.Mesh(rt.backGeometry, rt.backMaterial);
+  rear.position.y = -TILE_BACK_OFFSET;
   rear.rotation.x = Math.PI / 2;
   rear.renderOrder = 2;
   rear.receiveShadow = true;
@@ -788,9 +809,9 @@ function createRuntime(THREE: any): TableRuntime {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x0b2017, 16, 29);
 
-  const camera = new THREE.PerspectiveCamera(37, 1, .1, 60);
-  camera.position.set(0, 10.15, 11.55);
-  camera.lookAt(0, .08, .20);
+  const camera = new THREE.PerspectiveCamera(34, 1, .1, 60);
+  camera.position.set(0, 7.75, 12.75);
+  camera.lookAt(0, .25, .15);
 
   scene.add(new THREE.HemisphereLight(0xf3ead7, 0x0b1811, 1.35));
   const key = new THREE.DirectionalLight(0xffefd2, 2.3);
@@ -830,15 +851,18 @@ function createRuntime(THREE: any): TableRuntime {
   scene.add(actorRoot);
 
   const tileGeometry = roundedTileGeometry(THREE);
-  const faceGeometry = new THREE.PlaneGeometry(.37, .51);
+  const faceGeometry = roundedFaceGeometry(THREE, .39, .53, .038);
+  // The back cap deliberately reaches over the bevel so the green back reads as one continuous
+  // piece instead of a small sticker floating inside a cream border.
+  const backGeometry = roundedFaceGeometry(THREE, .438, .578, .052);
   const ivoryMaterial = new THREE.MeshStandardMaterial({
-    color: 0xe9dfc8,
+    color: 0xf7f1df,
     roughness: .54,
     metalness: 0,
   });
   const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true, 'classic'));
   backTexture.colorSpace = THREE.SRGBColorSpace;
-  const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: .65, metalness: 0 });
+  const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: .58, metalness: 0 });
 
   const rt: TableRuntime = {
     THREE,
@@ -848,6 +872,7 @@ function createRuntime(THREE: any): TableRuntime {
     actorRoot,
     tileGeometry,
     faceGeometry,
+    backGeometry,
     ivoryMaterial,
     backMaterial,
     faceMaterials: new Map(),
@@ -936,6 +961,7 @@ function disposeRuntime(): void {
   stage.replaceChildren();
   rt.tileGeometry.dispose();
   rt.faceGeometry.dispose();
+  rt.backGeometry.dispose();
   rt.ivoryMaterial.dispose();
   rt.backMaterial.map?.dispose?.();
   rt.backMaterial.dispose();
