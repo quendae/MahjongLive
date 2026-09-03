@@ -37,6 +37,9 @@ type DevTuning = {
     riverJitter: number;
     riverYawJitter: number;
     riverTiltJitter: number;
+    meldGap: number;
+    meldRowGap: number;
+    calledTileRotation: number;
   };
   tableGeometry: { frameTopY: number; feltTopY: number; frameWidth: number; frameThickness: number; feltThickness: number };
   ui: {
@@ -58,13 +61,16 @@ type DevTuning = {
   tableImage: string | null;
   woodColor: string;
   backColor: string;
+  backPattern: string;
+  backPatternStrength: number;
+  backImage: string | null;
   sceneColor: string;
 };
 
 const DEFAULT_DEV_TUNING: DevTuning = {
   camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: -.65, targetZ: .15, fov: 27 },
-  left: { x: -90, y: 0, z: -90 },
-  right: { x: -90, y: 0, z: 90 },
+  left: { x: -90, y: 180, z: -90 },
+  right: { x: -90, y: 180, z: 90 },
   top: { x: -90, y: 180, z: 0 },
   bottom: { x: 90, y: 0, z: 0 },
   tiles: {
@@ -85,6 +91,9 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     riverJitter: .028,
     riverYawJitter: 3.2,
     riverTiltJitter: .7,
+    meldGap: .36,
+    meldRowGap: .48,
+    calledTileRotation: 90,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -106,6 +115,9 @@ const DEFAULT_DEV_TUNING: DevTuning = {
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
+  backPattern: 'ribbed',
+  backPatternStrength: .48,
+  backImage: null,
   sceneColor: '#071b13',
 };
 
@@ -142,6 +154,8 @@ type TileSpec = {
   drawn: boolean;
   latest: boolean;
   tileId: number | null;
+  called?: boolean;
+  calledFrom?: number | null;
   element: HTMLElement | null;
 };
 
@@ -199,6 +213,8 @@ type TableRuntime = {
   backShellMaterial: any;
   tableTexture: any | null;
   tableTextureSource: string | null;
+  backTexture: any | null;
+  backTextureSource: string | null;
   faceMaterials: Map<string, any>;
   actors: Map<string, TileActor>;
   raycaster: any;
@@ -263,6 +279,9 @@ function readDevTuning(): DevTuning {
       riverJitter: finiteNumber(raw.tiles?.riverJitter, DEFAULT_DEV_TUNING.tiles.riverJitter),
       riverYawJitter: finiteNumber(raw.tiles?.riverYawJitter, DEFAULT_DEV_TUNING.tiles.riverYawJitter),
       riverTiltJitter: finiteNumber(raw.tiles?.riverTiltJitter, DEFAULT_DEV_TUNING.tiles.riverTiltJitter),
+      meldGap: finiteNumber(raw.tiles?.meldGap, DEFAULT_DEV_TUNING.tiles.meldGap),
+      meldRowGap: finiteNumber(raw.tiles?.meldRowGap, DEFAULT_DEV_TUNING.tiles.meldRowGap),
+      calledTileRotation: finiteNumber(raw.tiles?.calledTileRotation, DEFAULT_DEV_TUNING.tiles.calledTileRotation),
     },
     tableGeometry: {
       frameTopY: finiteNumber(raw.tableGeometry?.frameTopY, DEFAULT_DEV_TUNING.tableGeometry.frameTopY),
@@ -290,9 +309,14 @@ function readDevTuning(): DevTuning {
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULT_DEV_TUNING.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULT_DEV_TUNING.backColor,
+    backPattern: typeof raw.backPattern === 'string' ? raw.backPattern : DEFAULT_DEV_TUNING.backPattern,
+    backPatternStrength: finiteNumber(raw.backPatternStrength, DEFAULT_DEV_TUNING.backPatternStrength),
+    backImage: typeof raw.backImage === 'string' ? raw.backImage : null,
     sceneColor: typeof raw.sceneColor === 'string' ? raw.sceneColor : DEFAULT_DEV_TUNING.sceneColor,
   };
   if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;
+  if (parsed.left.x === -90 && parsed.left.z === -90 && parsed.left.y === 0) parsed.left.y = 180;
+  if (parsed.right.x === -90 && parsed.right.z === 90 && parsed.right.y === 0) parsed.right.y = 180;
   devTuningCache = parsed;
   return parsed;
 }
@@ -490,23 +514,29 @@ function baseTransform(spec: TileSpec): Transform {
   } else {
     const row = Math.floor(spec.index / 8);
     const col = spec.index % 8;
+    const gap = tuning.tiles.meldGap;
+    const rowGap = tuning.tiles.meldRowGap;
     transform.scale = .80 * tuning.tiles.meldScale;
-    // Every player's open sets start in that player's lower-right corner and grow away from it.
+    // Open sets hug the player's lower-right rail. Tiles within a meld are nearly touching.
     if (spec.side === 'bottom') {
-      transform.x = 5.52 - col * .44;
-      transform.z = 4.34 - row * .58;
+      transform.x = 5.67 - col * gap;
+      transform.z = 4.48 - row * rowGap;
     } else if (spec.side === 'top') {
-      transform.x = -5.52 + col * .44;
-      transform.z = -4.34 + row * .58;
+      transform.x = -5.67 + col * gap;
+      transform.z = -4.48 + row * rowGap;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -5.52 + row * .58;
-      transform.z = 4.34 - col * .44;
+      transform.x = -5.67 + row * rowGap;
+      transform.z = 4.48 - col * gap;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 5.52 - row * .58;
-      transform.z = -4.34 + col * .44;
+      transform.x = 5.67 - row * rowGap;
+      transform.z = -4.48 + col * gap;
       transform.yaw = -Math.PI / 2;
+    }
+    if (spec.called) {
+      transform.yaw += radians(tuning.tiles.calledTileRotation);
+      transform.y += .012;
     }
   }
 
@@ -594,9 +624,9 @@ function roundedTileGeometry(THREE: any): any {
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: height,
     steps: 1,
-    curveSegments: 4,
+    curveSegments: 10,
     bevelEnabled: true,
-    bevelSegments: 2,
+    bevelSegments: 4,
     bevelSize: .018,
     bevelThickness: .018,
   });
@@ -606,9 +636,9 @@ function roundedTileGeometry(THREE: any): any {
 }
 
 function roundedBackShellGeometry(THREE: any): any {
-  const width = .448;
-  const depth = .588;
-  const height = .040;
+  const width = .430;
+  const depth = .570;
+  const height = .052;
   const radius = .058;
   const x0 = -width / 2;
   const x1 = width / 2;
@@ -625,8 +655,8 @@ function roundedBackShellGeometry(THREE: any): any {
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: height, steps: 1, curveSegments: 6, bevelEnabled: true,
-    bevelSegments: 2, bevelSize: .009, bevelThickness: .009,
+    depth: height, steps: 1, curveSegments: 10, bevelEnabled: true,
+    bevelSegments: 4, bevelSize: .009, bevelThickness: .009,
   });
   geometry.rotateX(-Math.PI / 2);
   geometry.center();
@@ -648,7 +678,7 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
-  const geometry = new THREE.ShapeGeometry(shape, 8);
+  const geometry = new THREE.ShapeGeometry(shape, 14);
   const positions = geometry.getAttribute('position');
   const uvs = geometry.getAttribute('uv');
   for (let index = 0; index < positions.count; index += 1) {
@@ -667,7 +697,7 @@ function disposeFaceMaterials(rt: TableRuntime): void {
 }
 
 function materialForFace(rt: TableRuntime, label: string | null, back = false): any {
-  if (back) return rt.backMaterial;
+  if (back) return rt.ivoryMaterial;
   const key = `${rt.faceMode}:${label ?? 'blank'}`;
   const cached = rt.faceMaterials.get(key);
   if (cached) return cached;
@@ -898,8 +928,9 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
     if (side !== 'bottom') {
       const rack = [...zone.querySelectorAll<HTMLElement>('.opponent-hand .tile')];
       rack.forEach((element, index) => {
+        const tileId = elementTileId(element);
         specs.push({
-          key: `concealed:${player}:${index}`,
+          key: tileId === null ? `concealed:${player}:${index}` : `tile:${tileId}`,
           zone: 'rack',
           side,
           player,
@@ -909,9 +940,9 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
           back: true,
           selectable: false,
           advised: false,
-          drawn: false,
+          drawn: element.classList.contains('tile-drawn'),
           latest: false,
-          tileId: null,
+          tileId,
           element,
         });
       });
@@ -935,6 +966,8 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
         drawn: false,
         latest: false,
         tileId,
+        called: element.classList.contains('tile-meld-called'),
+        calledFrom: element.dataset.calledFrom === undefined ? null : Number(element.dataset.calledFrom),
         element,
       });
     });
@@ -1080,7 +1113,7 @@ function createRuntime(THREE: any): TableRuntime {
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.65));
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1096,8 +1129,8 @@ function createRuntime(THREE: any): TableRuntime {
   camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
 
-  scene.add(new THREE.HemisphereLight(0xf3ead7, 0x0b1811, 1.35));
-  const key = new THREE.DirectionalLight(0xffefd2, 2.3);
+  scene.add(new THREE.HemisphereLight(0xf8fbff, 0x0d1712, 1.28));
+  const key = new THREE.DirectionalLight(0xffffff, 2.18);
   key.position.set(-4.8, 11, 7.2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -1109,7 +1142,7 @@ function createRuntime(THREE: any): TableRuntime {
   key.shadow.camera.bottom = -8;
   scene.add(key);
 
-  const fill = new THREE.PointLight(0x79ae92, .75, 17, 2);
+  const fill = new THREE.PointLight(0x9dc5b0, .58, 17, 2);
   fill.position.set(4.6, 4.5, -4.5);
   scene.add(fill);
 
@@ -1154,10 +1187,8 @@ function createRuntime(THREE: any): TableRuntime {
     roughness: tuning.tiles.bodyRoughness,
     metalness: 0,
   });
-  const backTexture = new THREE.CanvasTexture(createFaceCanvas(null, true, 'classic'));
-  backTexture.colorSpace = THREE.SRGBColorSpace;
   const backMaterial = new THREE.MeshStandardMaterial({
-    map: backTexture, color: tuning.backColor, roughness: .58, metalness: 0,
+    color: tuning.backColor, roughness: .62, metalness: 0,
     side: THREE.DoubleSide,
   });
   const backShellMaterial = new THREE.MeshStandardMaterial({
@@ -1185,6 +1216,8 @@ function createRuntime(THREE: any): TableRuntime {
     backShellMaterial,
     tableTexture: null,
     tableTextureSource: null,
+    backTexture: null,
+    backTextureSource: null,
     faceMaterials: new Map(),
     actors: new Map(),
     raycaster: new THREE.Raycaster(),
@@ -1283,6 +1316,105 @@ function syncTableTexture(rt: TableRuntime, source: string | null): void {
   });
 }
 
+function createBackPatternCanvas(pattern: string, strength: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 384;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  const s = Math.max(0, Math.min(1, strength));
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (pattern === 'solid') return canvas;
+
+  const dark = (alpha: number) => `rgba(20,28,24,${(alpha * s).toFixed(3)})`;
+  const light = (alpha: number) => `rgba(255,255,255,${(alpha * s).toFixed(3)})`;
+  ctx.lineCap = 'round';
+
+  if (pattern === 'ribbed') {
+    for (let x = 10; x < canvas.width; x += 14) {
+      ctx.strokeStyle = dark(.26); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x, 5); ctx.lineTo(x, canvas.height - 5); ctx.stroke();
+      ctx.strokeStyle = light(.22); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x + 4, 5); ctx.lineTo(x + 4, canvas.height - 5); ctx.stroke();
+    }
+  } else if (pattern === 'woven') {
+    ctx.lineWidth = 2;
+    for (let x = -canvas.height; x < canvas.width + canvas.height; x += 18) {
+      ctx.strokeStyle = dark(.20); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + canvas.height, canvas.height); ctx.stroke();
+      ctx.strokeStyle = light(.18); ctx.beginPath(); ctx.moveTo(x + 8, 0); ctx.lineTo(x + canvas.height + 8, canvas.height); ctx.stroke();
+    }
+    for (let x = 0; x < canvas.width + canvas.height; x += 22) {
+      ctx.strokeStyle = dark(.12); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - canvas.height, canvas.height); ctx.stroke();
+    }
+  } else if (pattern === 'diamond' || pattern === 'classic') {
+    ctx.lineWidth = pattern === 'classic' ? 3 : 2;
+    const step = pattern === 'classic' ? 34 : 28;
+    for (let y = -step; y < canvas.height + step; y += step) {
+      for (let x = -step; x < canvas.width + step; x += step) {
+        ctx.strokeStyle = dark(pattern === 'classic' ? .24 : .18);
+        ctx.beginPath();
+        ctx.moveTo(x, y + step / 2); ctx.lineTo(x + step / 2, y); ctx.lineTo(x + step, y + step / 2); ctx.lineTo(x + step / 2, y + step); ctx.closePath();
+        ctx.stroke();
+      }
+    }
+    if (pattern === 'classic') {
+      ctx.strokeStyle = dark(.38); ctx.lineWidth = 6; ctx.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
+      ctx.strokeStyle = light(.25); ctx.lineWidth = 2; ctx.strokeRect(28, 28, canvas.width - 56, canvas.height - 56);
+    }
+  } else if (pattern === 'waves') {
+    ctx.lineWidth = 3;
+    for (let y = 18; y < canvas.height; y += 24) {
+      ctx.strokeStyle = dark(.22);
+      ctx.beginPath();
+      for (let x = 0; x <= canvas.width; x += 8) {
+        const yy = y + Math.sin((x / 38) * Math.PI * 2) * 5;
+        if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+      }
+      ctx.stroke();
+    }
+  }
+  return canvas;
+}
+
+function backTextureKey(tuning: DevTuning): string {
+  if (tuning.backPattern === 'custom' && tuning.backImage) {
+    return `custom:${tuning.backImage.length}:${tuning.backImage.slice(-48)}`;
+  }
+  return `pattern:${tuning.backPattern}:${tuning.backPatternStrength.toFixed(3)}`;
+}
+
+function configureBackTexture(rt: TableRuntime, texture: any): void {
+  texture.colorSpace = rt.THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.generateMipmaps = true;
+  texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
+  texture.magFilter = rt.THREE.LinearFilter;
+  rt.backTexture = texture;
+  rt.backMaterial.map = texture;
+  rt.backMaterial.needsUpdate = true;
+}
+
+function syncBackTexture(rt: TableRuntime, tuning: DevTuning): void {
+  const key = backTextureKey(tuning);
+  if (rt.backTextureSource === key) return;
+  rt.backTextureSource = key;
+  rt.backTexture?.dispose?.();
+  rt.backTexture = null;
+  rt.backMaterial.map = null;
+  rt.backMaterial.needsUpdate = true;
+
+  if (tuning.backPattern === 'custom' && tuning.backImage) {
+    new rt.THREE.TextureLoader().load(tuning.backImage, (texture: any) => {
+      if (rt.disposed || rt.backTextureSource !== key) { texture.dispose(); return; }
+      configureBackTexture(rt, texture);
+    });
+    return;
+  }
+  const texture = new rt.THREE.CanvasTexture(createBackPatternCanvas(tuning.backPattern, tuning.backPatternStrength));
+  configureBackTexture(rt, texture);
+}
+
 function applyDevTuning(rt: TableRuntime): void {
   const tuning = readDevTuning();
   rt.camera.fov = tuning.camera.fov;
@@ -1298,6 +1430,7 @@ function applyDevTuning(rt: TableRuntime): void {
   applyTableGeometry(rt, tuning);
   rt.backMaterial.color.set(tuning.backColor);
   rt.backShellMaterial.color.set(tuning.backColor);
+  syncBackTexture(rt, tuning);
   rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
   for (const material of rt.faceMaterials.values()) {
     material.color?.set?.(tuning.tiles.faceTint);
@@ -1409,7 +1542,7 @@ function disposeRuntime(): void {
   rt.feltMaterial.dispose();
   rt.backShellMaterial.dispose();
   rt.tableTexture?.dispose?.();
-  rt.backMaterial.map?.dispose?.();
+  rt.backTexture?.dispose?.();
   rt.backMaterial.dispose();
   disposeFaceMaterials(rt);
   rt.renderer.dispose();

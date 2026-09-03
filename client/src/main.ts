@@ -151,6 +151,8 @@ function tileMarkup(
     eligible?: boolean;
     disabled?: boolean;
     called?: boolean;
+    meldCalled?: boolean;
+    calledFrom?: PlayerIndex;
     advised?: boolean;
     adviceText?: string;
   } = {},
@@ -163,22 +165,38 @@ function tileMarkup(
   if (options.eligible) classes.push('tile-eligible');
   if (options.disabled) classes.push('tile-disabled');
   if (options.called) classes.push('tile-called');
+  if (options.meldCalled) classes.push('tile-meld-called');
   if (options.advised) classes.push('tile-advised');
-  const attrs = options.clickable && id >= 0 ? ` data-tile-id="${id}" role="button" tabindex="0"` : '';
+  const engineAttr = id >= 0 ? ` data-engine-tile-id="${id}"` : '';
+  const actionAttr = options.clickable && id >= 0 ? ` data-tile-id="${id}" role="button" tabindex="0"` : '';
+  const calledFromAttr = options.calledFrom !== undefined ? ` data-called-from="${options.calledFrom}"` : '';
   const title = options.adviceText ? ` title="${options.adviceText}"` : '';
-  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${attrs}${title}>${tileFace(tile)}</div>`;
+  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${engineAttr}${actionAttr}${calledFromAttr}${title}>${tileFace(tile)}</div>`;
 }
 
-function tileBackMarkup(compact = false): string {
-  return `<div class="tile tile-back${compact ? ' tile-compact' : ''}" aria-hidden="true"><span></span></div>`;
+function tileBackMarkup(
+  compact = false,
+  options: { engineTileId?: number; drawn?: boolean } = {},
+): string {
+  const idAttr = typeof options.engineTileId === 'number' ? ` data-engine-tile-id="${options.engineTileId}"` : '';
+  const classes = `tile tile-back${compact ? ' tile-compact' : ''}${options.drawn ? ' tile-drawn' : ''}`;
+  return `<div class="${classes}" aria-hidden="true"${idAttr}><span></span></div>`;
 }
 
 function meldMarkup(meld: PlayerMeld): string {
   const hiddenOuter = meld.type === 'quad' && meld.isOpen !== true;
   return `<div class="meld meld-${meld.type}">${meld.tiles
-    .map((tile, index) => hiddenOuter && (index === 0 || index === meld.tiles.length - 1)
-      ? tileBackMarkup(true)
-      : tileMarkup(tile, { compact: true }))
+    .map((tile, index) => {
+      if (hiddenOuter && (index === 0 || index === meld.tiles.length - 1)) {
+        return tileBackMarkup(true, { engineTileId: tile.id });
+      }
+      const meldCalled = meld.calledTileId !== undefined && tile.id === meld.calledTileId;
+      return tileMarkup(tile, {
+        compact: true,
+        meldCalled,
+        calledFrom: meldCalled ? meld.calledFrom : undefined,
+      });
+    })
     .join('')}</div>`;
 }
 
@@ -210,7 +228,13 @@ function opponentPanel(player: PlayerIndex): string {
   const state = round.players[player];
   const position = seatPosition(player, current.state.humanSeat);
   const concealedCount = Math.max(0, state.concealed.length);
-  const backs = Array.from({ length: concealedCount }, () => tileBackMarkup(true)).join('');
+  const drawnId = round.phase.kind === 'awaiting-discard' && round.phase.player === player
+    ? round.phase.drawnTileId
+    : null;
+  const backs = state.concealed.map((tile) => tileBackMarkup(true, {
+    engineTileId: tile.id,
+    drawn: drawnId !== null && tile.id === drawnId,
+  })).join('');
   const melds = state.melds.map(meldMarkup).join('');
   const discards = state.discards.map((discard) => tileMarkup(discard.tile, {
     compact: true,

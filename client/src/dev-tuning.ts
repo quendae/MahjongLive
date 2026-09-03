@@ -29,6 +29,9 @@ type DevTuning = {
     riverJitter: number;
     riverYawJitter: number;
     riverTiltJitter: number;
+    meldGap: number;
+    meldRowGap: number;
+    calledTileRotation: number;
   };
   tableGeometry: {
     frameTopY: number;
@@ -56,13 +59,16 @@ type DevTuning = {
   tableImage: string | null;
   woodColor: string;
   backColor: string;
+  backPattern: string;
+  backPatternStrength: number;
+  backImage: string | null;
   sceneColor: string;
 };
 
 const DEFAULTS: DevTuning = {
   camera: { x: 0, y: 10, z: 12.75, targetX: 0, targetY: -.65, targetZ: .15, fov: 27 },
-  left: { x: -90, y: 0, z: -90 },
-  right: { x: -90, y: 0, z: 90 },
+  left: { x: -90, y: 180, z: -90 },
+  right: { x: -90, y: 180, z: 90 },
   top: { x: -90, y: 180, z: 0 },
   bottom: { x: 90, y: 0, z: 0 },
   tiles: {
@@ -83,6 +89,9 @@ const DEFAULTS: DevTuning = {
     riverJitter: .028,
     riverYawJitter: 3.2,
     riverTiltJitter: .7,
+    meldGap: .36,
+    meldRowGap: .48,
+    calledTileRotation: 90,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -104,6 +113,9 @@ const DEFAULTS: DevTuning = {
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
+  backPattern: 'ribbed',
+  backPatternStrength: .48,
+  backImage: null,
   sceneColor: '#071b13',
 };
 
@@ -154,6 +166,9 @@ function loadSettings(): DevTuning {
       riverJitter: finite(raw.tiles?.riverJitter, DEFAULTS.tiles.riverJitter),
       riverYawJitter: finite(raw.tiles?.riverYawJitter, DEFAULTS.tiles.riverYawJitter),
       riverTiltJitter: finite(raw.tiles?.riverTiltJitter, DEFAULTS.tiles.riverTiltJitter),
+      meldGap: finite(raw.tiles?.meldGap, DEFAULTS.tiles.meldGap),
+      meldRowGap: finite(raw.tiles?.meldRowGap, DEFAULTS.tiles.meldRowGap),
+      calledTileRotation: finite(raw.tiles?.calledTileRotation, DEFAULTS.tiles.calledTileRotation),
     },
     tableGeometry: {
       frameTopY: finite(raw.tableGeometry?.frameTopY, DEFAULTS.tableGeometry.frameTopY),
@@ -181,12 +196,17 @@ function loadSettings(): DevTuning {
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULTS.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULTS.backColor,
+    backPattern: typeof raw.backPattern === 'string' ? raw.backPattern : DEFAULTS.backPattern,
+    backPatternStrength: finite(raw.backPatternStrength, DEFAULTS.backPatternStrength),
+    backImage: typeof raw.backImage === 'string' ? raw.backImage : null,
     sceneColor: typeof raw.sceneColor === 'string' ? raw.sceneColor : DEFAULTS.sceneColor,
   };
 }
 
 let settings = loadSettings();
 if (Math.abs(settings.tiles.riverRowGap - .55) < .0001) settings.tiles.riverRowGap = .60;
+if (settings.left.x === -90 && settings.left.z === -90 && settings.left.y === 0) settings.left.y = 180;
+if (settings.right.x === -90 && settings.right.z === 90 && settings.right.y === 0) settings.right.y = 180;
 let panel: HTMLElement | null = null;
 
 function syncDevOpenClass(): void {
@@ -361,6 +381,25 @@ function colorControl(
   parent.append(row);
 }
 
+async function optimizedBackImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxDimension = 768;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not create image canvas');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/webp', .82);
+  } finally {
+    bitmap.close?.();
+  }
+}
+
 async function optimizedTableImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   try {
@@ -433,6 +472,9 @@ function buildPanel(): HTMLElement {
   numberSlider(tileSection, 'Opponent size', .60, 1.50, .01, () => settings.tiles.opponentScale, (v) => { settings.tiles.opponentScale = v; }, '×', DEFAULTS.tiles.opponentScale);
   numberSlider(tileSection, 'Discard size', .50, 1.40, .01, () => settings.tiles.riverScale, (v) => { settings.tiles.riverScale = v; }, '×', DEFAULTS.tiles.riverScale);
   numberSlider(tileSection, 'Meld size', .50, 1.40, .01, () => settings.tiles.meldScale, (v) => { settings.tiles.meldScale = v; }, '×', DEFAULTS.tiles.meldScale);
+  numberSlider(tileSection, 'Meld gap', .30, .55, .01, () => settings.tiles.meldGap, (v) => { settings.tiles.meldGap = v; }, '', DEFAULTS.tiles.meldGap);
+  numberSlider(tileSection, 'Meld row gap', .38, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
+  numberSlider(tileSection, 'Called tile turn', -180, 180, 1, () => settings.tiles.calledTileRotation, (v) => { settings.tiles.calledTileRotation = v; }, '°', DEFAULTS.tiles.calledTileRotation);
   tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');
   root.append(tileSection);
 
@@ -562,7 +604,57 @@ function buildPanel(): HTMLElement {
   presetRow.append(presetLabel, preset);
   surfaces.append(presetRow);
   colorControl(surfaces, 'Back RGB', () => settings.backColor, (v) => { settings.backColor = v; preset.value = ''; }, DEFAULTS.backColor);
-  surfaces.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The colored back is a physical cap around the rear face; the pattern itself stays slightly inset.</p>');
+
+  const patternRow = document.createElement('div');
+  patternRow.className = 'dev-tuning-presets';
+  const patternLabel = document.createElement('label'); patternLabel.textContent = 'Back texture';
+  const pattern = document.createElement('select');
+  const patterns: [string, string][] = [
+    ['Fine ribs', 'ribbed'], ['Woven', 'woven'], ['Diamonds', 'diamond'],
+    ['Soft waves', 'waves'], ['Classic lattice', 'classic'], ['Solid', 'solid'], ['Custom image', 'custom'],
+  ];
+  patterns.forEach(([name, value]) => {
+    const option = document.createElement('option'); option.textContent = name; option.value = value; pattern.append(option);
+  });
+  pattern.value = patterns.some(([, value]) => value === settings.backPattern) ? settings.backPattern : 'ribbed';
+  pattern.addEventListener('change', () => {
+    settings.backPattern = pattern.value;
+    saveAndBroadcast(`Back texture: ${pattern.selectedOptions[0]?.textContent ?? ''}`);
+  });
+  patternRow.append(patternLabel, pattern);
+  surfaces.append(patternRow);
+  numberSlider(surfaces, 'Pattern strength', 0, 1, .01, () => settings.backPatternStrength, (v) => { settings.backPatternStrength = v; }, '', DEFAULTS.backPatternStrength);
+
+  const backFileRow = document.createElement('div');
+  backFileRow.className = 'dev-tuning-file';
+  const backFileLabel = document.createElement('label'); backFileLabel.textContent = 'Back image';
+  const backFile = document.createElement('input'); backFile.type = 'file'; backFile.accept = 'image/*';
+  const backClear = document.createElement('button'); backClear.type = 'button'; backClear.className = 'dev-tuning-action'; backClear.textContent = 'Clear';
+  backFile.addEventListener('change', async () => {
+    const selected = backFile.files?.[0];
+    if (!selected) return;
+    if (selected.size > 8_000_000) { setStatus('Back image is over 8 MB.'); backFile.value = ''; return; }
+    setStatus(`Optimizing ${selected.name} for tile backs…`);
+    try {
+      settings.backImage = await optimizedBackImage(selected);
+      settings.backPattern = 'custom';
+      saveAndBroadcast(`Loaded back texture: ${selected.name}`);
+      root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false; syncDevOpenClass();
+    } catch {
+      setStatus('Could not decode/optimize that back image.');
+      backFile.value = '';
+    }
+  });
+  backClear.addEventListener('click', () => {
+    settings.backImage = null;
+    if (settings.backPattern === 'custom') settings.backPattern = DEFAULTS.backPattern;
+    backFile.value = '';
+    saveAndBroadcast('Custom back image cleared.');
+    root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false; syncDevOpenClass();
+  });
+  backFileRow.append(backFileLabel, backFile, backClear);
+  surfaces.append(backFileRow);
+  surfaces.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Patterns are generated at runtime and tinted by Back RGB. Custom images are optimized before being stored.</p>');
   root.append(surfaces);
 
   const actions = document.createElement('div');

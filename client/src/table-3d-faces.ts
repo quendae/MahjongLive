@@ -6,13 +6,15 @@ export function createFaceCanvas(
   mode: TileFaceMode = 'classic',
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = 160;
-  canvas.height = 216;
+  const renderScale = 2;
+  canvas.width = 160 * renderScale;
+  canvas.height = 216 * renderScale;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
+  ctx.scale(renderScale, renderScale);
 
-  ctx.fillStyle = back ? '#ffffff' : '#fffdf8';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = back ? '#ffffff' : '#fffefd';
+  ctx.fillRect(0, 0, 160, 216);
 
   // Fronts should read like a single porcelain/ivory surface. Keep the decorative border only
   // on tile backs; the old grey rounded front outline made every face look like an inset sticker.
@@ -72,7 +74,7 @@ export function createFaceCanvas(
   const honor = glyphs[text];
   if (honor) {
     ctx.fillStyle = honor.color;
-    ctx.font = 'bold 112px Georgia, "Times New Roman", serif';
+    ctx.font = '800 116px "Noto Serif CJK JP", "Yu Mincho", "MS Mincho", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(honor.glyph, 80, 111);
@@ -133,12 +135,12 @@ function drawMan(ctx: CanvasRenderingContext2D, rank: number, red: boolean): voi
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = red ? '#c53b33' : '#22352e';
-  ctx.font = '700 86px "Noto Serif CJK JP", "Yu Mincho", Georgia, serif';
-  ctx.fillText(numerals[rank - 1] ?? String(rank), 80, 74);
-  ctx.fillStyle = '#b93430';
-  ctx.font = '700 67px "Noto Serif CJK JP", "Yu Mincho", Georgia, serif';
-  ctx.fillText('萬', 80, 157);
+  ctx.fillStyle = red ? '#c22f2d' : '#18251f';
+  ctx.font = '800 88px "Noto Serif CJK JP", "Yu Mincho", "MS Mincho", serif';
+  ctx.fillText(numerals[rank - 1] ?? String(rank), 80, 70);
+  ctx.fillStyle = '#c5302d';
+  ctx.font = '800 70px "Noto Serif CJK JP", "Yu Mincho", "MS Mincho", serif';
+  ctx.fillText('萬', 80, 158);
   ctx.restore();
 }
 
@@ -158,33 +160,34 @@ function pinLayout(rank: number): readonly [number, number][] {
 }
 
 function drawPin(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {
-  const palette = red ? ['#c43c35'] : ['#2f6f98', '#c43c35', '#2d7751'];
+  const dark = '#18342d';
+  const palette = red ? ['#c9302c'] : ['#276f4f', '#c9302c', '#1d3850'];
   pinLayout(rank).forEach(([x, y], index) => {
-    const color = palette[index % palette.length];
-    const radius = rank === 1 ? 35 : 15.5;
+    const accent = palette[index % palette.length];
+    const radius = rank === 1 ? 37 : 15.5;
     ctx.save();
     ctx.translate(x, y);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = rank === 1 ? 7 : 5;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = rank === 1 ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * .58, 0, Math.PI * 2);
-    ctx.stroke();
-    for (let petal = 0; petal < 6; petal += 1) {
-      const angle = petal * Math.PI / 3;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.ellipse(Math.cos(angle) * radius * .42, Math.sin(angle) * radius * .42, radius * .13, radius * .25, angle, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = rank === 1 ? 7 : 4.5;
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = rank === 1 ? 5 : 3.5;
+    ctx.beginPath(); ctx.arc(0, 0, radius * .68, 0, Math.PI * 2); ctx.stroke();
+    if (rank === 1) {
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 4;
+      for (let spoke = 0; spoke < 10; spoke += 1) {
+        const a = spoke * Math.PI / 5;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * radius * .76, Math.sin(a) * radius * .76);
+        ctx.lineTo(Math.cos(a) * radius * .96, Math.sin(a) * radius * .96);
+        ctx.stroke();
+      }
     }
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * .13, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(0, 0, radius * .25, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fffefd';
+    ctx.beginPath(); ctx.arc(0, 0, radius * .10, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   });
 }
@@ -205,54 +208,60 @@ function souLayout(rank: number): readonly [number, number, number][] {
 
 function drawSou(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {
   if (rank === 1) {
-    // A compact peacock/bamboo-bird motif inspired by traditional 1-sou tiles.
+    // Traditional peacock / bird motif: deliberately bolder than the previous minimalist mark.
     ctx.save();
-    ctx.strokeStyle = red ? '#c43c35' : '#2b7750';
-    ctx.fillStyle = red ? '#c43c35' : '#2f7096';
+    ctx.translate(80, 108);
+    ctx.strokeStyle = '#1f6846';
+    ctx.fillStyle = '#2b6f93';
     ctx.lineCap = 'round';
-    ctx.lineWidth = 7;
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.moveTo(78, 182);
-    ctx.quadraticCurveTo(73, 125, 82, 76);
+    ctx.moveTo(-5, 62);
+    ctx.quadraticCurveTo(-12, 15, 3, -22);
     ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(85, 63, 24, 33, .34, 0, Math.PI * 2);
+    ctx.ellipse(6, -38, 20, 29, .25, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#2b7750';
-    ctx.lineWidth = 5;
-    for (const [dx, dy] of [[-32, -5], [-22, -29], [25, -26], [34, 1]]) {
+    ctx.fillStyle = '#c8322e';
+    ctx.beginPath(); ctx.arc(13, -48, 5.5, 0, Math.PI * 2); ctx.fill();
+    const tails = [[-37, 14], [-28, -7], [-15, -22], [25, -20], [36, 2], [31, 25]];
+    for (const [tx, ty] of tails) {
+      ctx.strokeStyle = '#28714b';
+      ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.moveTo(80, 96);
-      ctx.quadraticCurveTo(80 + dx * .55, 82 + dy * .45, 80 + dx, 77 + dy);
+      ctx.moveTo(-1, -5);
+      ctx.quadraticCurveTo(tx * .55, ty * .6, tx, ty);
       ctx.stroke();
+      ctx.fillStyle = '#fffefd';
+      ctx.strokeStyle = '#173c31';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(tx, ty, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#c8322e';
+      ctx.beginPath(); ctx.arc(tx, ty, 3.2, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.fillStyle = '#c43c35';
-    ctx.beginPath();
-    ctx.arc(95, 53, 6, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
     return;
   }
 
-  const green = red ? '#c43c35' : '#2d7952';
+  const green = '#236b47';
   souLayout(rank).forEach(([x, y, angle], index) => {
+    const accent = red || (rank === 5 && index === 2) ? '#c8322e' : green;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle * Math.PI / 180);
-    ctx.fillStyle = green;
+    ctx.strokeStyle = '#173c31';
+    ctx.lineWidth = 2.5;
+    ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.roundRect(-8.5, -25, 17, 50, 7);
+    ctx.roundRect(-9, -25, 18, 50, 8);
     ctx.fill();
-    ctx.fillStyle = !red && index % 5 === 2 ? '#c43c35' : '#f8f3de';
-    ctx.beginPath();
-    ctx.roundRect(-7, -3, 14, 6, 3);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(26,74,49,.28)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -20);
-    ctx.lineTo(0, 20);
     ctx.stroke();
+    ctx.fillStyle = '#fffefd';
+    ctx.beginPath(); ctx.roundRect(-7.5, -4, 15, 8, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.72)';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(-3, -19); ctx.lineTo(-3, 19); ctx.stroke();
     ctx.restore();
   });
 }
