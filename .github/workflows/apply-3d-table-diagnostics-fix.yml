@@ -23,6 +23,21 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Remove obsolete face-file UV patch target
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'scripts/fix-3d-table-diagnostics.mjs';
+          let text = fs.readFileSync(path, 'utf8');
+          const startNeedle = `  text = replaceOnce(\n    text,\n    "  return new THREE.ShapeGeometry(shape, 8);\\n}",`;
+          const start = text.indexOf(startNeedle);
+          if (start < 0) throw new Error('obsolete UV block start not found');
+          const endNeedle = `    'normalized rounded face UVs',\n  );\n`;
+          const end = text.indexOf(endNeedle, start);
+          if (end < 0) throw new Error('obsolete UV block end not found');
+          text = text.slice(0, start) + text.slice(end + endNeedle.length);
+          fs.writeFileSync(path, text);
+          NODE
       - name: Apply rendering and diagnostic changes
         run: node scripts/fix-3d-table-diagnostics.mjs
       - name: Typecheck client
