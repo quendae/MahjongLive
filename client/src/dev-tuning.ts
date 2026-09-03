@@ -76,11 +76,11 @@ const DEFAULTS: DevTuning = {
   tiles: {
     faceOffset: .128,
     faceRotateX: -90,
-    faceScale: 1.1,
+    faceScale: .87,
     faceTextureRotation: 0,
-    bodyColor: '#ffffff',
+    bodyColor: '#fbfbfb',
     bodyRoughness: .46,
-    faceTint: '#ffffff',
+    faceTint: '#fbfbfb',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
@@ -217,6 +217,10 @@ let settings = loadSettings();
 if (Math.abs(settings.tiles.riverRowGap - .55) < .0001) settings.tiles.riverRowGap = .60;
 if (settings.left.x === -90 && settings.left.z === -90 && settings.left.y === 0) settings.left.y = 180;
 if (settings.right.x === -90 && settings.right.z === 90 && settings.right.y === 0) settings.right.y = 180;
+// Migrate the previous exact visual defaults so existing localStorage picks up the SVG-tuned baseline.
+if (Math.abs(settings.tiles.faceScale - 1.1) < .0001) settings.tiles.faceScale = .87;
+if (settings.tiles.bodyColor.toLowerCase() === '#ffffff') settings.tiles.bodyColor = '#fbfbfb';
+if (settings.tiles.faceTint.toLowerCase() === '#ffffff') settings.tiles.faceTint = '#fbfbfb';
 let panel: HTMLElement | null = null;
 
 function syncDevOpenClass(): void {
@@ -585,7 +589,7 @@ function buildPanel(): HTMLElement {
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Pixel ratio has the biggest FPS impact. Shadow quality: 0=off, 1=512, 2=1024, 3=2048. Raise filtering for sharper angled tile/table textures.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">The browser animation loop is VSync-capped, so a 60 Hz display normally reports ~60 FPS even when the GPU could render far more. These sliders change GPU headroom/quality; FPS will only drop once the renderer can no longer sustain the display refresh. Pixel ratio has the biggest cost. Shadow quality: 0=off, 1=512, 2=1024, 3=2048.</p>');
   root.append(graphics);
 
   rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);
@@ -610,7 +614,7 @@ function buildPanel(): HTMLElement {
   numberSlider(tileSection, 'Meld gap', .30, .55, .01, () => settings.tiles.meldGap, (v) => { settings.tiles.meldGap = v; }, '', DEFAULTS.tiles.meldGap);
   numberSlider(tileSection, 'Meld row gap', .38, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
   numberSlider(tileSection, 'Called tile turn', -180, 180, 1, () => settings.tiles.calledTileRotation, (v) => { settings.tiles.calledTileRotation = v; }, '°', DEFAULTS.tiles.calledTileRotation);
-  numberSlider(tileSection, 'Called tile gap', 0, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
+  numberSlider(tileSection, 'Called tile gap', -.30, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
   tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');
   root.append(tileSection);
 

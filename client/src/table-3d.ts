@@ -78,11 +78,11 @@ const DEFAULT_DEV_TUNING: DevTuning = {
   tiles: {
     faceOffset: .128,
     faceRotateX: -90,
-    faceScale: 1.1,
+    faceScale: .87,
     faceTextureRotation: 0,
-    bodyColor: '#ffffff',
+    bodyColor: '#fbfbfb',
     bodyRoughness: .46,
-    faceTint: '#ffffff',
+    faceTint: '#fbfbfb',
     ownScale: 1,
     opponentScale: 1,
     riverScale: 1,
@@ -330,6 +330,9 @@ function readDevTuning(): DevTuning {
   if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;
   if (parsed.left.x === -90 && parsed.left.z === -90 && parsed.left.y === 0) parsed.left.y = 180;
   if (parsed.right.x === -90 && parsed.right.z === 90 && parsed.right.y === 0) parsed.right.y = 180;
+  if (Math.abs(parsed.tiles.faceScale - 1.1) < .0001) parsed.tiles.faceScale = .87;
+  if (parsed.tiles.bodyColor.toLowerCase() === '#ffffff') parsed.tiles.bodyColor = '#fbfbfb';
+  if (parsed.tiles.faceTint.toLowerCase() === '#ffffff') parsed.tiles.faceTint = '#fbfbfb';
   devTuningCache = parsed;
   return parsed;
 }
