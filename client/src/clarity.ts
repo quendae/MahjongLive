@@ -21,14 +21,14 @@ function setTileMode(mode: TileFaceMode): void {
 function learningLabel(raw: string | null): string | null {
   const label = raw?.trim().toLowerCase() ?? '';
   const suited = /^(?:red )?([1-9])([mps])$/.exec(label);
-  if (suited) return `${suited[1]}${suited[2].toUpperCase()}`;
+  if (suited) return suited[1];
   if (label === 'east') return 'E';
   if (label === 'south') return 'S';
   if (label === 'west') return 'W';
   if (label === 'north') return 'N';
-  if (label === 'white dragon') return 'WHITE';
-  if (label === 'green dragon') return 'GREEN';
-  if (label === 'red dragon') return 'RED';
+  if (label === 'white dragon') return 'W';
+  if (label === 'green dragon') return 'G';
+  if (label === 'red dragon') return 'R';
   return null;
 }
 

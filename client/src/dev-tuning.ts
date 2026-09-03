@@ -56,6 +56,7 @@ type DevTuning = {
   tableImage: string | null;
   woodColor: string;
   backColor: string;
+  sceneColor: string;
 };
 
 const DEFAULTS: DevTuning = {
@@ -77,7 +78,7 @@ const DEFAULTS: DevTuning = {
     riverScale: 1,
     meldScale: 1,
     riverDepth: 2.14,
-    riverRowGap: .55,
+    riverRowGap: .60,
     riverColumnGap: .45,
     riverJitter: .028,
     riverYawJitter: 3.2,
@@ -103,6 +104,7 @@ const DEFAULTS: DevTuning = {
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
+  sceneColor: '#071b13',
 };
 
 function finite(value: unknown, fallback: number): number {
@@ -179,11 +181,17 @@ function loadSettings(): DevTuning {
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULTS.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULTS.backColor,
+    sceneColor: typeof raw.sceneColor === 'string' ? raw.sceneColor : DEFAULTS.sceneColor,
   };
 }
 
 let settings = loadSettings();
+if (Math.abs(settings.tiles.riverRowGap - .55) < .0001) settings.tiles.riverRowGap = .60;
 let panel: HTMLElement | null = null;
+
+function syncDevOpenClass(): void {
+  document.body.classList.toggle('dev-tuning-open', Boolean(panel && !panel.hidden));
+}
 
 function saveAndBroadcast(message = ''): void {
   try {
@@ -216,6 +224,7 @@ function applyDomPreview(): void {
   rootStyle.setProperty('--dev-center-height', `${settings.ui.centerHeight}px`);
   rootStyle.setProperty('--dev-reaction-scale', String(settings.ui.reactionScale));
   rootStyle.setProperty('--dev-game-log-width', `${settings.ui.gameLogWidth}px`);
+  rootStyle.setProperty('--dev-scene-bg', settings.sceneColor);
 
   document.querySelectorAll<HTMLElement>('.mahjong-table').forEach((table) => {
     // In 3D the uploaded image belongs only to the felt mesh. Never paint it onto the whole
@@ -355,7 +364,7 @@ function colorControl(
 async function optimizedTableImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   try {
-    const maxDimension = 1600;
+    const maxDimension = 1280;
     const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -365,7 +374,7 @@ async function optimizedTableImage(file: File): Promise<string> {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/webp', .82);
+    return canvas.toDataURL('image/webp', .78);
   } finally {
     bitmap.close?.();
   }
@@ -470,6 +479,31 @@ function buildPanel(): HTMLElement {
   ui.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Center X/Y are offsets from the projected 3D world center, not from the browser viewport center.</p>');
   root.append(ui);
 
+  const sceneSection = document.createElement('section');
+  sceneSection.className = 'dev-tuning-section';
+  sceneSection.innerHTML = '<h3>Scene background</h3>';
+  const scenePresetRow = document.createElement('div');
+  scenePresetRow.className = 'dev-tuning-presets';
+  const scenePresetLabel = document.createElement('label'); scenePresetLabel.textContent = 'Background';
+  const scenePreset = document.createElement('select');
+  const scenePresets: [string, string][] = [
+    ['Deep green', '#071b13'], ['Charcoal', '#111513'], ['Midnight', '#101825'],
+    ['Burgundy', '#251317'], ['Warm dark', '#211a14'], ['Custom RGB', ''],
+  ];
+  scenePresets.forEach(([name, value]) => {
+    const option = document.createElement('option'); option.textContent = name; option.value = value; scenePreset.append(option);
+  });
+  scenePreset.value = scenePresets.find(([, value]) => value === settings.sceneColor)?.[1] ?? '';
+  scenePreset.addEventListener('change', () => {
+    if (!scenePreset.value) return;
+    settings.sceneColor = scenePreset.value;
+    saveAndBroadcast('Scene background: ' + (scenePreset.selectedOptions[0]?.textContent ?? ''));
+  });
+  scenePresetRow.append(scenePresetLabel, scenePreset);
+  sceneSection.append(scenePresetRow);
+  colorControl(sceneSection, 'Background RGB', () => settings.sceneColor, (v) => { settings.sceneColor = v; scenePreset.value = ''; }, DEFAULTS.sceneColor);
+  root.append(sceneSection);
+
   const surfaces = document.createElement('section');
   surfaces.className = 'dev-tuning-section';
   surfaces.innerHTML = '<h3>Felt & tile backs</h3>';
@@ -523,7 +557,7 @@ function buildPanel(): HTMLElement {
     if (!preset.value) return;
     settings.backColor = preset.value;
     saveAndBroadcast(`Back preset: ${preset.selectedOptions[0]?.textContent ?? ''}`);
-    root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false;
+    root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false; syncDevOpenClass();
   });
   presetRow.append(presetLabel, preset);
   surfaces.append(presetRow);
@@ -539,7 +573,7 @@ function buildPanel(): HTMLElement {
     settings = structuredClone(DEFAULTS);
     localStorage.removeItem(STORAGE_KEY);
     saveAndBroadcast('Defaults restored.');
-    root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false;
+    root.remove(); panel = buildPanel(); document.body.append(panel); panel.hidden = false; syncDevOpenClass();
   });
   const copy = document.createElement('button');
   copy.type = 'button'; copy.className = 'dev-tuning-action'; copy.textContent = 'Copy JSON';
@@ -550,7 +584,7 @@ function buildPanel(): HTMLElement {
   actions.append(reset, copy);
   root.append(actions);
   const status = document.createElement('div'); status.className = 'dev-tuning-status'; root.append(status);
-  root.querySelector<HTMLButtonElement>('.dev-tuning-close')?.addEventListener('click', () => { root.hidden = true; });
+  root.querySelector<HTMLButtonElement>('.dev-tuning-close')?.addEventListener('click', () => { root.hidden = true; document.body.classList.remove('dev-tuning-open'); });
   return root;
 }
 
@@ -564,7 +598,7 @@ function ensureUi(): void {
     button.className = 'header-button dev-tuning-toggle';
     button.textContent = 'Dev';
     button.title = 'Open 3D camera/tile tuning (F2)';
-    button.addEventListener('click', () => { if (panel) panel.hidden = !panel.hidden; });
+    button.addEventListener('click', () => { if (panel) { panel.hidden = !panel.hidden; syncDevOpenClass(); } });
     actions.append(button);
   }
   applyDomPreview();
@@ -576,7 +610,8 @@ window.addEventListener('keydown', (event) => {
   if (event.key !== 'F2') return;
   event.preventDefault();
   ensureUi();
-  if (panel) panel.hidden = !panel.hidden;
+  if (panel) { panel.hidden = !panel.hidden; syncDevOpenClass(); }
 });
 ensureUi();
+syncDevOpenClass();
 saveAndBroadcast();

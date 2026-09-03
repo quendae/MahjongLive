@@ -73,3 +73,12 @@
   border-radius: 5px;
   background: rgba(216,193,126,.045);
 }
+
+
+/* Game log is a diagnostic aid: keep it unavailable during normal play. */
+body:not(.dev-tuning-open) .game-log { display: none !important; }
+body:not(.dev-tuning-open) .game-layout,
+body:not(.dev-tuning-open) .game-layout:has(.mahjong-table.table-3d-active) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.dev-tuning-open .game-log { display: block; }

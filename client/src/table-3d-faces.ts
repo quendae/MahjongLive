@@ -46,7 +46,7 @@ export function createFaceCanvas(
     if (suit === 'm') drawMan(ctx, rank, red);
     else if (suit === 'p') drawPin(ctx, rank, red);
     else drawSou(ctx, rank, red);
-    if (mode === 'beginner') drawBeginnerBadge(ctx, `${rank}${suit.toUpperCase()}`, suitColor(suit, red));
+    if (mode === 'beginner') drawBeginnerBadge(ctx, String(rank), suitColor(suit, red));
     return canvas;
   }
 
@@ -55,8 +55,8 @@ export function createFaceCanvas(
     south: { glyph: '南', color: '#26372f', beginner: 'S' },
     west: { glyph: '西', color: '#26372f', beginner: 'W' },
     north: { glyph: '北', color: '#26372f', beginner: 'N' },
-    'red dragon': { glyph: '中', color: '#bb3a34', beginner: 'RED' },
-    'green dragon': { glyph: '發', color: '#26744e', beginner: 'GREEN' },
+    'red dragon': { glyph: '中', color: '#bb3a34', beginner: 'R' },
+    'green dragon': { glyph: '發', color: '#26744e', beginner: 'G' },
   };
 
   if (text === 'white dragon') {
@@ -65,7 +65,7 @@ export function createFaceCanvas(
     roundRectStroke(ctx, 39, 36, 82, 144, 5);
     ctx.lineWidth = 3;
     roundRectStroke(ctx, 49, 48, 62, 120, 4);
-    if (mode === 'beginner') drawBeginnerBadge(ctx, 'WHITE', '#38749a', true);
+    if (mode === 'beginner') drawBeginnerBadge(ctx, 'W', '#38749a');
     return canvas;
   }
 
@@ -77,7 +77,7 @@ export function createFaceCanvas(
     ctx.textBaseline = 'middle';
     ctx.fillText(honor.glyph, 80, 111);
     if (mode === 'beginner') {
-      drawBeginnerBadge(ctx, honor.beginner, honor.color, honor.beginner.length > 1);
+      drawBeginnerBadge(ctx, honor.beginner, honor.color);
     }
   }
   return canvas;
@@ -100,25 +100,24 @@ function drawBeginnerBadge(
   ctx: CanvasRenderingContext2D,
   text: string,
   color: string,
-  wide = false,
 ): void {
-  const width = wide ? 98 : 60;
-  const height = 43;
-  const x = 160 - width - 8;
-  const y = 8;
+  // Small corner cue: enough for learning without covering the traditional artwork.
+  const size = 38;
+  const x = 160 - size - 9;
+  const y = 216 - size - 9;
   ctx.save();
-  ctx.fillStyle = 'rgba(255,253,245,.97)';
-  ctx.strokeStyle = 'rgba(35,48,40,.24)';
-  ctx.lineWidth = 2.5;
+  ctx.fillStyle = 'rgba(255,255,251,.94)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(x, y, width, height, 10);
+  ctx.roundRect(x, y, size, size, 10);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = color;
-  ctx.font = `850 ${wide ? 18 : 24}px Inter, Arial, sans-serif`;
+  ctx.font = '800 23px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x + width / 2, y + height / 2 + .5);
+  ctx.fillText(text, x + size / 2, y + size / 2 + .5);
   ctx.restore();
 }
 
@@ -131,14 +130,16 @@ function suitColor(suit: string, red: boolean): string {
 
 function drawMan(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {
   const numerals = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 82px Georgia, "Times New Roman", serif';
-  ctx.fillStyle = red ? '#c23b34' : '#26362f';
-  ctx.fillText(numerals[rank - 1] ?? String(rank), 80, 76);
-  ctx.font = 'bold 70px Georgia, "Times New Roman", serif';
-  ctx.fillStyle = '#b63b34';
-  ctx.fillText('萬', 80, 158);
+  ctx.fillStyle = red ? '#c53b33' : '#22352e';
+  ctx.font = '700 86px "Noto Serif CJK JP", "Yu Mincho", Georgia, serif';
+  ctx.fillText(numerals[rank - 1] ?? String(rank), 80, 74);
+  ctx.fillStyle = '#b93430';
+  ctx.font = '700 67px "Noto Serif CJK JP", "Yu Mincho", Georgia, serif';
+  ctx.fillText('萬', 80, 157);
+  ctx.restore();
 }
 
 function pinLayout(rank: number): readonly [number, number][] {
@@ -157,22 +158,34 @@ function pinLayout(rank: number): readonly [number, number][] {
 }
 
 function drawPin(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {
-  const palette = red ? ['#bd3b34'] : ['#306c97', '#bd3b34', '#2f7952'];
+  const palette = red ? ['#c43c35'] : ['#2f6f98', '#c43c35', '#2d7751'];
   pinLayout(rank).forEach(([x, y], index) => {
     const color = palette[index % palette.length];
+    const radius = rank === 1 ? 35 : 15.5;
+    ctx.save();
+    ctx.translate(x, y);
     ctx.strokeStyle = color;
-    ctx.lineWidth = rank === 1 ? 10 : 7;
+    ctx.lineWidth = rank === 1 ? 7 : 5;
     ctx.beginPath();
-    ctx.arc(x, y, rank === 1 ? 34 : 15, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = rank === 1 ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(x, y, rank === 1 ? 20 : 8, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius * .58, 0, Math.PI * 2);
     ctx.stroke();
+    for (let petal = 0; petal < 6; petal += 1) {
+      const angle = petal * Math.PI / 3;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(angle) * radius * .42, Math.sin(angle) * radius * .42, radius * .13, radius * .25, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(x, y, rank === 1 ? 7 : 3.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius * .13, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   });
 }
 
@@ -192,40 +205,53 @@ function souLayout(rank: number): readonly [number, number, number][] {
 
 function drawSou(ctx: CanvasRenderingContext2D, rank: number, red: boolean): void {
   if (rank === 1) {
-    ctx.strokeStyle = red ? '#bd3b34' : '#287650';
-    ctx.lineWidth = 10;
+    // A compact peacock/bamboo-bird motif inspired by traditional 1-sou tiles.
+    ctx.save();
+    ctx.strokeStyle = red ? '#c43c35' : '#2b7750';
+    ctx.fillStyle = red ? '#c43c35' : '#2f7096';
     ctx.lineCap = 'round';
+    ctx.lineWidth = 7;
     ctx.beginPath();
-    ctx.moveTo(80, 184);
-    ctx.quadraticCurveTo(74, 104, 81, 49);
+    ctx.moveTo(78, 182);
+    ctx.quadraticCurveTo(73, 125, 82, 76);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(80, 90);
-    ctx.quadraticCurveTo(48, 70, 37, 38);
-    ctx.moveTo(80, 110);
-    ctx.quadraticCurveTo(111, 82, 122, 49);
-    ctx.stroke();
-    ctx.fillStyle = red ? '#bd3b34' : '#356f96';
-    ctx.beginPath();
-    ctx.ellipse(93, 39, 19, 30, .45, 0, Math.PI * 2);
+    ctx.ellipse(85, 63, 24, 33, .34, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#2b7750';
+    ctx.lineWidth = 5;
+    for (const [dx, dy] of [[-32, -5], [-22, -29], [25, -26], [34, 1]]) {
+      ctx.beginPath();
+      ctx.moveTo(80, 96);
+      ctx.quadraticCurveTo(80 + dx * .55, 82 + dy * .45, 80 + dx, 77 + dy);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#c43c35';
+    ctx.beginPath();
+    ctx.arc(95, 53, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
     return;
   }
 
-  const green = red ? '#bd3b34' : '#2c7952';
-  souLayout(rank).forEach(([x, y, angle]) => {
+  const green = red ? '#c43c35' : '#2d7952';
+  souLayout(rank).forEach(([x, y, angle], index) => {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle * Math.PI / 180);
     ctx.fillStyle = green;
     ctx.beginPath();
-    ctx.roundRect(-9, -25, 18, 50, 8);
+    ctx.roundRect(-8.5, -25, 17, 50, 7);
     ctx.fill();
-    ctx.strokeStyle = '#eef0df';
-    ctx.lineWidth = 4;
+    ctx.fillStyle = !red && index % 5 === 2 ? '#c43c35' : '#f8f3de';
     ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(8, 0);
+    ctx.roundRect(-7, -3, 14, 6, 3);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(26,74,49,.28)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(0, 20);
     ctx.stroke();
     ctx.restore();
   });

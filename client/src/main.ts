@@ -881,11 +881,19 @@ function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan')
     for (const option of legal.options) actions.push({ type: 'shouminkan', player: human, meldIndex: option.meldIndex, tileId: option.tileId });
   }
 
-  if (actions.length === 1) {
-    submitHumanAction(actions[0]);
+  // Tile IDs can create several mechanically identical Pon/Kan options. Collapse choices that
+  // look identical to the player, but preserve meaningful alternatives (for example red-five use).
+  const uniqueByDescription = new Map<string, RoundAction>();
+  for (const action of actions) {
+    const description = actionDescription(action);
+    if (!uniqueByDescription.has(description)) uniqueByDescription.set(description, action);
+  }
+  const uniqueActions = [...uniqueByDescription.values()];
+  if (uniqueActions.length === 1) {
+    submitHumanAction(uniqueActions[0]);
     return;
   }
-  choiceState = { title: type === 'chi' ? 'Chi' : type === 'pon' ? 'Pon' : 'Kan', actions };
+  choiceState = { title: type === 'chi' ? 'Chi' : type === 'pon' ? 'Pon' : 'Kan', actions: uniqueActions };
   render();
 }
 

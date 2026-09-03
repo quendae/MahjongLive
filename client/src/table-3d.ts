@@ -58,6 +58,7 @@ type DevTuning = {
   tableImage: string | null;
   woodColor: string;
   backColor: string;
+  sceneColor: string;
 };
 
 const DEFAULT_DEV_TUNING: DevTuning = {
@@ -79,7 +80,7 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     riverScale: 1,
     meldScale: 1,
     riverDepth: 2.14,
-    riverRowGap: .55,
+    riverRowGap: .60,
     riverColumnGap: .45,
     riverJitter: .028,
     riverYawJitter: 3.2,
@@ -105,6 +106,7 @@ const DEFAULT_DEV_TUNING: DevTuning = {
   tableImage: null,
   woodColor: '#3a2b20',
   backColor: '#315c49',
+  sceneColor: '#071b13',
 };
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -121,6 +123,7 @@ let loadError = false;
 let runtime: TableRuntime | null = null;
 let reconcileScheduled = false;
 let reconcileGeneration = 0;
+let devTuningCache: DevTuning | null = null;
 
 type Side = 'bottom' | 'top' | 'left' | 'right';
 type TileZone = 'hand' | 'river' | 'rack' | 'meld';
@@ -220,6 +223,7 @@ function finiteNumber(value: unknown, fallback: number): number {
 }
 
 function readDevTuning(): DevTuning {
+  if (devTuningCache) return devTuningCache;
   let raw: any = {};
   try { raw = JSON.parse(localStorage.getItem(DEV_TUNING_KEY) ?? '{}'); } catch { raw = {}; }
   const readRotation = (value: any, fallback: DevRotation): DevRotation => ({
@@ -227,7 +231,7 @@ function readDevTuning(): DevTuning {
     y: finiteNumber(value?.y, fallback.y),
     z: finiteNumber(value?.z, fallback.z),
   });
-  return {
+  const parsed: DevTuning = {
     camera: {
       x: finiteNumber(raw.camera?.x, DEFAULT_DEV_TUNING.camera.x),
       y: finiteNumber(raw.camera?.y, DEFAULT_DEV_TUNING.camera.y),
@@ -286,7 +290,11 @@ function readDevTuning(): DevTuning {
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
     woodColor: typeof raw.woodColor === 'string' ? raw.woodColor : DEFAULT_DEV_TUNING.woodColor,
     backColor: typeof raw.backColor === 'string' ? raw.backColor : DEFAULT_DEV_TUNING.backColor,
+    sceneColor: typeof raw.sceneColor === 'string' ? raw.sceneColor : DEFAULT_DEV_TUNING.sceneColor,
   };
+  if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;
+  devTuningCache = parsed;
+  return parsed;
 }
 
 function radians(degrees: number): number {
@@ -485,19 +493,19 @@ function baseTransform(spec: TileSpec): Transform {
     transform.scale = .80 * tuning.tiles.meldScale;
     // Every player's open sets start in that player's lower-right corner and grow away from it.
     if (spec.side === 'bottom') {
-      transform.x = 5.20 - col * .44;
-      transform.z = 3.72 - row * .58;
+      transform.x = 5.52 - col * .44;
+      transform.z = 4.34 - row * .58;
     } else if (spec.side === 'top') {
-      transform.x = -5.20 + col * .44;
-      transform.z = -3.72 + row * .58;
+      transform.x = -5.52 + col * .44;
+      transform.z = -4.34 + row * .58;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -5.20 + row * .58;
-      transform.z = 3.72 - col * .44;
+      transform.x = -5.52 + row * .58;
+      transform.z = 4.34 - col * .44;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 5.20 - row * .58;
-      transform.z = -3.72 + col * .44;
+      transform.x = 5.52 - row * .58;
+      transform.z = -4.34 + col * .44;
       transform.yaw = -Math.PI / 2;
     }
   }
@@ -743,7 +751,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   indicator.rotation.x = -Math.PI / 2;
   indicator.position.y = -.103;
   indicator.visible = false;
-  visual.add(indicator);
+  group.add(indicator);
 
   const latestHalo = new THREE.Mesh(
     new THREE.RingGeometry(.29, .35, 40),
@@ -758,7 +766,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   latestHalo.rotation.x = -Math.PI / 2;
   latestHalo.position.y = -.106;
   latestHalo.visible = spec.latest && reactionClaimAvailable();
-  visual.add(latestHalo);
+  group.add(latestHalo);
 
   const actor: TileActor = {
     key: spec.key,
@@ -1068,7 +1076,7 @@ function alignStage(rt: TableRuntime, table: HTMLElement): void {
 
 function createRuntime(THREE: any): TableRuntime {
   const renderer = new THREE.WebGLRenderer({
-    alpha: true,
+    alpha: false,
     antialias: true,
     powerPreference: 'high-performance',
   });
@@ -1080,10 +1088,10 @@ function createRuntime(THREE: any): TableRuntime {
   renderer.domElement.setAttribute('aria-hidden', 'true');
   stage.replaceChildren(renderer.domElement);
 
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0b2017, 16, 29);
-
   const tuning = readDevTuning();
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(tuning.sceneColor);
+  scene.fog = new THREE.Fog(tuning.sceneColor, 16, 29);
   const camera = new THREE.PerspectiveCamera(tuning.camera.fov, 1, .1, 60);
   camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
@@ -1281,6 +1289,8 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
   rt.camera.updateProjectionMatrix();
+  rt.scene.background?.set?.(tuning.sceneColor);
+  rt.scene.fog?.color?.set?.(tuning.sceneColor);
   rt.woodMaterial.color.set(tuning.woodColor);
   rt.ivoryMaterial.color.set(tuning.tiles.bodyColor);
   rt.ivoryMaterial.roughness = tuning.tiles.bodyRoughness;
@@ -1310,7 +1320,9 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
   const hoverOffset = new rt.THREE.Vector3();
+  const groundOffset = new rt.THREE.Vector3();
   const inverseRotation = new rt.THREE.Quaternion();
+  const groundRotation = new rt.THREE.Quaternion().setFromEuler(new rt.THREE.Euler(-Math.PI / 2, 0, 0));
   for (const actor of rt.actors.values()) {
     if (actor.motion) {
       const motion = actor.motion;
@@ -1332,6 +1344,16 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         applyTransform(actor, motion.target);
       }
     }
+
+    // Keep halos on the felt in world space. They no longer rotate/lift with the tile, so the
+    // highlight reads as a pool of light underneath instead of a ring behind the face.
+    const feltTop = rt.felt.position.y + rt.felt.scale.y / 2 + .008;
+    inverseRotation.copy(actor.group.quaternion).invert();
+    groundOffset.set(0, feltTop - actor.group.position.y, 0).applyQuaternion(inverseRotation);
+    actor.indicator.position.copy(groundOffset);
+    actor.latestHalo.position.copy(groundOffset);
+    actor.indicator.quaternion.copy(inverseRotation).multiply(groundRotation);
+    actor.latestHalo.quaternion.copy(inverseRotation).multiply(groundRotation);
 
     const hovered = rt.hoveredKey === actor.key && actor.spec.selectable;
     const pressed = rt.pressedKey === actor.key && hovered;
@@ -1523,7 +1545,16 @@ observer.observe(app, { childList: true, subtree: true });
 window.addEventListener('resize', scheduleReconcile, { passive: true });
 window.addEventListener('scroll', scheduleReconcile, { passive: true });
 window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
-window.addEventListener('mahjong-live:dev-tuning', scheduleReconcile);
+window.addEventListener('mahjong-live:dev-tuning', (event) => {
+  const detail = (event as CustomEvent<DevTuning>).detail;
+  devTuningCache = detail && typeof detail === 'object' ? detail : null;
+  scheduleReconcile();
+});
+window.addEventListener('storage', (event) => {
+  if (event.key !== DEV_TUNING_KEY) return;
+  devTuningCache = null;
+  scheduleReconcile();
+});
 window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
 window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
 window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true });
