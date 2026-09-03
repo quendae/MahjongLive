@@ -23,6 +23,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Repair current light-value patch target
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-dev-performance-polish.py')
+          s = p.read_text()
+          s = s.replace('new THREE.DirectionalLight(0xffffff, 1.9)', 'new THREE.DirectionalLight(0xffffff, 2.18)')
+          p.write_text(s)
+          PY
       - name: Apply polish patch
         run: python scripts/apply-dev-performance-polish.py
       - name: Typecheck client
