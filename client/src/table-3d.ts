@@ -79,7 +79,7 @@ type DevTuning = {
     doraLabelY: number;
     centerScoreScale: number;
   };
-  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
+  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number; geometryQuality: number };
   tableColor: string;
   tableImage: string | null;
   woodColor: string;
@@ -142,7 +142,7 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     doraLabelY: 0,
     centerScoreScale: 1.25,
   },
-  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4 },
+  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4, geometryQuality: 1 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -297,6 +297,7 @@ type TableRuntime = {
   rendererBackend: 'webgl' | 'webgpu';
   benchmarkStage: BenchmarkStage;
   infoCallsAtSampleStart: number;
+  geometryQuality: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -386,6 +387,7 @@ function readDevTuning(): DevTuning {
       pixelRatio: finiteNumber(raw.graphics?.pixelRatio, DEFAULT_DEV_TUNING.graphics.pixelRatio),
       shadowQuality: finiteNumber(raw.graphics?.shadowQuality, DEFAULT_DEV_TUNING.graphics.shadowQuality),
       anisotropy: finiteNumber(raw.graphics?.anisotropy, DEFAULT_DEV_TUNING.graphics.anisotropy),
+      geometryQuality: finiteNumber(raw.graphics?.geometryQuality, DEFAULT_DEV_TUNING.graphics.geometryQuality),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULT_DEV_TUNING.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -728,7 +730,20 @@ function transformsDiffer(a: Transform, b: Transform): boolean {
     || Math.abs(a.scale - b.scale) > .002;
 }
 
-function roundedTileGeometry(THREE: any): any {
+function geometryQualityLevel(value: number): number {
+  return Math.max(0, Math.min(3, Math.round(Number.isFinite(value) ? value : 1)));
+}
+
+function geometryProfile(value: number): { curveSegments: number; bevelSegments: number; faceSegments: number } {
+  switch (geometryQualityLevel(value)) {
+    case 0: return { curveSegments: 2, bevelSegments: 1, faceSegments: 3 };
+    case 2: return { curveSegments: 6, bevelSegments: 2, faceSegments: 8 };
+    case 3: return { curveSegments: 10, bevelSegments: 3, faceSegments: 12 };
+    default: return { curveSegments: 4, bevelSegments: 1, faceSegments: 6 };
+  }
+}
+
+function roundedTileGeometry(THREE: any, quality: number): any {
   const width = .43;
   const depth = .57;
   const height = .16;
@@ -747,12 +762,13 @@ function roundedTileGeometry(THREE: any): any {
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  const profile = geometryProfile(quality);
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: height,
     steps: 1,
-    curveSegments: 4,
+    curveSegments: profile.curveSegments,
     bevelEnabled: true,
-    bevelSegments: 1,
+    bevelSegments: profile.bevelSegments,
     bevelSize: .018,
     bevelThickness: .018,
   });
@@ -761,7 +777,7 @@ function roundedTileGeometry(THREE: any): any {
   return geometry;
 }
 
-function roundedBackShellGeometry(THREE: any): any {
+function roundedBackShellGeometry(THREE: any, quality: number): any {
   const width = .430;
   const depth = .570;
   const height = .052;
@@ -780,16 +796,17 @@ function roundedBackShellGeometry(THREE: any): any {
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  const profile = geometryProfile(quality);
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: height, steps: 1, curveSegments: 4, bevelEnabled: true,
-    bevelSegments: 1, bevelSize: .009, bevelThickness: .009,
+    depth: height, steps: 1, curveSegments: profile.curveSegments, bevelEnabled: true,
+    bevelSegments: profile.bevelSegments, bevelSize: .009, bevelThickness: .009,
   });
   geometry.rotateX(-Math.PI / 2);
   geometry.center();
   return geometry;
 }
 
-function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: number): any {
+function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: number, quality: number): any {
   const x0 = -width / 2;
   const x1 = width / 2;
   const y0 = -depth / 2;
@@ -804,7 +821,7 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
-  const geometry = new THREE.ShapeGeometry(shape, 6);
+  const geometry = new THREE.ShapeGeometry(shape, geometryProfile(quality).faceSegments);
   const positions = geometry.getAttribute('position');
   const uvs = geometry.getAttribute('uv');
   for (let index = 0; index < positions.count; index += 1) {
@@ -1618,11 +1635,12 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
   const actorRoot = new THREE.Group();
   scene.add(actorRoot);
 
-  const tileGeometry = roundedTileGeometry(THREE);
-  const faceGeometry = roundedFaceGeometry(THREE, .39, .53, .038);
+  const geometryQuality = geometryQualityLevel(tuning.graphics.geometryQuality);
+  const tileGeometry = roundedTileGeometry(THREE, geometryQuality);
+  const faceGeometry = roundedFaceGeometry(THREE, .39, .53, .038, geometryQuality);
   // Pattern is intentionally inset; the separate 3D shell provides the coloured edge spill.
-  const backGeometry = roundedFaceGeometry(THREE, .405, .545, .043);
-  const backShellGeometry = roundedBackShellGeometry(THREE);
+  const backGeometry = roundedFaceGeometry(THREE, .405, .545, .043, geometryQuality);
+  const backShellGeometry = roundedBackShellGeometry(THREE, geometryQuality);
   const ivoryMaterial = new THREE.MeshStandardMaterial({
     color: tuning.tiles.bodyColor,
     roughness: tuning.tiles.bodyRoughness,
@@ -1752,6 +1770,7 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
     rendererBackend: wantsWebGpu ? 'webgpu' : 'webgl',
     benchmarkStage: 'normal',
     infoCallsAtSampleStart: 0,
+    geometryQuality,
   };
 
   rebuildFaceAtlas(rt);
@@ -2219,6 +2238,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         faceBatches: [...rt.staticFaceBatches.values()].filter((batch) => batch.count > 0).length,
         rendererBackend: rendererBackendLabel(rt),
         benchmarkStage: rt.benchmarkStage,
+        geometryQuality: rt.geometryQuality,
         pixelRatio: rt.renderer.getPixelRatio(),
         visibility: document.visibilityState,
       } }));
@@ -2416,6 +2436,11 @@ window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
 window.addEventListener('mahjong-live:dev-tuning', (event) => {
   const detail = (event as CustomEvent<DevTuning>).detail;
   devTuningCache = detail && typeof detail === 'object' ? detail : null;
+  if (runtime && detail?.graphics
+    && geometryQualityLevel(detail.graphics.geometryQuality) !== runtime.geometryQuality) {
+    disposeRuntime();
+    loadError = false;
+  }
   scheduleReconcile();
 });
 window.addEventListener('mahjong-live:renderer-backend', (event) => {

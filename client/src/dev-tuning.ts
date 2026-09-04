@@ -64,7 +64,7 @@ type DevTuning = {
     doraLabelY: number;
     centerScoreScale: number;
   };
-  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
+  graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number; geometryQuality: number };
   tableColor: string;
   tableImage: string | null;
   woodColor: string;
@@ -127,7 +127,7 @@ const DEFAULTS: DevTuning = {
     doraLabelY: 0,
     centerScoreScale: 1.25,
   },
-  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4 },
+  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4, geometryQuality: 1 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -223,6 +223,7 @@ function loadSettings(): DevTuning {
       pixelRatio: finite(raw.graphics?.pixelRatio, DEFAULTS.graphics.pixelRatio),
       shadowQuality: finite(raw.graphics?.shadowQuality, DEFAULTS.graphics.shadowQuality),
       anisotropy: finite(raw.graphics?.anisotropy, DEFAULTS.graphics.anisotropy),
+      geometryQuality: finite(raw.graphics?.geometryQuality, DEFAULTS.graphics.geometryQuality),
     },
     tableColor: typeof raw.tableColor === 'string' ? raw.tableColor : DEFAULTS.tableColor,
     tableImage: typeof raw.tableImage === 'string' ? raw.tableImage : null,
@@ -266,6 +267,7 @@ type PerformanceDetail = {
   benchmarkStage?: string;
   pixelRatio?: number;
   visibility?: string;
+  geometryQuality?: number;
 };
 
 type PerformanceCapture = {
@@ -350,6 +352,7 @@ function appendPerformanceSample(detail: PerformanceDetail): void {
     String(detail.faceBatches ?? ''),
     detail.rendererBackend ?? '',
     detail.benchmarkStage ?? '',
+    String(detail.geometryQuality ?? ''),
     performanceNumber(detail.pixelRatio),
   ].join('\t'));
   capture.samples += 1;
@@ -373,10 +376,10 @@ function startPerformanceCapture(): void {
       `devicePixelRatio\t${devicePixelRatio}`,
       `hardwareConcurrency\t${navigator.hardwareConcurrency ?? ''}`,
       `visibilityAtStart\t${document.visibilityState}`,
-      `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}`,
+      `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}\tgeometryQuality=${settings.graphics.geometryQuality}`,
       `rendererPreference\t${localStorage.getItem(RENDERER_BACKEND_KEY) ?? (!/Firefox\//.test(navigator.userAgent) && Boolean((navigator as any).gpu) ? 'webgpu-auto' : 'webgl-auto')}\twebgpuAvailable=${Boolean((navigator as any).gpu)}`,
       '',
-      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tpixel_ratio',
+      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tgeometry_quality\tpixel_ratio',
     ],
   };
   document.body.classList.add('perf-capture-active');
@@ -831,6 +834,7 @@ function buildPanel(): HTMLElement {
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
+  numberSlider(graphics, 'Tile corner quality', 0, 3, 1, () => settings.graphics.geometryQuality, (v) => { settings.graphics.geometryQuality = Math.round(v); }, '', DEFAULTS.graphics.geometryQuality);
   const stressActions = document.createElement('div');
   stressActions.className = 'dev-tuning-actions dev-stress-actions';
   const stressButton = document.createElement('button');
@@ -862,7 +866,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', `<p class="dev-tuning-note">Printed tile art shares one atlas texture/material. On Chromium/Edge with WebGPU available, WebGPU is now the automatic default unless you explicitly choose another backend; Firefox stays on WebGL 2 because its current Three.js WebGPU path can hang the tab. WebGPU keeps a 4 s initialization timeout and automatic WebGL fallback. Performance TXT is rate-limited to one clean sample per interval and renderer.info is reset per frame on both backends.</p>`);
+  graphics.insertAdjacentHTML('beforeend', `<p class="dev-tuning-note">Printed tile art shares one atlas texture/material. Tile corner quality: 0 = Low (2/1), 1 = Medium/current (4/1), 2 = High (6/2), 3 = Ultra (10/3); changing it rebuilds the 3D runtime so the difference is real geometry, not CSS. On Chromium/Edge with WebGPU available, WebGPU is the automatic default unless explicitly overridden; Firefox stays on WebGL 2 because its current Three.js WebGPU path can hang the tab.</p>`);
   root.append(graphics);
   const webGpuFallback = sessionStorage.getItem('mahjong-live:webgpu-fallback');
   if (webGpuFallback) {
