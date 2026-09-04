@@ -14,7 +14,7 @@ and should be updated as the game grows.
 - [x] Built-in FPS/RAF/render telemetry, TXT capture and stress-table benchmark.
 - [x] Adjustable tile-corner geometry quality.
 - [x] Keep renderer/device alive when changing graphics tuning; geometry swaps are in-place.
-- [ ] Finish WebGL fallback performance work, especially Edge/ANGLE.
+- [x] Finish WebGL fallback performance work, especially Edge/ANGLE.
 - [x] Keep every DOM tile preview (Dora, reactions, choices) on the same FluffyStuff artwork source.
 - [x] Strong, readable CHI/PON/KAN/RON table announcements with appropriate presentation pauses.
 - [x] Human Tenpai/Furiten status with visible wait tiles, without exposing opponent concealed info.
