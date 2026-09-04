@@ -25,7 +25,10 @@ const alias = [
 const flags = new Set(process.argv.slice(3));
 const openBrowser = flags.has('--open') || (!flags.has('--no-open') && process.argv[2] === 'dev');
 const commonServer = {
-  host: '127.0.0.1',
+  // Listen on every interface so the development/preview build can be tested directly from
+  // another machine on the LAN (use the Network URL printed by Vite). This is intentionally
+  // limited to the local machine/network by the host firewall rather than Vite's old loopback bind.
+  host: '0.0.0.0',
   strictPort: false,
   open: openBrowser,
 };
