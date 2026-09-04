@@ -788,13 +788,33 @@ function buildPanel(): HTMLElement {
   rendererRow.className = 'dev-tuning-presets';
   const rendererLabel = document.createElement('label'); rendererLabel.textContent = 'Renderer';
   const rendererSelect = document.createElement('select');
-  const rendererOptions: [string, string][] = [['WebGL 2', 'webgl'], ['WebGPU (experimental)', 'webgpu']];
-  rendererOptions.forEach(([name, value]) => { const option = document.createElement('option'); option.textContent = name; option.value = value; rendererSelect.append(option); });
+  const firefoxWebGpuBlocked = /Firefox\//.test(navigator.userAgent);
+  const webGpuApiAvailable = Boolean((navigator as any).gpu);
+  const rendererOptions: [string, string][] = [
+    ['WebGL 2', 'webgl'],
+    [firefoxWebGpuBlocked ? 'WebGPU (disabled on Firefox)' : 'WebGPU (experimental)', 'webgpu'],
+  ];
+  rendererOptions.forEach(([name, value]) => {
+    const option = document.createElement('option');
+    option.textContent = name;
+    option.value = value;
+    if (value === 'webgpu' && (firefoxWebGpuBlocked || !webGpuApiAvailable)) option.disabled = true;
+    rendererSelect.append(option);
+  });
+  if (firefoxWebGpuBlocked && localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu') {
+    localStorage.setItem(RENDERER_BACKEND_KEY, 'webgl');
+  }
   rendererSelect.value = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
   rendererSelect.addEventListener('change', () => {
+    if (rendererSelect.value === 'webgpu' && (firefoxWebGpuBlocked || !webGpuApiAvailable)) {
+      rendererSelect.value = 'webgl';
+      localStorage.setItem(RENDERER_BACKEND_KEY, 'webgl');
+      setStatus(firefoxWebGpuBlocked ? 'WebGPU is disabled on Firefox because the current Three.js backend can hang the tab. Use Chromium/Edge for that experiment.' : 'WebGPU API is not available in this browser.');
+      return;
+    }
     localStorage.setItem(RENDERER_BACKEND_KEY, rendererSelect.value);
     window.dispatchEvent(new CustomEvent('mahjong-live:renderer-backend', { detail: { backend: rendererSelect.value } }));
-    setStatus(rendererSelect.value === 'webgpu' ? 'Switching to experimental WebGPURenderer…' : 'Switching to WebGL renderer…');
+    setStatus(rendererSelect.value === 'webgpu' ? 'Switching to experimental WebGPURenderer… automatic WebGL fallback is enabled.' : 'Switching to WebGL renderer…');
   });
   rendererRow.append(rendererLabel, rendererSelect);
   graphics.append(rendererRow);
@@ -832,8 +852,13 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Renderer can be switched live between WebGL 2 and experimental Three.js WebGPURenderer. Printed tile art now shares one atlas texture/material instead of dozens of CanvasTextures — the previous benchmark isolated texture/material switching as the dominant bottleneck. Run benchmark sweep still records full, empty, table only, tiles without printed faces, and full scene without shadows. TXT includes renderer_backend and benchmark_stage.</p>');
+  graphics.insertAdjacentHTML('beforeend', `<p class="dev-tuning-note">Printed tile art shares one atlas texture/material. WebGPU remains experimental and is disabled on Firefox because the current Three.js/Firefox path can hang the tab even when navigator.gpu is exposed; Chromium/Edge may still test it, with a 4 s initialization timeout and automatic WebGL 2 fallback. Run benchmark sweep records full, empty, table only, tiles without printed faces, and full scene without shadows.</p>`);
   root.append(graphics);
+  const webGpuFallback = sessionStorage.getItem('mahjong-live:webgpu-fallback');
+  if (webGpuFallback) {
+    sessionStorage.removeItem('mahjong-live:webgpu-fallback');
+    requestAnimationFrame(() => setStatus(webGpuFallback));
+  }
   requestAnimationFrame(updatePerformanceCaptureUi);
 
   rotationSection(root, 'Left opponent tiles', settings.left, DEFAULTS.left);

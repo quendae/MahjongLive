@@ -416,8 +416,35 @@ function setConfiguredRotation(transform: Transform, rotation: DevRotation): voi
   transform.roll = radians(rotation.z);
 }
 
+function isFirefoxBrowser(): boolean {
+  return /Firefox\//.test(navigator.userAgent);
+}
+
 function requestedRendererBackend(): 'webgl' | 'webgpu' {
-  return localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  const requested = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  // Firefox can expose navigator.gpu while Three's WebGPURenderer still wedges the tab/driver.
+  // Do not let a saved experimental preference lock the game into the 2D fallback there.
+  if (requested === 'webgpu' && isFirefoxBrowser()) {
+    localStorage.setItem(RENDERER_BACKEND_KEY, 'webgl');
+    sessionStorage.setItem('mahjong-live:webgpu-fallback', 'WebGPU disabled on Firefox after an unstable renderer initialization; WebGL 2 restored.');
+    return 'webgl';
+  }
+  return requested;
+}
+
+async function initializeWebGpuRenderer(renderer: any): Promise<void> {
+  if (typeof renderer.init !== 'function') return;
+  const init = renderer.init();
+  if (!init || typeof init.then !== 'function') return;
+  let timeoutId = 0;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('WebGPU initialization timed out after 4 seconds')), 4000);
+  });
+  try {
+    await Promise.race([init, timeout]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
 }
 
 function loadThree(): Promise<any> {
@@ -1494,7 +1521,7 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
   const renderer = wantsWebGpu
     ? new THREE.WebGPURenderer({ alpha: false, antialias: true })
     : new THREE.WebGLRenderer({ alpha: false, antialias: true, powerPreference: 'high-performance' });
-  if (wantsWebGpu && typeof renderer.init === 'function') await renderer.init();
+  if (wantsWebGpu) await initializeWebGpuRenderer(renderer);
   renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   if (renderer.shadowMap) {
     renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
@@ -2243,8 +2270,19 @@ async function reconcile(): Promise<void> {
       runtime = await createRuntime(THREE);
       loadError = false;
     } catch (error) {
-      console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
       const detail = error instanceof Error ? error.message : String(error);
+      const requestedWebGpu = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu';
+      if (requestedWebGpu) {
+        console.warn('Mahjong Live WebGPU renderer failed; restoring WebGL 2.', error);
+        localStorage.setItem(RENDERER_BACKEND_KEY, 'webgl');
+        sessionStorage.setItem('mahjong-live:webgpu-fallback', `WebGPU failed: ${detail || 'unknown renderer error'}. WebGL 2 restored automatically.`);
+        threePromise = null;
+        loadError = false;
+        stage.replaceChildren();
+        scheduleReconcile();
+        return;
+      }
+      console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
       fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
       updateModeButton();
       return;
