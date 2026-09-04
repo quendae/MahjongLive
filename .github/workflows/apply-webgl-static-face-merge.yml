@@ -1,0 +1,38 @@
+name: Apply WebGL static face merge patch
+
+on:
+  push:
+    paths:
+      - 'scripts/apply-webgl-static-face-merge.py'
+      - '.github/workflows/apply-webgl-static-face-merge.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply patch
+        run: python scripts/apply-webgl-static-face-merge.py
+      - name: Typecheck client
+        run: pnpm client:typecheck
+      - name: Build client
+        run: pnpm client:build
+      - name: Commit directly to master
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/src/table-3d.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'Merge static atlas faces into one WebGL draw'
+          git push origin HEAD:master
