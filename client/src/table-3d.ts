@@ -13,6 +13,18 @@ const TILE_FACE_OFFSET = .128;
 const TILE_BACK_OFFSET = .142;
 const OPPONENT_RACK_LEAN = .17;
 const DEV_TUNING_KEY = 'mahjong-live:dev-tuning:v1';
+const FACE_ATLAS_LABELS = [
+  '1m','2m','3m','4m','5m','6m','7m','8m','9m',
+  '1p','2p','3p','4p','5p','6p','7p','8p','9p',
+  '1s','2s','3s','4s','5s','6s','7s','8s','9s',
+  'red 5m','red 5p','red 5s',
+  'east','south','west','north','white dragon','green dragon','red dragon',
+] as const;
+const FACE_ATLAS_COLUMNS = 8;
+const FACE_ATLAS_ROWS = 5;
+const FACE_ATLAS_CELL_W = 256;
+const FACE_ATLAS_CELL_H = 344;
+const FACE_ATLAS_PAD = 4;
 
 type DevRotation = { x: number; y: number; z: number };
 type DevTuning = {
@@ -238,6 +250,10 @@ type TableRuntime = {
   backTexture: any | null;
   backTextureSource: string | null;
   faceMaterials: Map<string, any>;
+  faceAtlasTexture: any | null;
+  faceAtlasMaterial: any;
+  faceGeometries: Map<string, any>;
+  faceGeometryRotation: number;
   actors: Map<string, TileActor>;
   raycaster: any;
   pointer: any;
@@ -767,52 +783,142 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   return geometry;
 }
 
-function disposeFaceMaterials(rt: TableRuntime): void {
-  for (const material of rt.faceMaterials.values()) {
-    material.map?.dispose?.();
-    material.dispose?.();
-  }
-  rt.faceMaterials.clear();
+function disposeFaceGeometries(rt: TableRuntime): void {
+  for (const geometry of rt.faceGeometries.values()) geometry.dispose?.();
+  rt.faceGeometries.clear();
 }
 
-function materialForFace(rt: TableRuntime, label: string | null, back = false): any {
-  if (back) return rt.ivoryMaterial;
-  const key = `${rt.faceMode}:${label ?? 'blank'}`;
-  const cached = rt.faceMaterials.get(key);
-  if (cached) return cached;
-  const tuning = readDevTuning();
+function disposeFaceMaterials(rt: TableRuntime): void {
+  rt.faceAtlasTexture?.dispose?.();
+  rt.faceAtlasTexture = null;
+  rt.faceAtlasMaterial?.dispose?.();
+  rt.faceMaterials.clear();
+  disposeFaceGeometries(rt);
+}
+
+function normalizedFaceLabel(label: string | null): string {
+  return label?.trim().toLowerCase() ?? '';
+}
+
+function faceAtlasIndex(label: string | null): number {
+  const normalized = normalizedFaceLabel(label);
+  const index = FACE_ATLAS_LABELS.indexOf(normalized as (typeof FACE_ATLAS_LABELS)[number]);
+  // Standard gameplay labels are all represented above. Keep an unused final cell as a safe blank
+  // fallback instead of binding a new one-off texture if an unexpected label appears in dev data.
+  return index >= 0 ? index : FACE_ATLAS_COLUMNS * FACE_ATLAS_ROWS - 1;
+}
+
+function rebuildFaceAtlas(rt: TableRuntime): void {
+  const THREE = rt.THREE;
+  const atlasWidth = FACE_ATLAS_COLUMNS * FACE_ATLAS_CELL_W;
+  const atlasHeight = FACE_ATLAS_ROWS * FACE_ATLAS_CELL_H;
+  const drawWidth = FACE_ATLAS_CELL_W - FACE_ATLAS_PAD * 2;
+  const drawHeight = FACE_ATLAS_CELL_H - FACE_ATLAS_PAD * 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = atlasWidth;
+  canvas.height = atlasHeight;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) return;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, atlasWidth, atlasHeight);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  rt.faceAtlasTexture?.dispose?.();
   let texture: any = null;
-  const canvas = createFaceCanvas(label, false, rt.faceMode, () => {
-    if (texture) texture.needsUpdate = true;
+  const mode = rt.faceMode;
+  FACE_ATLAS_LABELS.forEach((label, index) => {
+    const col = index % FACE_ATLAS_COLUMNS;
+    const row = Math.floor(index / FACE_ATLAS_COLUMNS);
+    const x = col * FACE_ATLAS_CELL_W + FACE_ATLAS_PAD;
+    const y = row * FACE_ATLAS_CELL_H + FACE_ATLAS_PAD;
+    let source: HTMLCanvasElement;
+    const repaint = () => {
+      if (!texture || rt.disposed || rt.faceMode !== mode || rt.faceAtlasTexture !== texture) return;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(col * FACE_ATLAS_CELL_W, row * FACE_ATLAS_CELL_H, FACE_ATLAS_CELL_W, FACE_ATLAS_CELL_H);
+      ctx.drawImage(source, x, y, drawWidth, drawHeight);
+      texture.needsUpdate = true;
+    };
+    source = createFaceCanvas(label, false, mode, repaint);
+    ctx.drawImage(source, x, y, drawWidth, drawHeight);
   });
-  texture = new rt.THREE.CanvasTexture(canvas);
-  texture.colorSpace = rt.THREE.SRGBColorSpace;
+
+  texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  // One non-mipmapped atlas is both cheaper and more stable than dozens of independent mip chains.
+  // The 4px white gutter around every cell prevents linear filtering from bleeding neighbouring art.
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rendererMaxAnisotropy(rt));
-  texture.center.set(.5, .5);
-  texture.rotation = radians(tuning.tiles.faceTextureRotation);
-  // Keep the SVG artwork participating in the same soft scene lighting as the tile body.
-  // Face batching handles the draw-call cost, so we can keep Lambert here without the bright
-  // sticker-like look of MeshBasicMaterial.
-  const material = new rt.THREE.MeshLambertMaterial({
-    map: texture,
-    color: tuning.tiles.faceTint,
-    side: rt.THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  });
-  rt.faceMaterials.set(key, material);
-  return material;
+  rt.faceAtlasTexture = texture;
+  rt.faceAtlasMaterial.map = texture;
+  rt.faceAtlasMaterial.color.set(readDevTuning().tiles.faceTint);
+  rt.faceAtlasMaterial.needsUpdate = true;
+}
+
+function faceGeometryForLabel(rt: TableRuntime, label: string | null): any {
+  const index = faceAtlasIndex(label);
+  const rotation = rt.faceGeometryRotation;
+  const key = `${index}:${rotation.toFixed(3)}`;
+  const cached = rt.faceGeometries.get(key);
+  if (cached) return cached;
+
+  const geometry = rt.faceGeometry.clone();
+  const uvs = geometry.getAttribute('uv');
+  const col = index % FACE_ATLAS_COLUMNS;
+  const row = Math.floor(index / FACE_ATLAS_COLUMNS);
+  const atlasWidth = FACE_ATLAS_COLUMNS * FACE_ATLAS_CELL_W;
+  const atlasHeight = FACE_ATLAS_ROWS * FACE_ATLAS_CELL_H;
+  const drawWidth = FACE_ATLAS_CELL_W - FACE_ATLAS_PAD * 2;
+  const drawHeight = FACE_ATLAS_CELL_H - FACE_ATLAS_PAD * 2;
+  const leftPx = col * FACE_ATLAS_CELL_W + FACE_ATLAS_PAD;
+  const topPx = row * FACE_ATLAS_CELL_H + FACE_ATLAS_PAD;
+  const angle = radians(rotation);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  for (let vertex = 0; vertex < uvs.count; vertex += 1) {
+    const sourceU = uvs.getX(vertex) - .5;
+    const sourceV = uvs.getY(vertex) - .5;
+    const localU = Math.max(0, Math.min(1, sourceU * cos - sourceV * sin + .5));
+    const localV = Math.max(0, Math.min(1, sourceU * sin + sourceV * cos + .5));
+    const atlasU = (leftPx + localU * drawWidth) / atlasWidth;
+    const atlasV = 1 - (topPx + (1 - localV) * drawHeight) / atlasHeight;
+    uvs.setXY(vertex, atlasU, atlasV);
+  }
+  uvs.needsUpdate = true;
+  rt.faceGeometries.set(key, geometry);
+  return geometry;
+}
+
+function syncFaceGeometryRotation(rt: TableRuntime, rotation: number): void {
+  if (Math.abs(rt.faceGeometryRotation - rotation) < .0001) return;
+  rt.faceGeometryRotation = rotation;
+  disposeFaceGeometries(rt);
+  clearStaticFaceBatches(rt);
+  for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
+    actor.face.geometry = faceGeometryForLabel(rt, actor.spec.label);
+  }
+  rt.staticRiverDirty = true;
+}
+
+function materialForFace(rt: TableRuntime, _label: string | null, back = false): any {
+  return back ? rt.ivoryMaterial : rt.faceAtlasMaterial;
 }
 
 function clearStaticFaceBatches(rt: TableRuntime): void {
-  for (const batch of rt.staticFaceBatches.values()) batch.removeFromParent();
+  for (const batch of rt.staticFaceBatches.values()) {
+    batch.removeFromParent();
+    batch.dispose?.();
+  }
   rt.staticFaceBatches.clear();
   rt.staticFaceCount = 0;
 }
 
 function staticFaceBatchKey(rt: TableRuntime, label: string | null): string {
-  return `${rt.faceMode}:${label ?? 'blank'}`;
+  return `${rt.faceMode}:${normalizedFaceLabel(label) || 'blank'}`;
 }
 
 function ensureStaticFaceBatch(rt: TableRuntime, label: string | null): any {
@@ -820,8 +926,8 @@ function ensureStaticFaceBatch(rt: TableRuntime, label: string | null): any {
   const existing = rt.staticFaceBatches.get(key);
   if (existing) return existing;
   const batch = new rt.THREE.InstancedMesh(
-    rt.faceGeometry,
-    materialForFace(rt, label, false),
+    faceGeometryForLabel(rt, label),
+    rt.faceAtlasMaterial,
     rt.staticFaceBatchCapacity,
   );
   batch.count = 0;
@@ -840,10 +946,12 @@ function syncFaceMode(rt: TableRuntime): void {
   if (next === rt.faceMode) return;
   rt.faceMode = next;
   clearStaticFaceBatches(rt);
-  disposeFaceMaterials(rt);
+  rebuildFaceAtlas(rt);
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
-    actor.face.material = materialForFace(rt, actor.spec.label, actor.spec.back);
+    actor.face.geometry = faceGeometryForLabel(rt, actor.spec.label);
+    actor.face.material = rt.faceAtlasMaterial;
   }
+  rt.staticRiverDirty = true;
 }
 
 function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): TileActor {
@@ -868,7 +976,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   visual.add(rearShell);
 
   const faceTuning = readDevTuning().tiles;
-  const face = new THREE.Mesh(rt.faceGeometry, materialForFace(rt, spec.label, spec.back));
+  const face = new THREE.Mesh(faceGeometryForLabel(rt, spec.label), materialForFace(rt, spec.label, spec.back));
   face.position.y = faceTuning.faceOffset;
   face.rotation.x = radians(faceTuning.faceRotateX);
   face.scale.setScalar(faceTuning.faceScale);
@@ -957,7 +1065,10 @@ function tagActorMeshes(actor: TileActor): void {
 function refreshActor(rt: TableRuntime, actor: TileActor, spec: TileSpec): void {
   const changedFace = actor.spec.label !== spec.label || actor.spec.back !== spec.back;
   actor.spec = spec;
-  if (changedFace) actor.face.material = materialForFace(rt, spec.label, spec.back);
+  if (changedFace) {
+    actor.face.geometry = faceGeometryForLabel(rt, spec.label);
+    actor.face.material = materialForFace(rt, spec.label, spec.back);
+  }
   // The body already closes both sides. Draw only the printed plane that can actually be seen:
   // artwork on face-up tiles, patterned rear on concealed opponent tiles. This removes one draw
   // call per tile, which matters a lot once rivers fill up.
@@ -1377,12 +1488,13 @@ function shadowMapSize(level: number): number {
   return 2048;
 }
 
-function createRuntime(THREE: any): TableRuntime {
+async function createRuntime(THREE: any): Promise<TableRuntime> {
   const tuning = readDevTuning();
   const wantsWebGpu = requestedRendererBackend() === 'webgpu' && typeof THREE.WebGPURenderer === 'function';
   const renderer = wantsWebGpu
     ? new THREE.WebGPURenderer({ alpha: false, antialias: true })
     : new THREE.WebGLRenderer({ alpha: false, antialias: true, powerPreference: 'high-performance' });
+  if (wantsWebGpu && typeof renderer.init === 'function') await renderer.init();
   renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   if (renderer.shadowMap) {
     renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
@@ -1470,6 +1582,15 @@ function createRuntime(THREE: any): TableRuntime {
   const backShellMaterial = new THREE.MeshStandardMaterial({
     color: tuning.backColor, roughness: .58, metalness: 0,
   });
+  const faceAtlasMaterial = new THREE.MeshLambertMaterial({
+    map: null,
+    color: tuning.tiles.faceTint,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  const faceMaterials = new Map<string, any>([['atlas', faceAtlasMaterial]]);
 
   // Batch shared geometry for every settled, non-selectable tile, not only river tiles. This is
   // especially important at the start of a hand where three concealed opponent racks otherwise
@@ -1530,7 +1651,11 @@ function createRuntime(THREE: any): TableRuntime {
     tableTextureSource: null,
     backTexture: null,
     backTextureSource: null,
-    faceMaterials: new Map(),
+    faceMaterials,
+    faceAtlasTexture: null,
+    faceAtlasMaterial,
+    faceGeometries: new Map(),
+    faceGeometryRotation: tuning.tiles.faceTextureRotation,
     actors: new Map(),
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2(),
@@ -1575,6 +1700,7 @@ function createRuntime(THREE: any): TableRuntime {
     benchmarkStage: 'normal',
   };
 
+  rebuildFaceAtlas(rt);
   applyDevTuning(rt);
   renderer.setAnimationLoop((time: number) => frameRuntime(rt, time));
   rt.rafHandle = requestAnimationFrame((time) => browserRafProbe(rt, time));
@@ -1794,13 +1920,10 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.backShellMaterial.color.set(tuning.backColor);
   syncBackTexture(rt, tuning);
   rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
+  syncFaceGeometryRotation(rt, tuning.tiles.faceTextureRotation);
   for (const material of rt.faceMaterials.values()) {
     material.color?.set?.(tuning.tiles.faceTint);
-    if (material.map) {
-      material.map.center.set(.5, .5);
-      material.map.rotation = radians(tuning.tiles.faceTextureRotation);
-      material.map.needsUpdate = true;
-    }
+    if (material.map) material.map.needsUpdate = true;
   }
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     actor.face.position.y = tuning.tiles.faceOffset;
@@ -2117,11 +2240,12 @@ async function reconcile(): Promise<void> {
     try {
       const THREE = await loadThree();
       if (generation !== reconcileGeneration || !enabled || !table.isConnected) return;
-      runtime = createRuntime(THREE);
+      runtime = await createRuntime(THREE);
       loadError = false;
     } catch (error) {
       console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
-      fallbackNote(table, '3D renderer unavailable — using the fully playable 2D table.');
+      const detail = error instanceof Error ? error.message : String(error);
+      fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
       updateModeButton();
       return;
     }

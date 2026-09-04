@@ -832,7 +832,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Renderer can now be switched live between WebGL 2 and experimental Three.js WebGPURenderer (which may itself fall back to WebGL 2 if WebGPU is unavailable). Run benchmark sweep fills the rivers, then records the same scene as: full, empty renderer, table only, tiles without printed faces, and full scene without shadows. The generated TXT includes renderer_backend and benchmark_stage so we can finally isolate browser/driver cost from scene cost.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Renderer can be switched live between WebGL 2 and experimental Three.js WebGPURenderer. Printed tile art now shares one atlas texture/material instead of dozens of CanvasTextures — the previous benchmark isolated texture/material switching as the dominant bottleneck. Run benchmark sweep still records full, empty, table only, tiles without printed faces, and full scene without shadows. TXT includes renderer_backend and benchmark_stage.</p>');
   root.append(graphics);
   requestAnimationFrame(updatePerformanceCaptureUi);
 
