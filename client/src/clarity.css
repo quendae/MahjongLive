@@ -27,6 +27,8 @@
   font-weight: 900;
   line-height: 1;
   letter-spacing: .015em;
+  transform: translate(var(--dev-tile-label-x, 0px), var(--dev-tile-label-y, 0px)) scale(var(--dev-tile-label-scale, 1));
+  transform-origin: top right;
 }
 
 .tile-compact .tile-learning-label {
@@ -239,4 +241,10 @@
     min-width: 62px;
     padding: 9px 10px;
   }
+}
+
+
+.table-dora-tray .tile-learning-label {
+  transform: translate(var(--dev-dora-label-x, 0px), var(--dev-dora-label-y, 0px)) scale(var(--dev-dora-label-scale, .72));
+  transform-origin: top right;
 }

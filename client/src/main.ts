@@ -38,6 +38,7 @@ import {
 } from './preferences';
 import type { PresentationSpeed } from './preferences';
 import { presentationCaption } from './presentation';
+import { tileAssetUrlForLabel } from './table-3d-faces';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
 const SETUP_PENDING_KEY = 'mahjong-live:setup-pending:v1';
@@ -118,13 +119,17 @@ function tileLabel(tile: Tile): string {
 }
 
 function tileFace(tile: Tile): string {
+  const label = tileLabel(tile);
+  const src = tileAssetUrlForLabel(label);
+  if (src) {
+    return `<img class="tile-art" src="${src}" alt="" draggable="false" aria-hidden="true">`;
+  }
   if (tile.kind === 'honor') {
     if (tile.honorType === 'wind') return windGlyph[tile.value as Wind];
     if (tile.value === 'white') return '<span class="white-dragon">□</span>';
     if (tile.value === 'green') return '<span class="green-glyph">發</span>';
     return '<span class="red-glyph">中</span>';
   }
-
   const suffix = tile.suit === 'man' ? '萬' : tile.suit === 'pin' ? '筒' : '索';
   return `<span class="tile-rank">${tile.rank}</span><span class="tile-suit">${suffix}</span>`;
 }
@@ -398,7 +403,7 @@ function actionBar(): string {
   if (prompt.kind === 'turn') {
     if (legalAction(prompt, 'tsumo')) buttons.push(actionButton('Tsumo', 'tsumo', 'action-win'));
     if (legalAction(prompt, 'riichi-discard')) {
-      buttons.push(actionButton(riichiMode ? 'Cancel Riichi' : 'Riichi', 'riichi', riichiMode ? 'action-active' : ''));
+      buttons.push(actionButton(riichiMode ? 'Cancel Riichi' : 'Riichi', 'riichi', riichiMode ? 'action-active action-riichi' : 'action-riichi'));
     }
     if (legalAction(prompt, 'ankan')) buttons.push(actionButton('Closed Kan', 'ankan'));
     if (legalAction(prompt, 'shouminkan')) buttons.push(actionButton('Added Kan', 'shouminkan'));
@@ -416,6 +421,20 @@ function actionBar(): string {
     <div class="action-dock action-dock-compact">
       ${advisor}
       <div class="action-buttons">${buttons.join('')}</div>
+    </div>
+  `;
+}
+
+function presentationCallBubble(): string {
+  if (!presentationLocked || !current) return '';
+  const event = current.events.find((candidate) => candidate.type === 'CallMade');
+  if (!event || event.type !== 'CallMade') return '';
+  const side = seatPosition(event.player, current.state.humanSeat);
+  const label = event.kind === 'chi' ? 'CHI' : event.kind === 'pon' ? 'PON' : 'KAN';
+  return `
+    <div class="call-bubble call-bubble-${side}" role="status" aria-live="polite">
+      <strong>${label}</strong>
+      <span>${playerName(event.player)}</span>
     </div>
   `;
 }
@@ -738,6 +757,7 @@ function render(): void {
             ${left !== undefined ? opponentPanel(left) : ''}
             ${right !== undefined ? opponentPanel(right) : ''}
             ${centerInfo()}
+            ${presentationCallBubble()}
             ${humanZone()}
           </div>
           ${actionBar()}
@@ -801,7 +821,10 @@ function playPresentation(result: SingleDriveSuccess): void {
     appendEvents(frame.events);
     render();
     index += 1;
-    window.setTimeout(step, presentationDelayMs(preferences.presentationSpeed));
+    const callFrame = frame.events.some((event) => event.type === 'CallMade');
+    const baseDelay = presentationDelayMs(preferences.presentationSpeed);
+    const callHold = callFrame ? Math.max(520, Math.min(1250, baseDelay * 1.35)) : 0;
+    window.setTimeout(step, baseDelay + callHold);
   };
 
   step();

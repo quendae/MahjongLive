@@ -387,3 +387,23 @@ button:focus-visible, [role="button"]:focus-visible {
   padding: 7px 10px;
 }
 .action-dock-compact .advisor-strip { margin-right: auto; }
+
+
+/* FluffyStuff Regular SVG artwork is also used by DOM-only previews/popups/Dora. */
+.tile-art {
+  display: block;
+  width: 92%;
+  height: 94%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+.tile-compact .tile-art { width: 96%; height: 96%; }
+.action-riichi {
+  color: #241c0e;
+  background: linear-gradient(180deg, #eed580, #d5b45e);
+  border-color: rgba(255,231,159,.72);
+  font-weight: 850;
+  box-shadow: 0 4px 14px rgba(213,181,107,.18);
+}
+.action-riichi:hover { background: linear-gradient(180deg, #f3dd91, #ddbd68); }

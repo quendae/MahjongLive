@@ -57,6 +57,13 @@ type DevTuning = {
     centerHeight: number;
     reactionScale: number;
     gameLogWidth: number;
+    tileLabelScale: number;
+    tileLabelX: number;
+    tileLabelY: number;
+    doraLabelScale: number;
+    doraLabelX: number;
+    doraLabelY: number;
+    centerScoreScale: number;
   };
   graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
   tableColor: string;
@@ -113,8 +120,15 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     centerHeight: 265,
     reactionScale: 1,
     gameLogWidth: 290,
+    tileLabelScale: 1,
+    tileLabelX: 0,
+    tileLabelY: 0,
+    doraLabelScale: .72,
+    doraLabelX: 0,
+    doraLabelY: 0,
+    centerScoreScale: 1.25,
   },
-  graphics: { pixelRatio: 1.35, shadowQuality: 1, anisotropy: 4 },
+  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -256,6 +270,7 @@ type TableRuntime = {
   staticRiverCount: number;
   staticRiverDirty: boolean;
   pickMeshes: any[];
+  stressActors: TileActor[];
 };
 
 function readFaceMode(): TileFaceMode {
@@ -333,6 +348,13 @@ function readDevTuning(): DevTuning {
       centerHeight: finiteNumber(raw.ui?.centerHeight, DEFAULT_DEV_TUNING.ui.centerHeight),
       reactionScale: finiteNumber(raw.ui?.reactionScale, DEFAULT_DEV_TUNING.ui.reactionScale),
       gameLogWidth: finiteNumber(raw.ui?.gameLogWidth, DEFAULT_DEV_TUNING.ui.gameLogWidth),
+      tileLabelScale: finiteNumber(raw.ui?.tileLabelScale, DEFAULT_DEV_TUNING.ui.tileLabelScale),
+      tileLabelX: finiteNumber(raw.ui?.tileLabelX, DEFAULT_DEV_TUNING.ui.tileLabelX),
+      tileLabelY: finiteNumber(raw.ui?.tileLabelY, DEFAULT_DEV_TUNING.ui.tileLabelY),
+      doraLabelScale: finiteNumber(raw.ui?.doraLabelScale, DEFAULT_DEV_TUNING.ui.doraLabelScale),
+      doraLabelX: finiteNumber(raw.ui?.doraLabelX, DEFAULT_DEV_TUNING.ui.doraLabelX),
+      doraLabelY: finiteNumber(raw.ui?.doraLabelY, DEFAULT_DEV_TUNING.ui.doraLabelY),
+      centerScoreScale: finiteNumber(raw.ui?.centerScoreScale, DEFAULT_DEV_TUNING.ui.centerScoreScale),
     },
     graphics: {
       pixelRatio: finiteNumber(raw.graphics?.pixelRatio, DEFAULT_DEV_TUNING.graphics.pixelRatio),
@@ -349,6 +371,7 @@ function readDevTuning(): DevTuning {
     sceneColor: typeof raw.sceneColor === 'string' ? raw.sceneColor : DEFAULT_DEV_TUNING.sceneColor,
   };
   if (Math.abs(parsed.tiles.riverRowGap - .55) < .0001) parsed.tiles.riverRowGap = .60;
+  if (Math.abs(parsed.graphics.pixelRatio - 1.35) < .0001) parsed.graphics.pixelRatio = 1.0;
   if (parsed.left.x === -90 && parsed.left.z === -90 && parsed.left.y === 0) parsed.left.y = 180;
   if (parsed.right.x === -90 && parsed.right.z === 90 && parsed.right.y === 0) parsed.right.y = 180;
   if (Math.abs(parsed.tiles.faceScale - 1.1) < .0001) parsed.tiles.faceScale = .87;
@@ -772,7 +795,7 @@ function syncFaceMode(rt: TableRuntime): void {
   if (next === rt.faceMode) return;
   rt.faceMode = next;
   disposeFaceMaterials(rt);
-  for (const actor of rt.actors.values()) {
+  for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     actor.face.material = materialForFace(rt, actor.spec.label, actor.spec.back);
   }
 }
@@ -1160,7 +1183,7 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   const shellLocal = new THREE.Matrix4().makeTranslation(0, -.103, 0);
   let count = 0;
 
-  for (const actor of rt.actors.values()) {
+  for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     const canBatch = actor.spec.zone === 'river' && !actor.motion && count < rt.staticRiverCapacity;
     actor.body.visible = !canBatch;
     actor.rearShell.visible = !canBatch;
@@ -1180,6 +1203,53 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   rt.staticRiverShells.count = count;
   rt.staticRiverBodies.instanceMatrix.needsUpdate = true;
   rt.staticRiverShells.instanceMatrix.needsUpdate = true;
+}
+
+const STRESS_TILE_LABELS = [
+  '1m','2m','3m','4m','5m','6m','7m','8m','9m',
+  '1p','2p','3p','4p','5p','6p','7p','8p','9p',
+  '1s','2s','3s','4s','5s','6s','7s','8s','9s',
+  'east','south','west','north','white dragon','green dragon','red dragon',
+] as const;
+
+function clearStressDiscards(rt: TableRuntime): void {
+  for (const actor of rt.stressActors) actor.group.removeFromParent();
+  rt.stressActors = [];
+  rt.staticRiverDirty = true;
+  syncStaticRiverInstances(rt);
+}
+
+function fillStressDiscards(rt: TableRuntime): void {
+  clearStressDiscards(rt);
+  const sides: Side[] = ['bottom', 'right', 'top', 'left'];
+  for (const side of sides) {
+    const existing = [...rt.actors.values()].filter((actor) => actor.spec.zone === 'river' && actor.spec.side === side).length;
+    for (let index = existing; index < 24; index += 1) {
+      const label = STRESS_TILE_LABELS[(index + sides.indexOf(side) * 7) % STRESS_TILE_LABELS.length];
+      const spec: TileSpec = {
+        key: `stress:${side}:${index}`,
+        zone: 'river',
+        side,
+        player: `stress-${side}`,
+        index,
+        total: 24,
+        label,
+        back: false,
+        selectable: false,
+        advised: false,
+        drawn: false,
+        latest: false,
+        tileId: null,
+        element: null,
+      };
+      const target = humanizeTransform(spec, baseTransform(spec));
+      const actor = createActor(rt, spec, target);
+      actor.motion = null;
+      rt.stressActors.push(actor);
+    }
+  }
+  rt.staticRiverDirty = true;
+  syncStaticRiverInstances(rt);
 }
 
 function removeActor(rt: TableRuntime, actor: TileActor): void {
@@ -1220,7 +1290,7 @@ function createRuntime(THREE: any): TableRuntime {
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, tuning.graphics.pixelRatio));
+  renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1305,7 +1375,7 @@ function createRuntime(THREE: any): TableRuntime {
   // Static discards are the population that grows throughout a round. Keep their unique SVG
   // fronts as normal meshes, but batch the shared ivory bodies and coloured rear shells into two
   // draw calls instead of two extra draw calls per discard.
-  const staticRiverCapacity = 96;
+  const staticRiverCapacity = 192;
   const staticRiverBodies = new THREE.InstancedMesh(tileGeometry, ivoryMaterial, staticRiverCapacity);
   staticRiverBodies.count = 0;
   staticRiverBodies.castShadow = true;
@@ -1386,6 +1456,7 @@ function createRuntime(THREE: any): TableRuntime {
     staticRiverCount: 0,
     staticRiverDirty: true,
     pickMeshes: [],
+    stressActors: [],
   };
 
   applyDevTuning(rt);
@@ -1577,7 +1648,7 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
   rt.camera.updateProjectionMatrix();
-  rt.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, tuning.graphics.pixelRatio));
+  rt.renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   const shadowSize = shadowMapSize(tuning.graphics.shadowQuality);
   rt.renderer.shadowMap.enabled = shadowSize > 0;
   rt.keyLight.castShadow = shadowSize > 0;
@@ -1611,7 +1682,7 @@ function applyDevTuning(rt: TableRuntime): void {
       material.map.needsUpdate = true;
     }
   }
-  for (const actor of rt.actors.values()) {
+  for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     actor.face.position.y = tuning.tiles.faceOffset;
     actor.face.rotation.x = radians(tuning.tiles.faceRotateX);
     actor.face.scale.setScalar(tuning.tiles.faceScale);
@@ -1785,7 +1856,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         gpuTimerSupported: Boolean(rt.gpuTimerExt),
         calls: rt.renderer.info.render.calls,
         triangles: rt.renderer.info.render.triangles,
-        actors: rt.actors.size,
+        actors: rt.actors.size + rt.stressActors.length,
         moving: movingCount,
         instancedRivers: rt.staticRiverCount,
         pixelRatio: rt.renderer.getPixelRatio(),
@@ -1971,6 +2042,13 @@ window.addEventListener('mahjong-live:dev-tuning', (event) => {
   devTuningCache = detail && typeof detail === 'object' ? detail : null;
   scheduleReconcile();
 });
+window.addEventListener('mahjong-live:dev-stress-discards', (event) => {
+  if (!runtime) return;
+  const enabled = Boolean((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled);
+  if (enabled) fillStressDiscards(runtime);
+  else clearStressDiscards(runtime);
+});
+
 window.addEventListener('storage', (event) => {
   if (event.key !== DEV_TUNING_KEY) return;
   devTuningCache = null;

@@ -2,7 +2,7 @@ export type TileFaceMode = 'classic' | 'beginner';
 
 const TILE_ASSET_ROOT = '/tiles/riichi-regular';
 
-function assetFileForLabel(label: string | null): string | null {
+export function assetFileForLabel(label: string | null): string | null {
   const text = label?.trim().toLowerCase() ?? '';
   const suited = /^(red )?([1-9])([mps])$/.exec(text);
   if (suited) {
@@ -21,6 +21,11 @@ function assetFileForLabel(label: string | null): string | null {
     'red dragon': 'Chun.svg',
   };
   return honors[text] ?? null;
+}
+
+export function tileAssetUrlForLabel(label: string | null): string | null {
+  const file = assetFileForLabel(label);
+  return file ? `${TILE_ASSET_ROOT}/${file}` : null;
 }
 
 function beginnerCue(label: string | null): { text: string; color: string } | null {
@@ -132,6 +137,6 @@ export function createFaceCanvas(
     }
     onReady?.();
   };
-  image.src = `${TILE_ASSET_ROOT}/${file}`;
+  image.src = tileAssetUrlForLabel(label) ?? `${TILE_ASSET_ROOT}/${file}`;
   return canvas;
 }

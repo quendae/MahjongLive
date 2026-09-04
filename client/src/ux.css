@@ -214,3 +214,33 @@
   .tutorial-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-dock { min-height: 48px; }
 }
+
+
+/* Brief call announcement: pauses automated presentation without leaking hidden information. */
+.call-bubble {
+  position: absolute;
+  z-index: 24;
+  min-width: 112px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 16px 9px;
+  border: 1px solid rgba(239,211,137,.48);
+  border-radius: 16px;
+  color: #f5ebcf;
+  background: linear-gradient(145deg, rgba(15,35,25,.97), rgba(5,16,11,.99));
+  box-shadow: 0 14px 38px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.035);
+  pointer-events: none;
+  animation: call-bubble-in .18s ease-out both;
+}
+.call-bubble strong { color: #f2d274; font-size: 23px; line-height: 1; letter-spacing: .08em; }
+.call-bubble span { color: #b9c9c0; font-size: 10px; font-weight: 750; }
+.call-bubble-bottom { left: 50%; bottom: 17%; transform: translateX(-50%); }
+.call-bubble-top { left: 50%; top: 15%; transform: translateX(-50%); }
+.call-bubble-left { left: 13%; top: 50%; transform: translateY(-50%); }
+.call-bubble-right { right: 13%; top: 50%; transform: translateY(-50%); }
+@keyframes call-bubble-in {
+  from { opacity: 0; scale: .88; filter: blur(3px); }
+  to { opacity: 1; scale: 1; filter: blur(0); }
+}
+@media (prefers-reduced-motion: reduce) { .call-bubble { animation: none; } }

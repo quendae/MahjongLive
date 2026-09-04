@@ -55,6 +55,13 @@ type DevTuning = {
     centerHeight: number;
     reactionScale: number;
     gameLogWidth: number;
+    tileLabelScale: number;
+    tileLabelX: number;
+    tileLabelY: number;
+    doraLabelScale: number;
+    doraLabelX: number;
+    doraLabelY: number;
+    centerScoreScale: number;
   };
   graphics: { pixelRatio: number; shadowQuality: number; anisotropy: number };
   tableColor: string;
@@ -111,8 +118,15 @@ const DEFAULTS: DevTuning = {
     centerHeight: 265,
     reactionScale: 1,
     gameLogWidth: 290,
+    tileLabelScale: 1,
+    tileLabelX: 0,
+    tileLabelY: 0,
+    doraLabelScale: .72,
+    doraLabelX: 0,
+    doraLabelY: 0,
+    centerScoreScale: 1.25,
   },
-  graphics: { pixelRatio: 1.35, shadowQuality: 1, anisotropy: 4 },
+  graphics: { pixelRatio: 1.0, shadowQuality: 1, anisotropy: 4 },
   tableColor: '#370f53',
   tableImage: null,
   woodColor: '#3a2b20',
@@ -196,6 +210,13 @@ function loadSettings(): DevTuning {
       centerHeight: finite(raw.ui?.centerHeight, DEFAULTS.ui.centerHeight),
       reactionScale: finite(raw.ui?.reactionScale, DEFAULTS.ui.reactionScale),
       gameLogWidth: finite(raw.ui?.gameLogWidth, DEFAULTS.ui.gameLogWidth),
+      tileLabelScale: finite(raw.ui?.tileLabelScale, DEFAULTS.ui.tileLabelScale),
+      tileLabelX: finite(raw.ui?.tileLabelX, DEFAULTS.ui.tileLabelX),
+      tileLabelY: finite(raw.ui?.tileLabelY, DEFAULTS.ui.tileLabelY),
+      doraLabelScale: finite(raw.ui?.doraLabelScale, DEFAULTS.ui.doraLabelScale),
+      doraLabelX: finite(raw.ui?.doraLabelX, DEFAULTS.ui.doraLabelX),
+      doraLabelY: finite(raw.ui?.doraLabelY, DEFAULTS.ui.doraLabelY),
+      centerScoreScale: finite(raw.ui?.centerScoreScale, DEFAULTS.ui.centerScoreScale),
     },
     graphics: {
       pixelRatio: finite(raw.graphics?.pixelRatio, DEFAULTS.graphics.pixelRatio),
@@ -221,6 +242,7 @@ if (settings.right.x === -90 && settings.right.z === 90 && settings.right.y === 
 if (Math.abs(settings.tiles.faceScale - 1.1) < .0001) settings.tiles.faceScale = .87;
 if (settings.tiles.bodyColor.toLowerCase() === '#ffffff') settings.tiles.bodyColor = '#fbfbfb';
 if (settings.tiles.faceTint.toLowerCase() === '#ffffff') settings.tiles.faceTint = '#fbfbfb';
+if (Math.abs(settings.graphics.pixelRatio - 1.35) < .0001) settings.graphics.pixelRatio = 1.0;
 let panel: HTMLElement | null = null;
 
 type PerformanceDetail = {
@@ -250,6 +272,7 @@ type PerformanceCapture = {
 
 let performanceCapture: PerformanceCapture | null = null;
 let lastPerformanceDetail: PerformanceDetail | null = null;
+let stressDiscardsActive = false;
 
 function syncDevOpenClass(): void {
   document.body.classList.toggle('dev-tuning-open', Boolean(panel && !panel.hidden));
@@ -380,6 +403,13 @@ function applyDomPreview(): void {
   rootStyle.setProperty('--dev-reaction-scale', String(settings.ui.reactionScale));
   rootStyle.setProperty('--dev-game-log-width', `${settings.ui.gameLogWidth}px`);
   rootStyle.setProperty('--dev-scene-bg', settings.sceneColor);
+  rootStyle.setProperty('--dev-tile-label-scale', String(settings.ui.tileLabelScale));
+  rootStyle.setProperty('--dev-tile-label-x', `${settings.ui.tileLabelX}px`);
+  rootStyle.setProperty('--dev-tile-label-y', `${settings.ui.tileLabelY}px`);
+  rootStyle.setProperty('--dev-dora-label-scale', String(settings.ui.doraLabelScale));
+  rootStyle.setProperty('--dev-dora-label-x', `${settings.ui.doraLabelX}px`);
+  rootStyle.setProperty('--dev-dora-label-y', `${settings.ui.doraLabelY}px`);
+  rootStyle.setProperty('--dev-center-score-scale', String(settings.ui.centerScoreScale));
 
   document.querySelectorAll<HTMLElement>('.mahjong-table').forEach((table) => {
     // In 3D the uploaded image belongs only to the felt mesh. Never paint it onto the whole
@@ -709,6 +739,20 @@ function buildPanel(): HTMLElement {
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
+  const stressActions = document.createElement('div');
+  stressActions.className = 'dev-tuning-actions dev-stress-actions';
+  const stressButton = document.createElement('button');
+  stressButton.type = 'button';
+  stressButton.className = 'dev-tuning-action perf-stress-fill';
+  stressButton.textContent = stressDiscardsActive ? 'Clear simulated discards' : 'Fill table with discards';
+  stressButton.addEventListener('click', () => {
+    stressDiscardsActive = !stressDiscardsActive;
+    stressButton.textContent = stressDiscardsActive ? 'Clear simulated discards' : 'Fill table with discards';
+    window.dispatchEvent(new CustomEvent('mahjong-live:dev-stress-discards', { detail: { enabled: stressDiscardsActive } }));
+    setStatus(stressDiscardsActive ? 'Filled every river to 24 tiles for a visual performance stress test.' : 'Simulated discards cleared.');
+  });
+  stressActions.append(stressButton);
+  graphics.append(stressActions);
   const perfLog = document.createElement('div');
   perfLog.className = 'perf-log-controls';
   const perfStart = document.createElement('button');
@@ -790,6 +834,13 @@ function buildPanel(): HTMLElement {
   numberSlider(ui, 'Center width', 150, 420, 1, () => settings.ui.centerWidth, (v) => { settings.ui.centerWidth = v; }, 'px', DEFAULTS.ui.centerWidth);
   numberSlider(ui, 'Center height', 150, 420, 1, () => settings.ui.centerHeight, (v) => { settings.ui.centerHeight = v; }, 'px', DEFAULTS.ui.centerHeight);
   numberSlider(ui, 'Reaction popup', .50, 2.00, .01, () => settings.ui.reactionScale, (v) => { settings.ui.reactionScale = v; }, '×', DEFAULTS.ui.reactionScale);
+  numberSlider(ui, 'Tile label size', .40, 1.60, .01, () => settings.ui.tileLabelScale, (v) => { settings.ui.tileLabelScale = v; }, '×', DEFAULTS.ui.tileLabelScale);
+  numberSlider(ui, 'Tile label X', -24, 24, 1, () => settings.ui.tileLabelX, (v) => { settings.ui.tileLabelX = v; }, 'px', DEFAULTS.ui.tileLabelX);
+  numberSlider(ui, 'Tile label Y', -24, 24, 1, () => settings.ui.tileLabelY, (v) => { settings.ui.tileLabelY = v; }, 'px', DEFAULTS.ui.tileLabelY);
+  numberSlider(ui, 'Dora label size', .35, 1.40, .01, () => settings.ui.doraLabelScale, (v) => { settings.ui.doraLabelScale = v; }, '×', DEFAULTS.ui.doraLabelScale);
+  numberSlider(ui, 'Dora label X', -24, 24, 1, () => settings.ui.doraLabelX, (v) => { settings.ui.doraLabelX = v; }, 'px', DEFAULTS.ui.doraLabelX);
+  numberSlider(ui, 'Dora label Y', -24, 24, 1, () => settings.ui.doraLabelY, (v) => { settings.ui.doraLabelY = v; }, 'px', DEFAULTS.ui.doraLabelY);
+  numberSlider(ui, 'Center score plaques', .60, 2.00, .01, () => settings.ui.centerScoreScale, (v) => { settings.ui.centerScoreScale = v; }, '×', DEFAULTS.ui.centerScoreScale);
   numberSlider(ui, 'Game log width', 180, 600, 1, () => settings.ui.gameLogWidth, (v) => { settings.ui.gameLogWidth = v; }, 'px', DEFAULTS.ui.gameLogWidth);
   ui.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Center X/Y are offsets from the projected 3D world center, not from the browser viewport center.</p>');
   root.append(ui);

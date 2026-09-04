@@ -221,6 +221,8 @@
 }
 
 .table-3d-active .counter-score {
+  scale: var(--dev-center-score-scale, 1.25);
+  transform-origin: center;
   min-width: 88px;
   padding: 4px 7px;
   border-radius: 8px;
