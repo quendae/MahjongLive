@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { suited, wind } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
 import { applyAction, getLegalActions } from './round';
+import { completeShouminkan } from './kan';
 import type { PlayerMeld, RoundPlayerState, RoundState } from './types';
 
 function physical(tile: Tile, id: number): Tile {
@@ -117,6 +118,36 @@ describe('Riichi Ankan timing', () => {
     if (!result.ok) return;
     expect(result.state.wall.doraIndicators).toHaveLength(3);
     expect(result.events.filter((event) => event.type === 'DoraIndicatorRevealed')).toHaveLength(2);
+  });
+});
+
+
+describe('completed Kan-Dora presentation timing', () => {
+  it('reveals completed Shouminkan Kan-Dora immediately before the Rinshan draw', () => {
+    const ponTiles = [0, 1, 2].map((copy) => physical(suited('man', 5), 5000 + copy));
+    const addedTile = physical(suited('man', 5), 5003);
+    const round = state(
+      player([], { melds: [{ type: 'triplet', tiles: ponTiles, isOpen: true }] }),
+      9999,
+    );
+    round.phase = {
+      kind: 'kan-reactions',
+      declarer: 0,
+      meldIndex: 0,
+      addedTile,
+      ronClaims: [],
+    };
+
+    const result = completeShouminkan(round);
+    expect(result).not.toBeNull();
+    if (!result) return;
+    expect(result.state.wall.doraIndicators).toHaveLength(2);
+    expect(result.state.phase).toMatchObject({ kind: 'awaiting-discard', isRinshan: true, pendingKanDora: false });
+    expect(result.events.map((event) => event.type)).toEqual([
+      'KanCompleted',
+      'DoraIndicatorRevealed',
+      'TileDrawn',
+    ]);
   });
 });
 

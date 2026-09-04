@@ -189,6 +189,9 @@ type TileSpec = {
   tileId: number | null;
   called?: boolean;
   calledFrom?: number | null;
+  meldIndex?: number;
+  meldTileIndex?: number;
+  meldSize?: number;
   element: HTMLElement | null;
 };
 
@@ -635,26 +638,29 @@ function baseTransform(spec: TileSpec): Transform {
       setConfiguredRotation(transform, tuning.right);
     }
   } else {
-    const row = Math.floor(spec.index / 8);
-    const col = spec.index % 8;
     const gap = tuning.tiles.meldGap;
-    const rowGap = tuning.tiles.meldRowGap;
+    const meldIndex = Math.max(0, spec.meldIndex ?? 0);
+    const tileIndex = Math.max(0, spec.meldTileIndex ?? spec.index);
+    // Keep each legal 3/4-tile meld as one group. The previous flat 8-column stream wrapped the
+    // ninth tile onto a second row, which could throw a perfectly legal third meld into the table.
+    const groupGap = tuning.tiles.meldRowGap;
+    const groupStride = Math.max(1.18, gap * 4 + groupGap);
+    const linear = meldIndex * groupStride + tileIndex * gap;
     transform.scale = .80 * tuning.tiles.meldScale;
-    // Open sets hug the player's lower-right rail. Tiles within a meld are nearly touching.
     if (spec.side === 'bottom') {
-      transform.x = 5.67 - col * gap;
-      transform.z = 4.48 - row * rowGap;
+      transform.x = 5.67 - linear;
+      transform.z = 4.48;
     } else if (spec.side === 'top') {
-      transform.x = -5.67 + col * gap;
-      transform.z = -4.48 + row * rowGap;
+      transform.x = -5.67 + linear;
+      transform.z = -4.48;
       transform.yaw = Math.PI;
     } else if (spec.side === 'left') {
-      transform.x = -5.67 + row * rowGap;
-      transform.z = 4.48 - col * gap;
+      transform.x = -5.67;
+      transform.z = 4.48 - linear;
       transform.yaw = Math.PI / 2;
     } else {
-      transform.x = 5.67 - row * rowGap;
-      transform.z = -4.48 + col * gap;
+      transform.x = 5.67;
+      transform.z = -4.48 + linear;
       transform.yaw = -Math.PI / 2;
     }
     if (spec.called) {
@@ -829,6 +835,46 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   }
   uvs.needsUpdate = true;
   return geometry;
+}
+
+function rebuildGeometryQuality(rt: TableRuntime, value: number): void {
+  const next = geometryQualityLevel(value);
+  if (next === rt.geometryQuality) return;
+
+  // Merged static faces bake the old face geometry transforms; remove them before swapping geometry.
+  clearStaticFaceBatches(rt);
+  disposeFaceGeometries(rt);
+
+  const oldTile = rt.tileGeometry;
+  const oldFace = rt.faceGeometry;
+  const oldBack = rt.backGeometry;
+  const oldShell = rt.backShellGeometry;
+
+  rt.geometryQuality = next;
+  rt.tileGeometry = roundedTileGeometry(rt.THREE, next);
+  rt.faceGeometry = roundedFaceGeometry(rt.THREE, .39, .53, .038, next);
+  rt.backGeometry = roundedFaceGeometry(rt.THREE, .405, .545, .043, next);
+  rt.backShellGeometry = roundedBackShellGeometry(rt.THREE, next);
+
+  rt.staticRiverBodies.geometry = rt.tileGeometry;
+  rt.staticRiverShells.geometry = rt.backShellGeometry;
+  rt.staticBacks.geometry = rt.backGeometry;
+
+  for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
+    actor.body.geometry = rt.tileGeometry;
+    actor.rearShell.geometry = rt.backShellGeometry;
+    actor.rear.geometry = rt.backGeometry;
+    actor.face.geometry = faceGeometryForLabel(rt, actor.spec.label);
+  }
+
+  oldTile?.dispose?.();
+  oldFace?.dispose?.();
+  oldBack?.dispose?.();
+  oldShell?.dispose?.();
+
+  rt.staticRiverDirty = true;
+  syncStaticRiverInstances(rt);
+  if (rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
 }
 
 function disposeFaceGeometries(rt: TableRuntime): void {
@@ -1280,8 +1326,13 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
     meld.forEach((element, index) => {
       const tileId = elementTileId(element);
       const label = element.getAttribute('aria-label');
+      const meldElement = element.closest<HTMLElement>('.meld');
+      const meldIndexRaw = Number(meldElement?.dataset.meldIndex ?? 0);
+      const meldIndex = Number.isFinite(meldIndexRaw) ? meldIndexRaw : 0;
+      const meldTiles = meldElement ? [...meldElement.querySelectorAll<HTMLElement>(':scope > .tile')] : [];
+      const meldTileIndex = Math.max(0, meldTiles.indexOf(element));
       specs.push({
-        key: tileId === null ? `meld:${player}:${index}:${label ?? 'back'}` : `tile:${tileId}`,
+        key: tileId === null ? `meld:${player}:${meldIndex}:${meldTileIndex}:${label ?? 'back'}` : `tile:${tileId}`,
         zone: 'meld',
         side,
         player,
@@ -1296,6 +1347,9 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
         tileId,
         called: element.classList.contains('tile-meld-called'),
         calledFrom: element.dataset.calledFrom === undefined ? null : Number(element.dataset.calledFrom),
+        meldIndex,
+        meldTileIndex,
+        meldSize: Math.max(1, meldTiles.length),
         element,
       });
     });
@@ -2436,11 +2490,7 @@ window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
 window.addEventListener('mahjong-live:dev-tuning', (event) => {
   const detail = (event as CustomEvent<DevTuning>).detail;
   devTuningCache = detail && typeof detail === 'object' ? detail : null;
-  if (runtime && detail?.graphics
-    && geometryQualityLevel(detail.graphics.geometryQuality) !== runtime.geometryQuality) {
-    disposeRuntime();
-    loadError = false;
-  }
+  if (runtime && detail?.graphics) rebuildGeometryQuality(runtime, detail.graphics.geometryQuality);
   scheduleReconcile();
 });
 window.addEventListener('mahjong-live:renderer-backend', (event) => {

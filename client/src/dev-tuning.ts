@@ -895,7 +895,7 @@ function buildPanel(): HTMLElement {
   numberSlider(tileSection, 'Discard size', .50, 1.40, .01, () => settings.tiles.riverScale, (v) => { settings.tiles.riverScale = v; }, '×', DEFAULTS.tiles.riverScale);
   numberSlider(tileSection, 'Meld size', .50, 1.40, .01, () => settings.tiles.meldScale, (v) => { settings.tiles.meldScale = v; }, '×', DEFAULTS.tiles.meldScale);
   numberSlider(tileSection, 'Meld gap', .30, .55, .01, () => settings.tiles.meldGap, (v) => { settings.tiles.meldGap = v; }, '', DEFAULTS.tiles.meldGap);
-  numberSlider(tileSection, 'Meld row gap', .38, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
+  numberSlider(tileSection, 'Meld group gap', .10, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
   numberSlider(tileSection, 'Called tile turn', -180, 180, 1, () => settings.tiles.calledTileRotation, (v) => { settings.tiles.calledTileRotation = v; }, '°', DEFAULTS.tiles.calledTileRotation);
   numberSlider(tileSection, 'Called tile gap', -.30, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
   tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');

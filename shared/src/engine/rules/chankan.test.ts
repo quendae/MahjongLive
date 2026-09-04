@@ -173,9 +173,9 @@ describe('Shouminkan / Chankan', () => {
       kind: 'awaiting-discard',
       player: 0,
       isRinshan: true,
-      pendingKanDora: true,
+      pendingKanDora: false,
     });
-    expect(resolved.state.wall.doraIndicators).toHaveLength(1);
+    expect(resolved.state.wall.doraIndicators).toHaveLength(2);
   });
 
   it('sets temporary Furiten when a structural Chankan opportunity is passed', () => {

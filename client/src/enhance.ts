@@ -1,8 +1,6 @@
 import './game-feel.css';
 
-import type { Dragon, Suit, SuitRank, Tile, Wind } from '@mahjong-live/shared/tile-types';
 import { playDoraCue, playPresentationCaption, playTileSelect, playUiTap, setSoundEnabled, unlockAudio } from './audio';
-import { renderTileFace } from './tile-face';
 
 const SOUND_KEY = 'mahjong-live:sound-enabled:v1';
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -16,40 +14,6 @@ let scheduled = false;
 setSoundEnabled(soundEnabled);
 document.addEventListener('pointerdown', unlockAudio, { passive: true });
 
-function tileFromLabel(label: string): Tile | null {
-  const suited = /^(red )?([1-9])([mps])$/.exec(label.trim());
-  if (suited) {
-    const suitMap: Record<string, Suit> = { m: 'man', p: 'pin', s: 'sou' };
-    return {
-      kind: 'suited',
-      suit: suitMap[suited[3]],
-      rank: Number(suited[2]) as SuitRank,
-      isRed: Boolean(suited[1]),
-    };
-  }
-
-  const wind = label.trim() as Wind;
-  if (wind === 'east' || wind === 'south' || wind === 'west' || wind === 'north') {
-    return { kind: 'honor', honorType: 'wind', value: wind };
-  }
-
-  const dragon = /^(white|green|red) dragon$/.exec(label.trim());
-  if (dragon) {
-    return { kind: 'honor', honorType: 'dragon', value: dragon[1] as Dragon };
-  }
-  return null;
-}
-
-function enhanceTileFaces(): void {
-  app.querySelectorAll<HTMLElement>('.tile[aria-label]:not([data-vector-face])').forEach((element) => {
-    const label = element.getAttribute('aria-label');
-    if (!label) return;
-    const tile = tileFromLabel(label);
-    if (!tile) return;
-    element.innerHTML = renderTileFace(tile);
-    element.dataset.vectorFace = 'true';
-  });
-}
 
 function bindFeelSounds(): void {
   app.querySelectorAll<HTMLElement>('.tile-clickable:not([data-feel-sound])').forEach((element) => {
@@ -171,7 +135,6 @@ function applyPresentationFeel(): void {
 
 function enhance(): void {
   scheduled = false;
-  enhanceTileFaces();
   ensureSoundButton();
   bindFeelSounds();
   applyActiveTurn();

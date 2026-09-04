@@ -293,16 +293,19 @@ export function completeShouminkan(
   melds[phase.meldIndex] = meld;
   let players = replacePlayer(state.players, phase.declarer, { ...player, melds });
   players = clearAllIppatsu(players);
-  const working: RoundState = {
+  let working: RoundState = {
     ...state,
     players,
     callsMade: state.callsMade + 1,
   };
-  const rinshan = rinshanState(working, phase.declarer, true);
+  const wall = revealKanDora(working.wall);
+  working = { ...working, wall };
+  const rinshan = rinshanState(working, phase.declarer, false);
   return {
     state: rinshan.state,
     events: [
       { type: 'KanCompleted', player: phase.declarer, kind: 'shouminkan', meld },
+      { type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length },
       rinshan.event,
     ],
   };
@@ -339,18 +342,21 @@ export function executeDaiminkan(
     melds: [...caller.melds, meld],
   });
   players = clearAllIppatsu(players);
-  const working: RoundState = {
+  let working: RoundState = {
     ...state,
     players,
     callsMade: state.callsMade + 1,
     currentPlayer: claim.player,
   };
-  const rinshan = rinshanState(working, claim.player, true);
+  const wall = revealKanDora(working.wall);
+  working = { ...working, wall };
+  const rinshan = rinshanState(working, claim.player, false);
   return {
     state: rinshan.state,
     events: [
       { type: 'CallMade', player: claim.player, kind: 'daiminkan', meld },
       { type: 'KanCompleted', player: claim.player, kind: 'daiminkan', meld },
+      { type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length },
       rinshan.event,
     ],
   };

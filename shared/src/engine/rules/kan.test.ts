@@ -151,8 +151,8 @@ describe('Ankan', () => {
   });
 });
 
-describe('Daiminkan delayed Kan-Dora', () => {
-  it('draws Rinshan immediately but reveals the new indicator only when that player discards', () => {
+describe('Daiminkan immediate Kan-Dora', () => {
+  it('reveals the new indicator when the Kan completes, before the Rinshan discard', () => {
     const discardTile = physical(suited('pin', 5), 1000);
     const record: RoundDiscard = { tile: discardTile, tileId: 1000, tsumogiri: false, wasLastLiveDraw: false };
     const matches = [1, 2, 3].map((n) => physical(suited('pin', 5, n === 1), 1000 + n));
@@ -170,17 +170,18 @@ describe('Daiminkan delayed Kan-Dora', () => {
     expect(resolved.ok).toBe(true);
     if (!resolved.ok || resolved.state.phase.kind !== 'awaiting-discard') return;
     expect(resolved.state.players[1].melds[0]).toMatchObject({ type: 'quad', isOpen: true });
-    expect(resolved.state.wall.doraIndicators).toHaveLength(1);
-    expect(resolved.state.phase.pendingKanDora).toBe(true);
+    expect(resolved.state.wall.doraIndicators).toHaveLength(2);
+    expect(resolved.state.phase.pendingKanDora).toBe(false);
+    expect(resolved.events.some((event) => event.type === 'DoraIndicatorRevealed')).toBe(true);
     const drawnId = resolved.state.phase.drawnTileId!;
     const discard = applyAction(resolved.state, { type: 'discard', player: 1, tileId: drawnId });
     expect(discard.ok).toBe(true);
     if (!discard.ok) return;
     expect(discard.state.wall.doraIndicators).toHaveLength(2);
-    expect(discard.events.some((event) => event.type === 'DoraIndicatorRevealed')).toBe(true);
+    expect(discard.events.some((event) => event.type === 'DoraIndicatorRevealed')).toBe(false);
   });
 
-  it('does not reveal the delayed Kan-Dora when the caller wins immediately on Rinshan', () => {
+  it('keeps the immediately revealed Kan-Dora active for a Rinshan win', () => {
     const discardTile = physical(suited('pin', 5), 1300);
     const record: RoundDiscard = { tile: discardTile, tileId: 1300, tsumogiri: false, wasLastLiveDraw: false };
     const matches = [1, 2, 3].map((n) => physical(suited('pin', 5, n === 1), 1300 + n));
@@ -205,18 +206,18 @@ describe('Daiminkan delayed Kan-Dora', () => {
     const resolved = applyAction(claim.state, { type: 'resolve-reactions' });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok || resolved.state.phase.kind !== 'awaiting-discard') return;
-    expect(resolved.state.wall.doraIndicators).toHaveLength(1);
-    expect(resolved.state.phase.pendingKanDora).toBe(true);
+    expect(resolved.state.wall.doraIndicators).toHaveLength(2);
+    expect(resolved.state.phase.pendingKanDora).toBe(false);
     expect(getLegalActions(resolved.state, 1).some((action) => action.type === 'tsumo')).toBe(true);
 
     const win = applyAction(resolved.state, { type: 'tsumo', player: 1 });
     expect(win.ok).toBe(true);
     if (!win.ok || win.state.phase.kind !== 'ended' || win.state.phase.result.type !== 'tsumo') return;
     expect(win.state.phase.result.score.yaku.map((yaku) => yaku.name)).toContain('Rinshan Kaihou');
-    expect(win.state.wall.doraIndicators).toHaveLength(1);
+    expect(win.state.wall.doraIndicators).toHaveLength(2);
   });
 
-  it('flushes a previous delayed indicator before a chained Ankan, then reveals the Ankan Dora immediately', () => {
+  it('keeps immediate Daiminkan Dora active and adds the chained Ankan Dora', () => {
     const discardTile = physical(suited('pin', 5), 1400);
     const record: RoundDiscard = { tile: discardTile, tileId: 1400, tsumogiri: false, wasLastLiveDraw: false };
     const matches = [1, 2, 3].map((n) => physical(suited('pin', 5, n === 1), 1400 + n));
@@ -239,8 +240,8 @@ describe('Daiminkan delayed Kan-Dora', () => {
     const firstKan = applyAction(claimed.state, { type: 'resolve-reactions' });
     expect(firstKan.ok).toBe(true);
     if (!firstKan.ok || firstKan.state.phase.kind !== 'awaiting-discard') return;
-    expect(firstKan.state.wall.doraIndicators).toHaveLength(1);
-    expect(firstKan.state.phase.pendingKanDora).toBe(true);
+    expect(firstKan.state.wall.doraIndicators).toHaveLength(2);
+    expect(firstKan.state.phase.pendingKanDora).toBe(false);
 
     const ankan = getLegalActions(firstKan.state, 1).find((action) => action.type === 'ankan');
     expect(ankan?.type).toBe('ankan');
@@ -249,7 +250,7 @@ describe('Daiminkan delayed Kan-Dora', () => {
     expect(chained.ok).toBe(true);
     if (!chained.ok) return;
     expect(chained.state.wall.doraIndicators).toHaveLength(3);
-    expect(chained.events.filter((event) => event.type === 'DoraIndicatorRevealed')).toHaveLength(2);
+    expect(chained.events.filter((event) => event.type === 'DoraIndicatorRevealed')).toHaveLength(1);
   });
 
   it('is suppressed by a competing Ron claim', () => {

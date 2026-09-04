@@ -17,7 +17,7 @@ import type {
   SingleDriveSuccess,
   SingleGameState,
 } from '@mahjong-live/shared/single';
-import { seatWindFor } from '@mahjong-live/shared/rules';
+import { allTileTypes, isRonFuriten, seatWindFor, tileTypeKey, winningTileTypeKeys } from '@mahjong-live/shared/rules';
 import type {
   LegalAction,
   PlayerIndex,
@@ -188,9 +188,9 @@ function tileBackMarkup(
   return `<div class="${classes}" aria-hidden="true"${idAttr}><span></span></div>`;
 }
 
-function meldMarkup(meld: PlayerMeld): string {
+function meldMarkup(meld: PlayerMeld, meldIndex: number): string {
   const hiddenOuter = meld.type === 'quad' && meld.isOpen !== true;
-  return `<div class="meld meld-${meld.type}">${meld.tiles
+  return `<div class="meld meld-${meld.type}" data-meld-index="${meldIndex}">${meld.tiles
     .map((tile, index) => {
       if (hiddenOuter && (index === 0 || index === meld.tiles.length - 1)) {
         return tileBackMarkup(true, { engineTileId: tile.id });
@@ -210,6 +210,28 @@ function seatPosition(player: PlayerIndex, human: PlayerIndex): 'bottom' | 'righ
   return relative === 0 ? 'bottom' : relative === 1 ? 'right' : relative === 2 ? 'top' : 'left';
 }
 
+function waitMiniTile(tile: Tile): string {
+  const label = tileLabel(tile);
+  const src = tileAssetUrlForLabel(label);
+  return `<span class="wait-tile" title="${label}" aria-label="${label}">${src ? `<img src="${src}" alt="" draggable="false" aria-hidden="true">` : label}</span>`;
+}
+
+function humanWaitMarkup(player: PlayerIndex, state: RoundPlayerState): string {
+  if (!current || player !== current.state.humanSeat) return '';
+  // A 13-tile-equivalent concealed state is the actual waiting state. While the player is holding
+  // a fresh 14th tile, waits depend on the discard choice and are shown by the advisor instead.
+  if (state.concealed.length % 3 !== 1) return '';
+  const waits = winningTileTypeKeys(state.concealed, state.melds);
+  if (waits.size === 0) return '';
+  const waitingTiles = allTileTypes().filter((tile) => waits.has(tileTypeKey(tile)));
+  const furiten = isRonFuriten(state);
+  const names = waitingTiles.map(tileLabel).join(', ');
+  return `
+    <span class="status-tag ${furiten ? 'furiten-tag' : 'tenpai-tag'}" title="${furiten ? 'Furiten' : 'Tenpai'} — waiting on ${names}">${furiten ? 'Furiten' : 'Tenpai'}</span>
+    <span class="wait-hint" title="Waiting on ${names}"><span class="wait-hint-label">Wait</span>${waitingTiles.map(waitMiniTile).join('')}</span>
+  `;
+}
+
 function playerStatusMarkup(player: PlayerIndex, state: RoundPlayerState): string {
   if (!current) return '';
   const round = current.state.match.round;
@@ -217,6 +239,8 @@ function playerStatusMarkup(player: PlayerIndex, state: RoundPlayerState): strin
   const tags: string[] = [];
   if (player === round.dealer) tags.push('<span class="status-tag dealer-tag">Dealer</span>');
   if (state.riichi !== 'none') tags.push(`<span class="status-tag riichi-tag">${state.riichi === 'double-riichi' ? 'Double Riichi' : 'Riichi'}</span>`);
+  const waits = humanWaitMarkup(player, state);
+  if (waits) tags.push(waits);
   return `
     <div class="player-heading">
       <span class="seat-wind">${windGlyph[seatWind]}</span>
@@ -240,7 +264,7 @@ function opponentPanel(player: PlayerIndex): string {
     engineTileId: tile.id,
     drawn: drawnId !== null && tile.id === drawnId,
   })).join('');
-  const melds = state.melds.map(meldMarkup).join('');
+  const melds = state.melds.map((meld, index) => meldMarkup(meld, index)).join('');
   const discards = state.discards.map((discard) => tileMarkup(discard.tile, {
     compact: true,
     called: discard.calledBy !== undefined,
@@ -325,7 +349,7 @@ function humanZone(): string {
   const round = current.state.match.round;
   const human = current.state.humanSeat;
   const state = round.players[human];
-  const melds = state.melds.map(meldMarkup).join('');
+  const melds = state.melds.map((meld, index) => meldMarkup(meld, index)).join('');
   const discards = state.discards.map((discard) => tileMarkup(discard.tile, {
     compact: true,
     called: discard.calledBy !== undefined,
@@ -425,14 +449,21 @@ function actionBar(): string {
   `;
 }
 
-function presentationCallBubble(): string {
+function presentationReactionBubble(): string {
   if (!presentationLocked || !current) return '';
-  const event = current.events.find((candidate) => candidate.type === 'CallMade');
-  if (!event || event.type !== 'CallMade') return '';
+  const event = current.events.find((candidate) =>
+    candidate.type === 'RonClaimed' || candidate.type === 'CallMade' || candidate.type === 'KanDeclared'
+  );
+  if (!event) return '';
+
+  let label: 'CHI' | 'PON' | 'KAN' | 'RON';
+  if (event.type === 'RonClaimed') label = 'RON';
+  else if (event.type === 'KanDeclared') label = 'KAN';
+  else label = event.kind === 'chi' ? 'CHI' : event.kind === 'pon' ? 'PON' : 'KAN';
+
   const side = seatPosition(event.player, current.state.humanSeat);
-  const label = event.kind === 'chi' ? 'CHI' : event.kind === 'pon' ? 'PON' : 'KAN';
   return `
-    <div class="call-bubble call-bubble-${side}" role="status" aria-live="polite">
+    <div class="call-bubble call-bubble-${side} call-bubble-${label.toLowerCase()}" role="status" aria-live="assertive">
       <strong>${label}</strong>
       <span>${playerName(event.player)}</span>
     </div>
@@ -727,7 +758,7 @@ function tutorialOverlay(): string {
         <p class="tutorial-intro">The engine resolves instantly, while the table presents automated moves at your chosen speed. You are stopped only when your decision matters.</p>
         <div class="tutorial-steps">
           <div class="tutorial-step"><b>1 · Discard</b><span>Click one of the bright tiles in your hand. The separated tile on the right is your latest draw.</span></div>
-          <div class="tutorial-step"><b>2 · Calls</b><span>When Chi, Pon, Kan or Ron is legal, action buttons appear below the table. Pass is always available during reactions.</span></div>
+          <div class="tutorial-step"><b>2 · Calls</b><span>When Chi, Pon, Kan or Ron is legal, a reaction popup appears over the table. Pass is always available during reactions.</span></div>
           <div class="tutorial-step"><b>3 · Riichi</b><span>Press Riichi first; only legal declaration discards remain highlighted. Then choose the discard.</span></div>
           <div class="tutorial-step"><b>4 · Dora & advisor</b><span>Dora indicators sit in the table center. The optional advisor highlights development using only your hand and public tiles.</span></div>
         </div>
@@ -757,7 +788,7 @@ function render(): void {
             ${left !== undefined ? opponentPanel(left) : ''}
             ${right !== undefined ? opponentPanel(right) : ''}
             ${centerInfo()}
-            ${presentationCallBubble()}
+            ${presentationReactionBubble()}
             ${humanZone()}
           </div>
           ${actionBar()}
@@ -821,10 +852,14 @@ function playPresentation(result: SingleDriveSuccess): void {
     appendEvents(frame.events);
     render();
     index += 1;
-    const callFrame = frame.events.some((event) => event.type === 'CallMade');
+    const reactionFrame = frame.events.some((event) =>
+      event.type === 'CallMade' || event.type === 'RonClaimed' || event.type === 'KanDeclared' || event.type === 'HandWon'
+    );
     const baseDelay = presentationDelayMs(preferences.presentationSpeed);
-    const callHold = callFrame ? Math.max(520, Math.min(1250, baseDelay * 1.35)) : 0;
-    window.setTimeout(step, baseDelay + callHold);
+    // A spoken call is a table event, not background animation. Give it enough time to register
+    // even at Fast presentation speed and over remote/streamed displays.
+    const reactionHold = reactionFrame ? Math.max(1500, Math.min(2800, baseDelay * 2.2)) : 0;
+    window.setTimeout(step, baseDelay + reactionHold);
   };
 
   step();

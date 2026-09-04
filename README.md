@@ -1,6 +1,6 @@
 # Mahjong Live
 
-Riichi Mahjong in the browser, with an authoritative TypeScript rules engine, single-player bots and a WebGL 3D table.
+Riichi Mahjong in the browser, with an authoritative TypeScript rules engine, single-player bots and a WebGPU/WebGL 3D table.
 
 ## Play locally — easiest way
 
@@ -37,11 +37,11 @@ pnpm check             # engine typecheck + tests + client typecheck + build
 
 ## 3D table
 
-The normal game now starts with the **3D Table** presentation enabled. The WebGL renderer draws the physical table, discard rivers, opponent racks, melds and wall as lit 3D geometry while the existing rules engine remains the single source of truth.
+The normal game starts with the **3D Table** presentation enabled. Chromium/Edge prefers WebGPU when available, while Firefox and unsupported devices use the WebGL2 path. The renderer draws the physical table, discard rivers, racks and melds while the existing rules engine remains the single source of truth.
 
-The local player's rack intentionally remains an HTML interaction layer in this first 3D pass. That preserves excellent mouse, touch and keyboard behavior while the visual table moves to 3D. A header toggle allows instant switching between **3D Table** and **2D Table**.
+The local player's rack is rendered in 3D while the authoritative DOM remains the accessible interaction/state source. A header toggle allows instant switching between **3D Table** and **2D Table**. Tile artwork is stored locally and uses the public-domain FluffyStuff Riichi SVG set.
 
-The 3D renderer currently loads a pinned Three.js build from jsDelivr. If it cannot be loaded or WebGL is unavailable, Mahjong Live automatically keeps the fully playable 2D table instead of blocking game startup.
+The 3D renderer loads a pinned Three.js build from jsDelivr. If the requested GPU backend cannot initialize, Mahjong Live falls back safely instead of blocking game startup.
 
 ## Architecture
 
@@ -51,3 +51,7 @@ The 3D renderer currently loads a pinned Three.js build from jsDelivr. If it can
 - `client/src/table-3d.ts` — Three.js/WebGL table renderer derived from the already-rendered authoritative state.
 
 The 3D renderer does **not** own game rules or mutate match state. This keeps rendering replaceable and prevents visual work from changing Mahjong outcomes.
+
+## Roadmap
+
+Current work and future expansion are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md). Historical implementation plans remain under `docs/superpowers/plans/`.
