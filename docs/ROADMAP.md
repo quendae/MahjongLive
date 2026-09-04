@@ -13,12 +13,12 @@ and should be updated as the game grows.
 - [x] WebGPU-first renderer on Chromium/Edge; WebGL2 fallback and Firefox path.
 - [x] Built-in FPS/RAF/render telemetry, TXT capture and stress-table benchmark.
 - [x] Adjustable tile-corner geometry quality.
-- [ ] Keep renderer/device alive when changing graphics tuning; geometry swaps must be in-place.
+- [x] Keep renderer/device alive when changing graphics tuning; geometry swaps are in-place.
 - [ ] Finish WebGL fallback performance work, especially Edge/ANGLE.
-- [ ] Keep every DOM tile preview (Dora, reactions, choices) on the same FluffyStuff artwork source.
-- [ ] Strong, readable CHI/PON/KAN/RON table announcements with appropriate presentation pauses.
-- [ ] Human Tenpai/Furiten status with visible wait tiles, without exposing opponent concealed info.
-- [ ] Group-aware meld placement for all four legal meld groups without wrapping/collisions.
+- [x] Keep every DOM tile preview (Dora, reactions, choices) on the same FluffyStuff artwork source.
+- [x] Strong, readable CHI/PON/KAN/RON table announcements with appropriate presentation pauses.
+- [x] Human Tenpai/Furiten status with visible wait tiles, without exposing opponent concealed info.
+- [x] Group-aware meld placement for all four legal meld groups without wrapping/collisions.
 - [ ] Continue responsive table/camera QA on desktop, tablet and phone landscape.
 
 ## Rules and scoring
