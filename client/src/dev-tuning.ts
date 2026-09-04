@@ -769,7 +769,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Settled non-selectable bodies/shells/backs are instanced, printed fronts are additionally instanced by tile design, and shadow maps are cached between movements. The stress test should now expose whether remaining cost is geometry/driver rather than per-tile draw calls. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Settled non-selectable bodies/shells/backs and printed fronts are instanced, shadow maps are cached, and tile meshes now use much lighter rounded geometry. Watch the triangle count in the log: this pass targets the remaining vertex/geometry cost rather than raster resolution. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
   root.append(graphics);
   requestAnimationFrame(updatePerformanceCaptureUi);
 

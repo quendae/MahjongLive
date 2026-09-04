@@ -693,9 +693,9 @@ function roundedTileGeometry(THREE: any): any {
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: height,
     steps: 1,
-    curveSegments: 10,
+    curveSegments: 4,
     bevelEnabled: true,
-    bevelSegments: 4,
+    bevelSegments: 1,
     bevelSize: .018,
     bevelThickness: .018,
   });
@@ -724,8 +724,8 @@ function roundedBackShellGeometry(THREE: any): any {
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: height, steps: 1, curveSegments: 10, bevelEnabled: true,
-    bevelSegments: 4, bevelSize: .009, bevelThickness: .009,
+    depth: height, steps: 1, curveSegments: 4, bevelEnabled: true,
+    bevelSegments: 1, bevelSize: .009, bevelThickness: .009,
   });
   geometry.rotateX(-Math.PI / 2);
   geometry.center();
@@ -747,7 +747,7 @@ function roundedFaceGeometry(THREE: any, width: number, depth: number, radius: n
   shape.quadraticCurveTo(x0, y1, x0, y1 - radius);
   shape.lineTo(x0, y0 + radius);
   shape.quadraticCurveTo(x0, y0, x0 + radius, y0);
-  const geometry = new THREE.ShapeGeometry(shape, 14);
+  const geometry = new THREE.ShapeGeometry(shape, 6);
   const positions = geometry.getAttribute('position');
   const uvs = geometry.getAttribute('uv');
   for (let index = 0; index < positions.count; index += 1) {
@@ -780,10 +780,10 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.center.set(.5, .5);
   texture.rotation = radians(tuning.tiles.faceTextureRotation);
-  // The porcelain body provides the physical lighting/shading. The printed SVG plane itself is
-  // effectively ink on that surface, so an unlit shader is both visually stable and far cheaper
-  // than evaluating a light for every visible tile face.
-  const material = new rt.THREE.MeshBasicMaterial({
+  // Keep the SVG artwork participating in the same soft scene lighting as the tile body.
+  // Face batching handles the draw-call cost, so we can keep Lambert here without the bright
+  // sticker-like look of MeshBasicMaterial.
+  const material = new rt.THREE.MeshLambertMaterial({
     map: texture,
     color: tuning.tiles.faceTint,
     side: rt.THREE.DoubleSide,
@@ -878,7 +878,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   visual.add(rear);
 
   const indicator = new THREE.Mesh(
-    new THREE.RingGeometry(.235, .285, 34),
+    new THREE.RingGeometry(.235, .285, 20),
     new THREE.MeshBasicMaterial({
       color: 0xe8c96f,
       transparent: true,
@@ -893,7 +893,7 @@ function createActor(rt: TableRuntime, spec: TileSpec, initial: Transform): Tile
   group.add(indicator);
 
   const latestHalo = new THREE.Mesh(
-    new THREE.RingGeometry(.29, .35, 40),
+    new THREE.RingGeometry(.29, .35, 24),
     new THREE.MeshBasicMaterial({
       color: 0xf4d47d,
       transparent: true,
