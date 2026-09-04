@@ -296,6 +296,7 @@ type TableRuntime = {
   stressActors: TileActor[];
   rendererBackend: 'webgl' | 'webgpu';
   benchmarkStage: BenchmarkStage;
+  infoCallsAtSampleStart: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -941,34 +942,71 @@ function materialForFace(rt: TableRuntime, _label: string | null, back = false):
 function clearStaticFaceBatches(rt: TableRuntime): void {
   for (const batch of rt.staticFaceBatches.values()) {
     batch.removeFromParent();
+    if (batch.userData?.mergedStaticFaces) batch.geometry?.dispose?.();
     batch.dispose?.();
   }
   rt.staticFaceBatches.clear();
   rt.staticFaceCount = 0;
 }
 
-function staticFaceBatchKey(rt: TableRuntime, label: string | null): string {
-  return `${rt.faceMode}:${normalizedFaceLabel(label) || 'blank'}`;
-}
+type StaticFaceMergeEntry = { actor: TileActor; matrix: any };
 
-function ensureStaticFaceBatch(rt: TableRuntime, label: string | null): any {
-  const key = staticFaceBatchKey(rt, label);
-  const existing = rt.staticFaceBatches.get(key);
-  if (existing) return existing;
-  const batch = new rt.THREE.InstancedMesh(
-    faceGeometryForLabel(rt, label),
-    rt.faceAtlasMaterial,
-    rt.staticFaceBatchCapacity,
-  );
-  batch.count = 0;
-  batch.castShadow = false;
-  batch.receiveShadow = false;
-  batch.frustumCulled = false;
-  batch.renderOrder = 4;
-  batch.instanceMatrix.setUsage(rt.THREE.DynamicDrawUsage);
-  rt.actorRoot.add(batch);
-  rt.staticFaceBatches.set(key, batch);
-  return batch;
+function rebuildMergedStaticFaceBatch(rt: TableRuntime, entries: StaticFaceMergeEntry[]): void {
+  clearStaticFaceBatches(rt);
+  if (entries.length === 0) return;
+
+  const THREE = rt.THREE;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const vertex = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+
+  for (const entry of entries) {
+    const geometry = entry.actor.face.geometry;
+    const positionAttr = geometry.getAttribute('position');
+    const normalAttr = geometry.getAttribute('normal');
+    const uvAttr = geometry.getAttribute('uv');
+    const indexAttr = geometry.index;
+    normalMatrix.getNormalMatrix(entry.matrix);
+
+    const pushVertex = (sourceIndex: number) => {
+      vertex.fromBufferAttribute(positionAttr, sourceIndex).applyMatrix4(entry.matrix);
+      positions.push(vertex.x, vertex.y, vertex.z);
+      if (normalAttr) {
+        normal.fromBufferAttribute(normalAttr, sourceIndex).applyNormalMatrix(normalMatrix);
+      } else {
+        normal.set(0, 0, 1).applyNormalMatrix(normalMatrix);
+      }
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(uvAttr.getX(sourceIndex), uvAttr.getY(sourceIndex));
+    };
+
+    if (indexAttr) {
+      for (let index = 0; index < indexAttr.count; index += 1) pushVertex(indexAttr.getX(index));
+    } else {
+      for (let index = 0; index < positionAttr.count; index += 1) pushVertex(index);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  const mesh = new THREE.Mesh(geometry, rt.faceAtlasMaterial);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 4;
+  mesh.userData.mergedStaticFaces = true;
+  mesh.userData.faceCount = entries.length;
+  // Keep the existing diagnostics compatible: one merged face batch is one draw group.
+  mesh.count = entries.length;
+  rt.actorRoot.add(mesh);
+  rt.staticFaceBatches.set('merged-atlas-faces', mesh);
+  rt.staticFaceCount = entries.length;
 }
 
 function syncFaceMode(rt: TableRuntime): void {
@@ -1375,11 +1413,9 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   const rearPosition = new THREE.Matrix4().makeTranslation(0, -TILE_BACK_OFFSET, 0);
   const rearRotation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
   const rearLocal = new THREE.Matrix4().multiplyMatrices(rearPosition, rearRotation);
-  const faceCounts = new Map<string, number>();
-  for (const batch of rt.staticFaceBatches.values()) batch.count = 0;
+  const mergedFaces: StaticFaceMergeEntry[] = [];
   let count = 0;
   let backCount = 0;
-  let faceCount = 0;
 
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     // Keep selectable tiles individual so hover/click motion remains exact. Everything else can be
@@ -1402,37 +1438,24 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
       rt.staticBacks.setMatrixAt(backCount, rearMatrix);
       backCount += 1;
     } else if (!actor.spec.back) {
-      const key = staticFaceBatchKey(rt, actor.spec.label);
-      const index = faceCounts.get(key) ?? 0;
-      if (index < rt.staticFaceBatchCapacity) {
-        const batch = ensureStaticFaceBatch(rt, actor.spec.label);
-        actor.face.updateMatrix();
-        faceMatrix.multiplyMatrices(bodyMatrix, actor.face.matrix);
-        batch.setMatrixAt(index, faceMatrix);
-        faceCounts.set(key, index + 1);
-        faceCount += 1;
-      } else {
-        // Extremely artificial duplicate-heavy stress layouts can exceed a per-design batch. Keep
-        // the overflow face individual without giving up body/shell batching.
-        actor.face.visible = true;
-      }
+      actor.face.updateMatrix();
+      faceMatrix.multiplyMatrices(bodyMatrix, actor.face.matrix);
+      // All printed art already lives in one atlas and shares one material. Merge settled faces into
+      // one non-indexed mesh so WebGL submits a single static face draw instead of one draw per tile design.
+      mergedFaces.push({ actor, matrix: faceMatrix.clone() });
     }
     count += 1;
   }
 
   rt.staticRiverCount = count;
-  rt.staticFaceCount = faceCount;
   rt.staticRiverBodies.count = count;
   rt.staticRiverShells.count = count;
   rt.staticBacks.count = backCount;
   rt.staticRiverBodies.instanceMatrix.needsUpdate = true;
   rt.staticRiverShells.instanceMatrix.needsUpdate = true;
   rt.staticBacks.instanceMatrix.needsUpdate = true;
-  for (const [key, batch] of rt.staticFaceBatches) {
-    const batchCount = faceCounts.get(key) ?? 0;
-    batch.count = batchCount;
-    if (batchCount > 0) batch.instanceMatrix.needsUpdate = true;
-  }
+  rebuildMergedStaticFaceBatch(rt, mergedFaces);
+  applyBenchmarkVisibility(rt);
   if (rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
 }
 
@@ -1728,6 +1751,7 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
     stressActors: [],
     rendererBackend: wantsWebGpu ? 'webgpu' : 'webgl',
     benchmarkStage: 'normal',
+    infoCallsAtSampleStart: 0,
   };
 
   rebuildFaceAtlas(rt);
@@ -2172,6 +2196,11 @@ function frameRuntime(rt: TableRuntime, time: number): void {
       const intervals = Math.max(1, rt.fpsFrames - 1);
       const frameMs = rt.frameIntervalTotal / intervals;
       const loopHz = rt.fpsFrames * 1000 / sampleMs;
+      const rawCalls = rt.renderer.info?.render?.calls ?? 0;
+      const calls = rt.rendererBackend === 'webgpu'
+        ? Math.max(0, (rawCalls - rt.infoCallsAtSampleStart) / Math.max(1, rt.fpsFrames))
+        : rawCalls;
+      rt.infoCallsAtSampleStart = rawCalls;
       window.dispatchEvent(new CustomEvent('mahjong-live:fps', { detail: {
         fps: loopHz,
         loopHz,
@@ -2181,7 +2210,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         renderMs: rt.renderTimeTotal / Math.max(1, rt.fpsFrames),
         gpuMs: rt.gpuMs,
         gpuTimerSupported: Boolean(rt.gpuTimerExt),
-        calls: rt.renderer.info?.render?.calls ?? 0,
+        calls: Math.round(calls * 10) / 10,
         triangles: rt.renderer.info?.render?.triangles ?? 0,
         actors: rt.actors.size + rt.stressActors.length,
         moving: movingCount,
