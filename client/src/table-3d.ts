@@ -301,6 +301,15 @@ type TableRuntime = {
   benchmarkStage: BenchmarkStage;
   infoCallsAtSampleStart: number;
   geometryQuality: number;
+  stageWidth: number;
+  stageHeight: number;
+  staticFaceSignature: string;
+  appliedTuning: DevTuning | null;
+  appliedTuningStage: BenchmarkStage | null;
+  ivoryColor: string;
+  ivoryRoughness: number;
+  faceTint: string;
+  textureAnisotropy: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -472,22 +481,33 @@ function modeButton(): HTMLButtonElement | null {
   return app.querySelector<HTMLButtonElement>('.table-3d-toggle');
 }
 
+// Rewriting innerHTML here used to re-create the button's child nodes on every call. Because the
+// button lives inside the observed #app subtree, that alone produced a childList mutation, which
+// scheduled another reconcile, which called this again — a self-sustaining rAF-rate rebuild loop.
+// Only touch the DOM when the rendered label actually changes.
 function updateModeButton(button = modeButton()): void {
   if (!button) return;
   button.classList.toggle('is-2d', !enabled);
   button.classList.toggle('is-error', loadError);
   button.classList.toggle('is-loading', enabled && !runtime && !loadError);
   button.setAttribute('aria-pressed', String(enabled && !loadError));
-  if (loadError) {
-    button.innerHTML = '<span class="mode-dot" aria-hidden="true"></span><span>2D · 3D unavailable</span>';
-    button.title = '3D could not load. Click to retry.';
-  } else if (enabled) {
-    button.innerHTML = '<span class="mode-dot" aria-hidden="true"></span><span>3D Table</span>';
-    button.title = 'Switch to the lightweight 2D table';
-  } else {
-    button.innerHTML = '<span class="mode-dot" aria-hidden="true"></span><span>2D Table</span>';
-    button.title = 'Switch to the 3D table';
+
+  const label = loadError ? '2D · 3D unavailable' : enabled ? '3D Table' : '2D Table';
+  const title = loadError
+    ? '3D could not load. Click to retry.'
+    : enabled ? 'Switch to the lightweight 2D table' : 'Switch to the 3D table';
+
+  let text = button.querySelector<HTMLElement>('.mode-label');
+  if (!text) {
+    const dot = document.createElement('span');
+    dot.className = 'mode-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    text = document.createElement('span');
+    text.className = 'mode-label';
+    button.replaceChildren(dot, text);
   }
+  if (text.textContent !== label) text.textContent = label;
+  if (button.title !== title) button.title = title;
 }
 
 function ensureModeButton(): void {
@@ -1010,13 +1030,30 @@ function clearStaticFaceBatches(rt: TableRuntime): void {
   }
   rt.staticFaceBatches.clear();
   rt.staticFaceCount = 0;
+  rt.staticFaceSignature = '';
 }
 
 type StaticFaceMergeEntry = { actor: TileActor; matrix: any };
 
+// Merging bakes every settled face into one buffer, so a rebuild disposes and re-creates a GPU
+// buffer for the whole table. Most reconciles (a log line, a class flip, a new turn banner) leave
+// the settled set untouched, so describe it first and skip the rebuild when nothing moved.
+function staticFaceSignature(entries: StaticFaceMergeEntry[]): string {
+  const parts: string[] = [];
+  for (const entry of entries) {
+    const m = entry.matrix.elements;
+    parts.push(entry.actor.key, entry.actor.spec.label ?? '');
+    for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]) parts.push(m[index].toFixed(3));
+  }
+  return parts.join(',');
+}
+
 function rebuildMergedStaticFaceBatch(rt: TableRuntime, entries: StaticFaceMergeEntry[]): void {
+  const signature = staticFaceSignature(entries);
+  if (signature === rt.staticFaceSignature && rt.staticFaceBatches.size > 0) return;
   clearStaticFaceBatches(rt);
   if (entries.length === 0) return;
+  rt.staticFaceSignature = signature;
 
   const THREE = rt.THREE;
   const positions: number[] = [];
@@ -1595,10 +1632,16 @@ function alignStage(rt: TableRuntime, table: HTMLElement): void {
   stage.style.width = `${rect.width}px`;
   stage.style.height = `${rect.height}px`;
   stage.classList.add('is-active');
-  rt.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
-  rt.camera.aspect = rect.width / rect.height;
-  rt.camera.updateProjectionMatrix();
-  syncWorldUiAnchor(rt);
+  // Scrolling moves the stage without resizing it. Re-running setSize would reallocate the WebGL
+  // drawing buffer for identical dimensions, so only resize when the size genuinely changed.
+  if (rect.width !== rt.stageWidth || rect.height !== rt.stageHeight) {
+    rt.stageWidth = rect.width;
+    rt.stageHeight = rect.height;
+    rt.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
+    rt.camera.aspect = rect.width / rect.height;
+    rt.camera.updateProjectionMatrix();
+    syncWorldUiAnchor(rt);
+  }
 }
 
 function rendererMaxAnisotropy(rt: TableRuntime): number {
@@ -1825,6 +1868,15 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
     benchmarkStage: 'normal',
     infoCallsAtSampleStart: 0,
     geometryQuality,
+    stageWidth: 0,
+    stageHeight: 0,
+    staticFaceSignature: '',
+    appliedTuning: null,
+    appliedTuningStage: null,
+    ivoryColor: tuning.tiles.bodyColor,
+    ivoryRoughness: tuning.tiles.bodyRoughness,
+    faceTint: tuning.tiles.faceTint,
+    textureAnisotropy: Math.min(tuning.graphics.anisotropy, renderer.capabilities?.getMaxAnisotropy?.() ?? 1),
   };
 
   rebuildFaceAtlas(rt);
@@ -2013,6 +2065,12 @@ function syncBackTexture(rt: TableRuntime, tuning: DevTuning): void {
 
 function applyDevTuning(rt: TableRuntime): void {
   const tuning = readDevTuning();
+  // readDevTuning hands back a cached object that is only replaced when the tuning genuinely
+  // changes, so identity is a reliable change signal. Reconcile runs on every game DOM update;
+  // re-applying an unchanged tuning there only burned CPU and re-dirtied the cached shadow map.
+  if (tuning === rt.appliedTuning && rt.benchmarkStage === rt.appliedTuningStage) return;
+  rt.appliedTuning = tuning;
+  rt.appliedTuningStage = rt.benchmarkStage;
   rt.camera.fov = tuning.camera.fov;
   rt.camera.position.set(tuning.camera.x, tuning.camera.y, tuning.camera.z);
   rt.camera.lookAt(tuning.camera.targetX, tuning.camera.targetY, tuning.camera.targetZ);
@@ -2030,27 +2088,49 @@ function applyDevTuning(rt: TableRuntime): void {
     rt.keyLight.shadow.map?.dispose?.();
     rt.keyLight.shadow.map = null;
   }
+  // Anisotropy only takes effect on the next texture upload, so changing it must re-upload — which
+  // for the 2048x1720 face atlas is a multi-megabyte texImage2D. Do it when the value moves, never
+  // on every reconcile.
   const maxAnisotropy = rendererMaxAnisotropy(rt);
-  if (rt.tableTexture) rt.tableTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
-  if (rt.backTexture) rt.backTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
-  for (const material of rt.faceMaterials.values()) {
-    if (material.map) material.map.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
+  const anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
+  const anisotropyChanged = anisotropy !== rt.textureAnisotropy;
+  if (anisotropyChanged) {
+    rt.textureAnisotropy = anisotropy;
+    for (const texture of [rt.tableTexture, rt.backTexture]) {
+      if (!texture) continue;
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+    for (const material of rt.faceMaterials.values()) {
+      if (!material.map) continue;
+      material.map.anisotropy = anisotropy;
+      material.map.needsUpdate = true;
+    }
   }
   rt.scene.background?.set?.(tuning.sceneColor);
   rt.scene.fog?.color?.set?.(tuning.sceneColor);
   rt.woodMaterial.color.set(tuning.woodColor);
   rt.ivoryMaterial.color.set(tuning.tiles.bodyColor);
   rt.ivoryMaterial.roughness = tuning.tiles.bodyRoughness;
-  rt.ivoryMaterial.needsUpdate = true;
+  // Material.needsUpdate bumps the material version, forcing the renderer back through program
+  // resolution for every mesh that uses it. Only the roughness/colour edits actually require it.
+  if (tuning.tiles.bodyColor !== rt.ivoryColor || tuning.tiles.bodyRoughness !== rt.ivoryRoughness) {
+    rt.ivoryColor = tuning.tiles.bodyColor;
+    rt.ivoryRoughness = tuning.tiles.bodyRoughness;
+    rt.ivoryMaterial.needsUpdate = true;
+  }
   applyTableGeometry(rt, tuning);
   rt.backMaterial.color.set(tuning.backColor);
   rt.backShellMaterial.color.set(tuning.backColor);
   syncBackTexture(rt, tuning);
   rt.feltMaterial.color.set(tuning.tableImage ? 0xffffff : tuning.tableColor);
   syncFaceGeometryRotation(rt, tuning.tiles.faceTextureRotation);
-  for (const material of rt.faceMaterials.values()) {
-    material.color?.set?.(tuning.tiles.faceTint);
-    if (material.map) material.map.needsUpdate = true;
+  // The tint is a uniform on the material; the atlas bitmap itself is unchanged. Flagging the map
+  // dirty here re-uploaded the whole 2048x1720 atlas to the GPU on every reconcile. rebuildFaceAtlas
+  // and its async repaint callback already mark the texture when the pixels genuinely change.
+  if (tuning.tiles.faceTint !== rt.faceTint) {
+    rt.faceTint = tuning.tiles.faceTint;
+    for (const material of rt.faceMaterials.values()) material.color?.set?.(tuning.tiles.faceTint);
   }
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     actor.face.position.y = tuning.tiles.faceOffset;
@@ -2403,12 +2483,17 @@ async function reconcile(): Promise<void> {
   if (rt.previousTable && rt.previousTable !== table && rt.previousTable.isConnected) {
     rt.previousTable.classList.remove('table-3d-active', 'table-3d-tile-hover');
   }
+  // The authoritative UI re-renders by replacing #app wholesale, so this is frequently a brand new
+  // element. The world-centre anchor lives in its inline style and has to be restored on the
+  // replacement; neither applyDevTuning nor alignStage repeats work when nothing else changed.
+  const tableReplaced = rt.table !== table;
   rt.previousTable = table;
   rt.table = table;
   table.classList.add('table-3d-active');
   removeFallbackNote(table);
   applyDevTuning(rt);
   alignStage(rt, table);
+  if (tableReplaced) syncWorldUiAnchor(rt);
   syncActors(rt, table);
   updateModeButton();
 }
@@ -2482,10 +2567,40 @@ function onPointerLeave(): void {
   runtime.table?.classList.remove('table-3d-tile-hover');
 }
 
-const observer = new MutationObserver(scheduleReconcile);
+// The renderer injects its own controls into the observed #app subtree. Reading those writes back as
+// game state would let any future non-idempotent update restart the reconcile feedback loop.
+const RENDERER_OWNED_SELECTOR = '.table-3d-toggle, .table-3d-fallback-note';
+
+function isRendererOwnedNode(node: Node): boolean {
+  return node instanceof Element && node.matches(RENDERER_OWNED_SELECTOR);
+}
+
+function isRendererOwnedMutation(record: MutationRecord): boolean {
+  const target = record.target instanceof Element ? record.target : record.target.parentElement;
+  if (target?.closest(RENDERER_OWNED_SELECTOR)) return true;
+  const touched = [...record.addedNodes, ...record.removedNodes];
+  return touched.length > 0 && touched.every(isRendererOwnedNode);
+}
+
+const observer = new MutationObserver((records) => {
+  if (records.every(isRendererOwnedMutation)) return;
+  scheduleReconcile();
+});
 observer.observe(app, { childList: true, subtree: true });
 window.addEventListener('resize', scheduleReconcile, { passive: true });
-window.addEventListener('scroll', scheduleReconcile, { passive: true });
+// Scrolling never changes what is on the table — only where the stage sits. A full reconcile here
+// meant a complete DOM rescan and scene rebuild on every scroll frame.
+let alignScheduled = false;
+function scheduleAlign(): void {
+  if (alignScheduled) return;
+  alignScheduled = true;
+  requestAnimationFrame(() => {
+    alignScheduled = false;
+    const rt = runtime;
+    if (rt?.table) alignStage(rt, rt.table);
+  });
+}
+window.addEventListener('scroll', scheduleAlign, { passive: true });
 window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
 window.addEventListener('mahjong-live:dev-tuning', (event) => {
   const detail = (event as CustomEvent<DevTuning>).detail;
