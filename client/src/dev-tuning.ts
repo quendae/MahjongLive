@@ -2,6 +2,7 @@ import './dev-tuning.css';
 
 const STORAGE_KEY = 'mahjong-live:dev-tuning:v1';
 const EVENT_NAME = 'mahjong-live:dev-tuning';
+const RENDERER_BACKEND_KEY = 'mahjong-live:renderer-backend:v1';
 
 type Rotation = { x: number; y: number; z: number };
 type CameraSettings = { x: number; y: number; z: number; targetX: number; targetY: number; targetZ: number; fov: number };
@@ -261,6 +262,8 @@ type PerformanceDetail = {
   instancedRivers?: number;
   batchedFaces?: number;
   faceBatches?: number;
+  rendererBackend?: string;
+  benchmarkStage?: string;
   pixelRatio?: number;
   visibility?: string;
 };
@@ -275,6 +278,7 @@ type PerformanceCapture = {
 let performanceCapture: PerformanceCapture | null = null;
 let lastPerformanceDetail: PerformanceDetail | null = null;
 let stressDiscardsActive = false;
+let benchmarkRunning = false;
 
 function syncDevOpenClass(): void {
   document.body.classList.toggle('dev-tuning-open', Boolean(panel && !panel.hidden));
@@ -338,6 +342,8 @@ function appendPerformanceSample(detail: PerformanceDetail): void {
     String(detail.instancedRivers ?? ''),
     String(detail.batchedFaces ?? ''),
     String(detail.faceBatches ?? ''),
+    detail.rendererBackend ?? '',
+    detail.benchmarkStage ?? '',
     performanceNumber(detail.pixelRatio),
   ].join('\t'));
   capture.samples += 1;
@@ -361,8 +367,9 @@ function startPerformanceCapture(): void {
       `hardwareConcurrency\t${navigator.hardwareConcurrency ?? ''}`,
       `visibilityAtStart\t${document.visibilityState}`,
       `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}`,
+      `rendererPreference\t${localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl'}\twebgpuAvailable=${Boolean((navigator as any).gpu)}`,
       '',
-      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\tpixel_ratio',
+      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tpixel_ratio',
     ],
   };
   document.body.classList.add('perf-capture-active');
@@ -389,6 +396,43 @@ function stopPerformanceCapture(): void {
   document.body.classList.remove('perf-capture-active');
   updatePerformanceCaptureUi();
   setStatus(`Performance log saved (${capture.samples} samples).`);
+}
+
+function sleepBenchmark(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function runBenchmarkSweep(): Promise<void> {
+  if (benchmarkRunning) return;
+  benchmarkRunning = true;
+  const startedCaptureHere = !performanceCapture;
+  if (startedCaptureHere) startPerformanceCapture();
+  if (!stressDiscardsActive) {
+    stressDiscardsActive = true;
+    window.dispatchEvent(new CustomEvent('mahjong-live:dev-stress-discards', { detail: { enabled: true } }));
+    panel?.querySelector<HTMLButtonElement>('.perf-stress-fill')?.replaceChildren(document.createTextNode('Clear simulated discards'));
+    await sleepBenchmark(900);
+  }
+
+  const stages: Array<[string, string]> = [
+    ['normal', '1/5 full scene'],
+    ['empty', '2/5 empty renderer'],
+    ['table', '3/5 table only'],
+    ['tiles-no-faces', '4/5 tiles without printed faces'],
+    ['no-shadows', '5/5 full scene without shadows'],
+  ];
+  try {
+    for (const [stageName, label] of stages) {
+      setStatus(`Benchmark ${label}…`);
+      window.dispatchEvent(new CustomEvent('mahjong-live:benchmark-stage', { detail: { stage: stageName } }));
+      await sleepBenchmark(2800);
+    }
+  } finally {
+    window.dispatchEvent(new CustomEvent('mahjong-live:benchmark-stage', { detail: { stage: 'normal' } }));
+    benchmarkRunning = false;
+    if (startedCaptureHere && performanceCapture) stopPerformanceCapture();
+    else setStatus('Benchmark sweep complete; renderer restored to normal.');
+  }
 }
 
 function applyDomPreview(): void {
@@ -740,6 +784,20 @@ function buildPanel(): HTMLElement {
   const graphics = document.createElement('section');
   graphics.className = 'dev-tuning-section';
   graphics.innerHTML = '<h3>Performance & graphics</h3>';
+  const rendererRow = document.createElement('div');
+  rendererRow.className = 'dev-tuning-presets';
+  const rendererLabel = document.createElement('label'); rendererLabel.textContent = 'Renderer';
+  const rendererSelect = document.createElement('select');
+  const rendererOptions: [string, string][] = [['WebGL 2', 'webgl'], ['WebGPU (experimental)', 'webgpu']];
+  rendererOptions.forEach(([name, value]) => { const option = document.createElement('option'); option.textContent = name; option.value = value; rendererSelect.append(option); });
+  rendererSelect.value = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  rendererSelect.addEventListener('change', () => {
+    localStorage.setItem(RENDERER_BACKEND_KEY, rendererSelect.value);
+    window.dispatchEvent(new CustomEvent('mahjong-live:renderer-backend', { detail: { backend: rendererSelect.value } }));
+    setStatus(rendererSelect.value === 'webgpu' ? 'Switching to experimental WebGPURenderer…' : 'Switching to WebGL renderer…');
+  });
+  rendererRow.append(rendererLabel, rendererSelect);
+  graphics.append(rendererRow);
   numberSlider(graphics, 'Pixel ratio', .75, 2.00, .05, () => settings.graphics.pixelRatio, (v) => { settings.graphics.pixelRatio = v; }, '×', DEFAULTS.graphics.pixelRatio);
   numberSlider(graphics, 'Shadow quality', 0, 3, 1, () => settings.graphics.shadowQuality, (v) => { settings.graphics.shadowQuality = v; }, '', DEFAULTS.graphics.shadowQuality);
   numberSlider(graphics, 'Texture filtering', 1, 8, 1, () => settings.graphics.anisotropy, (v) => { settings.graphics.anisotropy = v; }, '×', DEFAULTS.graphics.anisotropy);
@@ -755,7 +813,12 @@ function buildPanel(): HTMLElement {
     window.dispatchEvent(new CustomEvent('mahjong-live:dev-stress-discards', { detail: { enabled: stressDiscardsActive } }));
     setStatus(stressDiscardsActive ? 'Filled every river to 24 tiles for a visual performance stress test.' : 'Simulated discards cleared.');
   });
-  stressActions.append(stressButton);
+  const benchmarkButton = document.createElement('button');
+  benchmarkButton.type = 'button';
+  benchmarkButton.className = 'dev-tuning-action perf-benchmark-run';
+  benchmarkButton.textContent = 'Run benchmark sweep';
+  benchmarkButton.addEventListener('click', () => void runBenchmarkSweep());
+  stressActions.append(stressButton, benchmarkButton);
   graphics.append(stressActions);
   const perfLog = document.createElement('div');
   perfLog.className = 'perf-log-controls';
@@ -769,7 +832,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Settled non-selectable bodies/shells/backs and printed fronts are instanced, shadow maps are cached, and tile meshes now use much lighter rounded geometry. Watch the triangle count in the log: this pass targets the remaining vertex/geometry cost rather than raster resolution. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Renderer can now be switched live between WebGL 2 and experimental Three.js WebGPURenderer (which may itself fall back to WebGL 2 if WebGPU is unavailable). Run benchmark sweep fills the rivers, then records the same scene as: full, empty renderer, table only, tiles without printed faces, and full scene without shadows. The generated TXT includes renderer_backend and benchmark_stage so we can finally isolate browser/driver cost from scene cost.</p>');
   root.append(graphics);
   requestAnimationFrame(updatePerformanceCaptureUi);
 
@@ -1043,8 +1106,8 @@ window.addEventListener('mahjong-live:fps', (event) => {
   const loopHz = Number.isFinite(detail.loopHz ?? detail.fps) ? Math.round(detail.loopHz ?? detail.fps ?? 0) : 0;
   const rafHz = Number.isFinite(detail.rafHz) ? Math.round(detail.rafHz ?? 0) : 0;
   const gpuMs = Number.isFinite(detail.gpuMs) ? `${(detail.gpuMs ?? 0).toFixed(2)}ms GPU` : 'GPU n/a';
-  target.textContent = `Loop ${loopHz} · RAF ${rafHz} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
-  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${detail.batchedFaces ?? 0} batched faces in ${detail.faceBatches ?? 0} face draws · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · ${detail.visibility ?? document.visibilityState}`;
+  target.textContent = `${detail.rendererBackend ?? 'renderer'} · ${detail.benchmarkStage ?? 'normal'} · Loop ${loopHz} · RAF ${rafHz} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
+  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${detail.batchedFaces ?? 0} batched faces in ${detail.faceBatches ?? 0} face draws · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · backend ${detail.rendererBackend ?? ''} · stage ${detail.benchmarkStage ?? ''} · ${detail.visibility ?? document.visibilityState}`;
   target.classList.toggle('fps-low', loopHz > 0 && loopHz < 55);
 });
 ensureUi();

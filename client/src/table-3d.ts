@@ -2,8 +2,10 @@ import './table-3d.css';
 import { createFaceCanvas } from './table-3d-faces';
 import type { TileFaceMode } from './table-3d-faces';
 
-const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
+const THREE_WEBGL_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
+const THREE_WEBGPU_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.webgpu.min.js';
 const MODE_KEY = 'mahjong-live:table-3d:v1';
+const RENDERER_BACKEND_KEY = 'mahjong-live:renderer-backend:v1';
 const TILE_MODE_KEY = 'mahjong-live:tile-face-mode:v1';
 // ExtrudeGeometry's bevel extends slightly beyond the nominal 0.16 tile thickness.
 // Keep the printed/rear planes clearly outside that shell so upright racks show their faces.
@@ -157,6 +159,7 @@ let devTuningCache: DevTuning | null = null;
 
 type Side = 'bottom' | 'top' | 'left' | 'right';
 type TileZone = 'hand' | 'river' | 'rack' | 'meld';
+type BenchmarkStage = 'normal' | 'empty' | 'table' | 'tiles-no-faces' | 'no-shadows';
 
 type TileSpec = {
   key: string;
@@ -275,6 +278,8 @@ type TableRuntime = {
   staticRiverDirty: boolean;
   pickMeshes: any[];
   stressActors: TileActor[];
+  rendererBackend: 'webgl' | 'webgpu';
+  benchmarkStage: BenchmarkStage;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -395,9 +400,14 @@ function setConfiguredRotation(transform: Transform, rotation: DevRotation): voi
   transform.roll = radians(rotation.z);
 }
 
+function requestedRendererBackend(): 'webgl' | 'webgpu' {
+  return localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+}
+
 function loadThree(): Promise<any> {
   if (!threePromise) {
-    threePromise = import(/* @vite-ignore */ THREE_URL).catch((error) => {
+    const url = requestedRendererBackend() === 'webgpu' ? THREE_WEBGPU_URL : THREE_WEBGL_URL;
+    threePromise = import(/* @vite-ignore */ url).catch((error) => {
       threePromise = null;
       loadError = true;
       throw error;
@@ -777,7 +787,7 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   });
   texture = new rt.THREE.CanvasTexture(canvas);
   texture.colorSpace = rt.THREE.SRGBColorSpace;
-  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rendererMaxAnisotropy(rt));
   texture.center.set(.5, .5);
   texture.rotation = radians(tuning.tiles.faceTextureRotation);
   // Keep the SVG artwork participating in the same soft scene lighting as the tile body.
@@ -1206,9 +1216,10 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
     .flatMap((actor) => [actor.body, actor.face]);
   rt.staticRiverDirty = true;
   syncStaticRiverInstances(rt);
-  if (rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
+  if (rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
   rt.lastRemainingDraws = draws;
   rt.initialized = true;
+  applyBenchmarkVisibility(rt);
 }
 
 function syncStaticRiverInstances(rt: TableRuntime): void {
@@ -1281,7 +1292,7 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
     batch.count = batchCount;
     if (batchCount > 0) batch.instanceMatrix.needsUpdate = true;
   }
-  if (rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
+  if (rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
 }
 
 const STRESS_TILE_LABELS = [
@@ -1355,6 +1366,10 @@ function alignStage(rt: TableRuntime, table: HTMLElement): void {
   syncWorldUiAnchor(rt);
 }
 
+function rendererMaxAnisotropy(rt: TableRuntime): number {
+  return rt.renderer.capabilities?.getMaxAnisotropy?.() ?? 1;
+}
+
 function shadowMapSize(level: number): number {
   if (level <= 0) return 0;
   if (level <= 1) return 512;
@@ -1364,19 +1379,19 @@ function shadowMapSize(level: number): number {
 
 function createRuntime(THREE: any): TableRuntime {
   const tuning = readDevTuning();
-  const renderer = new THREE.WebGLRenderer({
-    alpha: false,
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
+  const wantsWebGpu = requestedRendererBackend() === 'webgpu' && typeof THREE.WebGPURenderer === 'function';
+  const renderer = wantsWebGpu
+    ? new THREE.WebGPURenderer({ alpha: false, antialias: true })
+    : new THREE.WebGLRenderer({ alpha: false, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
-  renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  // Most of the table is static between actions. Re-rendering the complete shadow map on every
-  // browser frame costs one extra draw for every tile. Cache it and invalidate only when actors move
-  // or tuning/table geometry changes.
-  renderer.shadowMap.autoUpdate = false;
-  renderer.shadowMap.needsUpdate = tuning.graphics.shadowQuality > 0;
+  if (renderer.shadowMap) {
+    renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Most of the table is static between actions. Re-render the shadow map only when something
+    // actually moves. WebGPURenderer exposes the same high-level shadowMap surface.
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = tuning.graphics.shadowQuality > 0;
+  }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'table-3d-canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -1486,8 +1501,8 @@ function createRuntime(THREE: any): TableRuntime {
   const staticFaceBatches = new Map<string, any>();
   const staticFaceBatchCapacity = 32;
 
-  const gl = renderer.getContext();
-  const gpuTimerExt = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
+  const gl = renderer.getContext?.() ?? null;
+  const gpuTimerExt = gl && typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
     ? gl.getExtension('EXT_disjoint_timer_query_webgl2')
     : null;
 
@@ -1556,6 +1571,8 @@ function createRuntime(THREE: any): TableRuntime {
     staticRiverDirty: true,
     pickMeshes: [],
     stressActors: [],
+    rendererBackend: wantsWebGpu ? 'webgpu' : 'webgl',
+    benchmarkStage: 'normal',
   };
 
   applyDevTuning(rt);
@@ -1624,7 +1641,7 @@ function syncTableTexture(rt: TableRuntime, source: string | null): void {
   new rt.THREE.TextureLoader().load(source, (texture: any) => {
     if (rt.disposed || rt.tableTextureSource !== source) { texture.dispose(); return; }
     texture.colorSpace = rt.THREE.SRGBColorSpace;
-    texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
+    texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rendererMaxAnisotropy(rt));
     texture.generateMipmaps = true;
     texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
     texture.magFilter = rt.THREE.LinearFilter;
@@ -1712,7 +1729,7 @@ function backTextureKey(tuning: DevTuning): string {
 
 function configureBackTexture(rt: TableRuntime, texture: any): void {
   texture.colorSpace = rt.THREE.SRGBColorSpace;
-  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rendererMaxAnisotropy(rt));
   texture.generateMipmaps = true;
   texture.minFilter = rt.THREE.LinearMipmapLinearFilter;
   texture.magFilter = rt.THREE.LinearFilter;
@@ -1749,15 +1766,18 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.camera.updateProjectionMatrix();
   rt.renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   const shadowSize = shadowMapSize(tuning.graphics.shadowQuality);
-  rt.renderer.shadowMap.enabled = shadowSize > 0;
-  rt.renderer.shadowMap.autoUpdate = false;
-  rt.keyLight.castShadow = shadowSize > 0;
+  const shadowsEnabled = shadowSize > 0 && rt.benchmarkStage !== 'no-shadows';
+  if (rt.renderer.shadowMap) {
+    rt.renderer.shadowMap.enabled = shadowsEnabled;
+    rt.renderer.shadowMap.autoUpdate = false;
+  }
+  rt.keyLight.castShadow = shadowsEnabled;
   if (shadowSize > 0 && rt.keyLight.shadow.mapSize.width !== shadowSize) {
     rt.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
     rt.keyLight.shadow.map?.dispose?.();
     rt.keyLight.shadow.map = null;
   }
-  const maxAnisotropy = rt.renderer.capabilities.getMaxAnisotropy();
+  const maxAnisotropy = rendererMaxAnisotropy(rt);
   if (rt.tableTexture) rt.tableTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
   if (rt.backTexture) rt.backTexture.anisotropy = Math.min(tuning.graphics.anisotropy, maxAnisotropy);
   for (const material of rt.faceMaterials.values()) {
@@ -1789,7 +1809,54 @@ function applyDevTuning(rt: TableRuntime): void {
   }
   syncTableTexture(rt, tuning.tableImage);
   syncWorldUiAnchor(rt);
-  if (shadowSize > 0) rt.renderer.shadowMap.needsUpdate = true;
+  if (shadowsEnabled && rt.renderer.shadowMap) rt.renderer.shadowMap.needsUpdate = true;
+  applyBenchmarkVisibility(rt);
+}
+
+function applyBenchmarkVisibility(rt: TableRuntime): void {
+  const stageName = rt.benchmarkStage;
+  const showTable = stageName !== 'empty';
+  const showActors = stageName === 'normal' || stageName === 'tiles-no-faces' || stageName === 'no-shadows';
+  rt.frame.visible = showTable;
+  rt.underlay.visible = showTable;
+  rt.felt.visible = showTable;
+  rt.actorRoot.visible = showActors;
+
+  const hidePrintedFaces = stageName === 'tiles-no-faces';
+  rt.staticBacks.visible = !hidePrintedFaces;
+  for (const batch of rt.staticFaceBatches.values()) batch.visible = !hidePrintedFaces;
+  if (hidePrintedFaces) {
+    for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
+      actor.face.visible = false;
+      actor.rear.visible = false;
+    }
+  }
+}
+
+function setBenchmarkStage(rt: TableRuntime, stageName: BenchmarkStage): void {
+  const previous = rt.benchmarkStage;
+  rt.benchmarkStage = stageName;
+  if (previous === 'tiles-no-faces' && stageName !== 'tiles-no-faces') {
+    // Restore the exact individual/batched face visibility map after the faces-only diagnostic.
+    rt.staticRiverDirty = true;
+    syncStaticRiverInstances(rt);
+  }
+  const tuning = readDevTuning();
+  const shadowSize = shadowMapSize(tuning.graphics.shadowQuality);
+  const shadowsEnabled = shadowSize > 0 && stageName !== 'no-shadows';
+  if (rt.renderer.shadowMap) {
+    rt.renderer.shadowMap.enabled = shadowsEnabled;
+    if (shadowsEnabled) rt.renderer.shadowMap.needsUpdate = true;
+  }
+  rt.keyLight.castShadow = shadowsEnabled;
+  applyBenchmarkVisibility(rt);
+}
+
+function rendererBackendLabel(rt: TableRuntime): string {
+  if (rt.rendererBackend === 'webgl') return 'webgl';
+  if (rt.renderer.backend?.isWebGPUBackend) return 'webgpu';
+  if (rt.renderer.backend?.isWebGLBackend) return 'webgpu-renderer/webgl2-fallback';
+  return 'webgpu-renderer';
 }
 
 function browserRafProbe(rt: TableRuntime, time: number): void {
@@ -1935,7 +2002,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.staticRiverDirty) syncStaticRiverInstances(rt);
   // During motion the cached shadow map must follow the moving tile. Once motion ends it freezes
   // again, avoiding dozens/hundreds of shadow-pass draw calls on every otherwise static frame.
-  if (movingCount > 0 && rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
+  if (movingCount > 0 && rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
 
   const renderStarted = performance.now();
   const gpuTimerStarted = beginGpuTimer(rt);
@@ -1958,13 +2025,15 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         renderMs: rt.renderTimeTotal / Math.max(1, rt.fpsFrames),
         gpuMs: rt.gpuMs,
         gpuTimerSupported: Boolean(rt.gpuTimerExt),
-        calls: rt.renderer.info.render.calls,
-        triangles: rt.renderer.info.render.triangles,
+        calls: rt.renderer.info?.render?.calls ?? 0,
+        triangles: rt.renderer.info?.render?.triangles ?? 0,
         actors: rt.actors.size + rt.stressActors.length,
         moving: movingCount,
         instancedRivers: rt.staticRiverCount,
         batchedFaces: rt.staticFaceCount,
         faceBatches: [...rt.staticFaceBatches.values()].filter((batch) => batch.count > 0).length,
+        rendererBackend: rendererBackendLabel(rt),
+        benchmarkStage: rt.benchmarkStage,
         pixelRatio: rt.renderer.getPixelRatio(),
         visibility: document.visibilityState,
       } }));
@@ -2152,6 +2221,21 @@ window.addEventListener('mahjong-live:dev-tuning', (event) => {
   devTuningCache = detail && typeof detail === 'object' ? detail : null;
   scheduleReconcile();
 });
+window.addEventListener('mahjong-live:renderer-backend', (event) => {
+  const backend = (event as CustomEvent<{ backend?: string }>).detail?.backend === 'webgpu' ? 'webgpu' : 'webgl';
+  localStorage.setItem(RENDERER_BACKEND_KEY, backend);
+  disposeRuntime();
+  threePromise = null;
+  loadError = false;
+  scheduleReconcile();
+});
+window.addEventListener('mahjong-live:benchmark-stage', (event) => {
+  if (!runtime) return;
+  const raw = (event as CustomEvent<{ stage?: BenchmarkStage }>).detail?.stage ?? 'normal';
+  const allowed: BenchmarkStage[] = ['normal', 'empty', 'table', 'tiles-no-faces', 'no-shadows'];
+  setBenchmarkStage(runtime, allowed.includes(raw) ? raw : 'normal');
+});
+
 window.addEventListener('mahjong-live:dev-stress-discards', (event) => {
   if (!runtime) return;
   const enabled = Boolean((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled);
