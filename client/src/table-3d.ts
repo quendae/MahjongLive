@@ -266,6 +266,7 @@ type TableRuntime = {
   gpuMs: number | null;
   staticRiverBodies: any;
   staticRiverShells: any;
+  staticBacks: any;
   staticRiverCapacity: number;
   staticRiverCount: number;
   staticRiverDirty: boolean;
@@ -1170,6 +1171,7 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
     .flatMap((actor) => [actor.body, actor.face]);
   rt.staticRiverDirty = true;
   syncStaticRiverInstances(rt);
+  if (rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
   rt.lastRemainingDraws = draws;
   rt.initialized = true;
 }
@@ -1180,13 +1182,21 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   const THREE = rt.THREE;
   const bodyMatrix = new THREE.Matrix4();
   const shellMatrix = new THREE.Matrix4();
+  const rearMatrix = new THREE.Matrix4();
   const shellLocal = new THREE.Matrix4().makeTranslation(0, -.103, 0);
+  const rearPosition = new THREE.Matrix4().makeTranslation(0, -TILE_BACK_OFFSET, 0);
+  const rearRotation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+  const rearLocal = new THREE.Matrix4().multiplyMatrices(rearPosition, rearRotation);
   let count = 0;
+  let backCount = 0;
 
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
-    const canBatch = actor.spec.zone === 'river' && !actor.motion && count < rt.staticRiverCapacity;
+    // Keep selectable tiles individual so hover/click motion remains exact. Everything else can be
+    // instanced as soon as it has settled, including opponent racks, melds and rivers.
+    const canBatch = !actor.motion && !actor.spec.selectable && count < rt.staticRiverCapacity;
     actor.body.visible = !canBatch;
     actor.rearShell.visible = !canBatch;
+    actor.rear.visible = actor.spec.back && !canBatch;
     if (!canBatch) continue;
 
     actor.group.updateMatrix();
@@ -1195,14 +1205,22 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
     rt.staticRiverBodies.setMatrixAt(count, bodyMatrix);
     shellMatrix.multiplyMatrices(bodyMatrix, shellLocal);
     rt.staticRiverShells.setMatrixAt(count, shellMatrix);
+    if (actor.spec.back && backCount < rt.staticRiverCapacity) {
+      rearMatrix.multiplyMatrices(bodyMatrix, rearLocal);
+      rt.staticBacks.setMatrixAt(backCount, rearMatrix);
+      backCount += 1;
+    }
     count += 1;
   }
 
   rt.staticRiverCount = count;
   rt.staticRiverBodies.count = count;
   rt.staticRiverShells.count = count;
+  rt.staticBacks.count = backCount;
   rt.staticRiverBodies.instanceMatrix.needsUpdate = true;
   rt.staticRiverShells.instanceMatrix.needsUpdate = true;
+  rt.staticBacks.instanceMatrix.needsUpdate = true;
+  if (rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
 }
 
 const STRESS_TILE_LABELS = [
@@ -1293,6 +1311,11 @@ function createRuntime(THREE: any): TableRuntime {
   renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   renderer.shadowMap.enabled = tuning.graphics.shadowQuality > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Most of the table is static between actions. Re-rendering the complete shadow map on every
+  // browser frame costs one extra draw for every tile. Cache it and invalidate only when actors move
+  // or tuning/table geometry changes.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = tuning.graphics.shadowQuality > 0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'table-3d-canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -1372,10 +1395,10 @@ function createRuntime(THREE: any): TableRuntime {
     color: tuning.backColor, roughness: .58, metalness: 0,
   });
 
-  // Static discards are the population that grows throughout a round. Keep their unique SVG
-  // fronts as normal meshes, but batch the shared ivory bodies and coloured rear shells into two
-  // draw calls instead of two extra draw calls per discard.
-  const staticRiverCapacity = 192;
+  // Batch shared geometry for every settled, non-selectable tile, not only river tiles. This is
+  // especially important at the start of a hand where three concealed opponent racks otherwise
+  // account for well over a hundred separate body/shell/back draws before anyone has discarded.
+  const staticRiverCapacity = 256;
   const staticRiverBodies = new THREE.InstancedMesh(tileGeometry, ivoryMaterial, staticRiverCapacity);
   staticRiverBodies.count = 0;
   staticRiverBodies.castShadow = true;
@@ -1390,6 +1413,13 @@ function createRuntime(THREE: any): TableRuntime {
   staticRiverShells.frustumCulled = false;
   staticRiverShells.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   actorRoot.add(staticRiverShells);
+  const staticBacks = new THREE.InstancedMesh(backGeometry, backMaterial, staticRiverCapacity);
+  staticBacks.count = 0;
+  staticBacks.castShadow = false;
+  staticBacks.receiveShadow = false;
+  staticBacks.frustumCulled = false;
+  staticBacks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  actorRoot.add(staticBacks);
 
   const gl = renderer.getContext();
   const gpuTimerExt = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
@@ -1452,6 +1482,7 @@ function createRuntime(THREE: any): TableRuntime {
     gpuMs: null,
     staticRiverBodies,
     staticRiverShells,
+    staticBacks,
     staticRiverCapacity,
     staticRiverCount: 0,
     staticRiverDirty: true,
@@ -1651,6 +1682,7 @@ function applyDevTuning(rt: TableRuntime): void {
   rt.renderer.setPixelRatio(Math.max(.5, Math.min(2, tuning.graphics.pixelRatio)));
   const shadowSize = shadowMapSize(tuning.graphics.shadowQuality);
   rt.renderer.shadowMap.enabled = shadowSize > 0;
+  rt.renderer.shadowMap.autoUpdate = false;
   rt.keyLight.castShadow = shadowSize > 0;
   if (shadowSize > 0 && rt.keyLight.shadow.mapSize.width !== shadowSize) {
     rt.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
@@ -1689,6 +1721,7 @@ function applyDevTuning(rt: TableRuntime): void {
   }
   syncTableTexture(rt, tuning.tableImage);
   syncWorldUiAnchor(rt);
+  if (shadowSize > 0) rt.renderer.shadowMap.needsUpdate = true;
 }
 
 function browserRafProbe(rt: TableRuntime, time: number): void {
@@ -1832,6 +1865,9 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   }
 
   if (rt.staticRiverDirty) syncStaticRiverInstances(rt);
+  // During motion the cached shadow map must follow the moving tile. Once motion ends it freezes
+  // again, avoiding dozens/hundreds of shadow-pass draw calls on every otherwise static frame.
+  if (movingCount > 0 && rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
 
   const renderStarted = performance.now();
   const gpuTimerStarted = beginGpuTimer(rt);
@@ -1903,6 +1939,9 @@ function disposeRuntime(): void {
   rt.ivoryMaterial.dispose();
   rt.feltMaterial.dispose();
   rt.backShellMaterial.dispose();
+  rt.staticRiverBodies.dispose?.();
+  rt.staticRiverShells.dispose?.();
+  rt.staticBacks.dispose?.();
   rt.tableTexture?.dispose?.();
   rt.backTexture?.dispose?.();
   rt.backMaterial.dispose();
