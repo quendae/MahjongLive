@@ -273,6 +273,7 @@ type PerformanceCapture = {
   startedIso: string;
   lines: string[];
   samples: number;
+  lastSampleAt: number;
 };
 
 let performanceCapture: PerformanceCapture | null = null;
@@ -322,8 +323,13 @@ function updatePerformanceCaptureUi(): void {
 function appendPerformanceSample(detail: PerformanceDetail): void {
   const capture = performanceCapture;
   if (!capture) return;
+  const sampleAt = performance.now();
+  // Switching/render benchmark stages can briefly leave overlapping renderer callbacks alive.
+  // Keep the TXT useful and deterministic: at most one row per ~0.5 s capture interval.
+  if (capture.lastSampleAt > 0 && sampleAt - capture.lastSampleAt < 500) return;
+  capture.lastSampleAt = sampleAt;
   const now = new Date();
-  const elapsed = (performance.now() - capture.startedAt) / 1000;
+  const elapsed = (sampleAt - capture.startedAt) / 1000;
   capture.lines.push([
     elapsed.toFixed(3),
     now.toISOString(),
@@ -357,6 +363,7 @@ function startPerformanceCapture(): void {
     startedAt: performance.now(),
     startedIso: started.toISOString(),
     samples: 0,
+    lastSampleAt: 0,
     lines: [
       'MahjongLive performance session',
       `START\t${started.toISOString()}`,
@@ -367,7 +374,7 @@ function startPerformanceCapture(): void {
       `hardwareConcurrency\t${navigator.hardwareConcurrency ?? ''}`,
       `visibilityAtStart\t${document.visibilityState}`,
       `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}`,
-      `rendererPreference\t${localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl'}\twebgpuAvailable=${Boolean((navigator as any).gpu)}`,
+      `rendererPreference\t${localStorage.getItem(RENDERER_BACKEND_KEY) ?? (!/Firefox\//.test(navigator.userAgent) && Boolean((navigator as any).gpu) ? 'webgpu-auto' : 'webgl-auto')}\twebgpuAvailable=${Boolean((navigator as any).gpu)}`,
       '',
       'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tpixel_ratio',
     ],
@@ -804,7 +811,10 @@ function buildPanel(): HTMLElement {
   if (firefoxWebGpuBlocked && localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu') {
     localStorage.setItem(RENDERER_BACKEND_KEY, 'webgl');
   }
-  rendererSelect.value = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  const storedRenderer = localStorage.getItem(RENDERER_BACKEND_KEY);
+  rendererSelect.value = storedRenderer === 'webgpu' || storedRenderer === 'webgl'
+    ? storedRenderer
+    : (!firefoxWebGpuBlocked && webGpuApiAvailable ? 'webgpu' : 'webgl');
   rendererSelect.addEventListener('change', () => {
     if (rendererSelect.value === 'webgpu' && (firefoxWebGpuBlocked || !webGpuApiAvailable)) {
       rendererSelect.value = 'webgl';
@@ -852,7 +862,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', `<p class="dev-tuning-note">Printed tile art shares one atlas texture/material. WebGPU remains experimental and is disabled on Firefox because the current Three.js/Firefox path can hang the tab even when navigator.gpu is exposed; Chromium/Edge may still test it, with a 4 s initialization timeout and automatic WebGL 2 fallback. Run benchmark sweep records full, empty, table only, tiles without printed faces, and full scene without shadows.</p>`);
+  graphics.insertAdjacentHTML('beforeend', `<p class="dev-tuning-note">Printed tile art shares one atlas texture/material. On Chromium/Edge with WebGPU available, WebGPU is now the automatic default unless you explicitly choose another backend; Firefox stays on WebGL 2 because its current Three.js WebGPU path can hang the tab. WebGPU keeps a 4 s initialization timeout and automatic WebGL fallback. Performance TXT is rate-limited to one clean sample per interval and renderer.info is reset per frame on both backends.</p>`);
   root.append(graphics);
   const webGpuFallback = sessionStorage.getItem('mahjong-live:webgpu-fallback');
   if (webGpuFallback) {

@@ -421,7 +421,10 @@ function isFirefoxBrowser(): boolean {
 }
 
 function requestedRendererBackend(): 'webgl' | 'webgpu' {
-  const requested = localStorage.getItem(RENDERER_BACKEND_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  const stored = localStorage.getItem(RENDERER_BACKEND_KEY);
+  const requested: 'webgl' | 'webgpu' = stored === 'webgl' || stored === 'webgpu'
+    ? stored
+    : (!isFirefoxBrowser() && Boolean((navigator as any).gpu) ? 'webgpu' : 'webgl');
   // Firefox can expose navigator.gpu while Three's WebGPURenderer still wedges the tab/driver.
   // Do not let a saved experimental preference lock the game into the 2D fallback there.
   if (requested === 'webgpu' && isFirefoxBrowser()) {
@@ -2156,6 +2159,9 @@ function frameRuntime(rt: TableRuntime, time: number): void {
 
   const renderStarted = performance.now();
   const gpuTimerStarted = beginGpuTimer(rt);
+  // WebGPURenderer currently accumulates renderer.info counters across frames while WebGL usually
+  // resets them automatically. Reset explicitly so diagnostics mean the same thing on both backends.
+  rt.renderer.info?.reset?.();
   rt.renderer.render(rt.scene, rt.camera);
   if (gpuTimerStarted) endGpuTimer(rt);
   rt.renderTimeTotal += performance.now() - renderStarted;
