@@ -267,6 +267,9 @@ type TableRuntime = {
   staticRiverBodies: any;
   staticRiverShells: any;
   staticBacks: any;
+  staticFaceBatches: Map<string, any>;
+  staticFaceBatchCapacity: number;
+  staticFaceCount: number;
   staticRiverCapacity: number;
   staticRiverCount: number;
   staticRiverDirty: boolean;
@@ -777,9 +780,10 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   texture.anisotropy = Math.min(readDevTuning().graphics.anisotropy, rt.renderer.capabilities.getMaxAnisotropy());
   texture.center.set(.5, .5);
   texture.rotation = radians(tuning.tiles.faceTextureRotation);
-  // Printed artwork does not need a PBR shader. Lambert keeps the same scene lighting while
-  // making the many unique SVG face materials substantially cheaper to render.
-  const material = new rt.THREE.MeshLambertMaterial({
+  // The porcelain body provides the physical lighting/shading. The printed SVG plane itself is
+  // effectively ink on that surface, so an unlit shader is both visually stable and far cheaper
+  // than evaluating a light for every visible tile face.
+  const material = new rt.THREE.MeshBasicMaterial({
     map: texture,
     color: tuning.tiles.faceTint,
     side: rt.THREE.DoubleSide,
@@ -791,10 +795,41 @@ function materialForFace(rt: TableRuntime, label: string | null, back = false): 
   return material;
 }
 
+function clearStaticFaceBatches(rt: TableRuntime): void {
+  for (const batch of rt.staticFaceBatches.values()) batch.removeFromParent();
+  rt.staticFaceBatches.clear();
+  rt.staticFaceCount = 0;
+}
+
+function staticFaceBatchKey(rt: TableRuntime, label: string | null): string {
+  return `${rt.faceMode}:${label ?? 'blank'}`;
+}
+
+function ensureStaticFaceBatch(rt: TableRuntime, label: string | null): any {
+  const key = staticFaceBatchKey(rt, label);
+  const existing = rt.staticFaceBatches.get(key);
+  if (existing) return existing;
+  const batch = new rt.THREE.InstancedMesh(
+    rt.faceGeometry,
+    materialForFace(rt, label, false),
+    rt.staticFaceBatchCapacity,
+  );
+  batch.count = 0;
+  batch.castShadow = false;
+  batch.receiveShadow = false;
+  batch.frustumCulled = false;
+  batch.renderOrder = 4;
+  batch.instanceMatrix.setUsage(rt.THREE.DynamicDrawUsage);
+  rt.actorRoot.add(batch);
+  rt.staticFaceBatches.set(key, batch);
+  return batch;
+}
+
 function syncFaceMode(rt: TableRuntime): void {
   const next = readFaceMode();
   if (next === rt.faceMode) return;
   rt.faceMode = next;
+  clearStaticFaceBatches(rt);
   disposeFaceMaterials(rt);
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     actor.face.material = materialForFace(rt, actor.spec.label, actor.spec.back);
@@ -1183,12 +1218,16 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   const bodyMatrix = new THREE.Matrix4();
   const shellMatrix = new THREE.Matrix4();
   const rearMatrix = new THREE.Matrix4();
+  const faceMatrix = new THREE.Matrix4();
   const shellLocal = new THREE.Matrix4().makeTranslation(0, -.103, 0);
   const rearPosition = new THREE.Matrix4().makeTranslation(0, -TILE_BACK_OFFSET, 0);
   const rearRotation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
   const rearLocal = new THREE.Matrix4().multiplyMatrices(rearPosition, rearRotation);
+  const faceCounts = new Map<string, number>();
+  for (const batch of rt.staticFaceBatches.values()) batch.count = 0;
   let count = 0;
   let backCount = 0;
+  let faceCount = 0;
 
   for (const actor of [...rt.actors.values(), ...rt.stressActors]) {
     // Keep selectable tiles individual so hover/click motion remains exact. Everything else can be
@@ -1197,6 +1236,7 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
     actor.body.visible = !canBatch;
     actor.rearShell.visible = !canBatch;
     actor.rear.visible = actor.spec.back && !canBatch;
+    actor.face.visible = !actor.spec.back && !canBatch;
     if (!canBatch) continue;
 
     actor.group.updateMatrix();
@@ -1209,17 +1249,38 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
       rearMatrix.multiplyMatrices(bodyMatrix, rearLocal);
       rt.staticBacks.setMatrixAt(backCount, rearMatrix);
       backCount += 1;
+    } else if (!actor.spec.back) {
+      const key = staticFaceBatchKey(rt, actor.spec.label);
+      const index = faceCounts.get(key) ?? 0;
+      if (index < rt.staticFaceBatchCapacity) {
+        const batch = ensureStaticFaceBatch(rt, actor.spec.label);
+        actor.face.updateMatrix();
+        faceMatrix.multiplyMatrices(bodyMatrix, actor.face.matrix);
+        batch.setMatrixAt(index, faceMatrix);
+        faceCounts.set(key, index + 1);
+        faceCount += 1;
+      } else {
+        // Extremely artificial duplicate-heavy stress layouts can exceed a per-design batch. Keep
+        // the overflow face individual without giving up body/shell batching.
+        actor.face.visible = true;
+      }
     }
     count += 1;
   }
 
   rt.staticRiverCount = count;
+  rt.staticFaceCount = faceCount;
   rt.staticRiverBodies.count = count;
   rt.staticRiverShells.count = count;
   rt.staticBacks.count = backCount;
   rt.staticRiverBodies.instanceMatrix.needsUpdate = true;
   rt.staticRiverShells.instanceMatrix.needsUpdate = true;
   rt.staticBacks.instanceMatrix.needsUpdate = true;
+  for (const [key, batch] of rt.staticFaceBatches) {
+    const batchCount = faceCounts.get(key) ?? 0;
+    batch.count = batchCount;
+    if (batchCount > 0) batch.instanceMatrix.needsUpdate = true;
+  }
   if (rt.renderer.shadowMap.enabled) rt.renderer.shadowMap.needsUpdate = true;
 }
 
@@ -1420,6 +1481,10 @@ function createRuntime(THREE: any): TableRuntime {
   staticBacks.frustumCulled = false;
   staticBacks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   actorRoot.add(staticBacks);
+  // Face-up static tiles are grouped by artwork/material. A full river can therefore render 96
+  // printed faces in roughly one draw per distinct tile design instead of one draw per tile.
+  const staticFaceBatches = new Map<string, any>();
+  const staticFaceBatchCapacity = 32;
 
   const gl = renderer.getContext();
   const gpuTimerExt = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
@@ -1483,6 +1548,9 @@ function createRuntime(THREE: any): TableRuntime {
     staticRiverBodies,
     staticRiverShells,
     staticBacks,
+    staticFaceBatches,
+    staticFaceBatchCapacity,
+    staticFaceCount: 0,
     staticRiverCapacity,
     staticRiverCount: 0,
     staticRiverDirty: true,
@@ -1895,6 +1963,8 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         actors: rt.actors.size + rt.stressActors.length,
         moving: movingCount,
         instancedRivers: rt.staticRiverCount,
+        batchedFaces: rt.staticFaceCount,
+        faceBatches: [...rt.staticFaceBatches.values()].filter((batch) => batch.count > 0).length,
         pixelRatio: rt.renderer.getPixelRatio(),
         visibility: document.visibilityState,
       } }));
@@ -1942,6 +2012,7 @@ function disposeRuntime(): void {
   rt.staticRiverBodies.dispose?.();
   rt.staticRiverShells.dispose?.();
   rt.staticBacks.dispose?.();
+  clearStaticFaceBatches(rt);
   rt.tableTexture?.dispose?.();
   rt.backTexture?.dispose?.();
   rt.backMaterial.dispose();

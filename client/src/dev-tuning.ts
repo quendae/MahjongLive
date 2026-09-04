@@ -259,6 +259,8 @@ type PerformanceDetail = {
   actors?: number;
   moving?: number;
   instancedRivers?: number;
+  batchedFaces?: number;
+  faceBatches?: number;
   pixelRatio?: number;
   visibility?: string;
 };
@@ -334,6 +336,8 @@ function appendPerformanceSample(detail: PerformanceDetail): void {
     String(detail.actors ?? ''),
     String(detail.moving ?? ''),
     String(detail.instancedRivers ?? ''),
+    String(detail.batchedFaces ?? ''),
+    String(detail.faceBatches ?? ''),
     performanceNumber(detail.pixelRatio),
   ].join('\t'));
   capture.samples += 1;
@@ -358,7 +362,7 @@ function startPerformanceCapture(): void {
       `visibilityAtStart\t${document.visibilityState}`,
       `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}`,
       '',
-      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tpixel_ratio',
+      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\tpixel_ratio',
     ],
   };
   document.body.classList.add('perf-capture-active');
@@ -765,7 +769,7 @@ function buildPanel(): HTMLElement {
   perfStop.addEventListener('click', stopPerformanceCapture);
   perfLog.append(perfStart, perfStop, perfState);
   graphics.append(perfLog);
-  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Settled non-selectable tile bodies/shells/backs are instanced, and shadow maps are cached between movements, so both the opening racks and full rivers require far fewer draw calls. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
+  graphics.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Diagnostics now compare the Three.js loop with an independent browser RAF probe and, when EXT_disjoint_timer_query_webgl2 is available, real GPU execution time. Settled non-selectable bodies/shells/backs are instanced, printed fronts are additionally instanced by tile design, and shadow maps are cached between movements. The stress test should now expose whether remaining cost is geometry/driver rather than per-tile draw calls. Start performance log records one tab-separated sample per diagnostic interval until Stop & save .txt; logging continues even if the Dev panel is closed.</p>');
   root.append(graphics);
   requestAnimationFrame(updatePerformanceCaptureUi);
 
@@ -1040,7 +1044,7 @@ window.addEventListener('mahjong-live:fps', (event) => {
   const rafHz = Number.isFinite(detail.rafHz) ? Math.round(detail.rafHz ?? 0) : 0;
   const gpuMs = Number.isFinite(detail.gpuMs) ? `${(detail.gpuMs ?? 0).toFixed(2)}ms GPU` : 'GPU n/a';
   target.textContent = `Loop ${loopHz} · RAF ${rafHz} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
-  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · ${detail.visibility ?? document.visibilityState}`;
+  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${detail.batchedFaces ?? 0} batched faces in ${detail.faceBatches ?? 0} face draws · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · ${detail.visibility ?? document.visibilityState}`;
   target.classList.toggle('fps-low', loopHz > 0 && loopHz < 55);
 });
 ensureUi();
