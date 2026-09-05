@@ -284,7 +284,7 @@ function ensureGroups(panel: HTMLElement): Map<GroupId, HTMLDivElement> {
 
 function organizePanel(panel: HTMLElement): void {
   const title = panel.querySelector<HTMLElement>('.dev-tuning-head strong');
-  if (title) title.textContent = 'Dev Tuning';
+  if (title && title.textContent !== 'Dev Tuning') title.textContent = 'Dev Tuning';
 
   const bodies = ensureGroups(panel);
   const looseSections = Array.from(panel.children).filter((child): child is HTMLElement =>
@@ -297,7 +297,7 @@ function organizePanel(panel: HTMLElement): void {
 
   const base2d = panel.querySelector<HTMLElement>('.dev-2d-section');
   const baseHeading = base2d?.querySelector<HTMLElement>('h3');
-  if (baseHeading) baseHeading.textContent = 'Base table / scaling';
+  if (baseHeading && baseHeading.textContent !== 'Base table / scaling') baseHeading.textContent = 'Base table / scaling';
 
   const twoDBody = bodies.get('2d');
   if (twoDBody && !twoDBody.querySelector('.dev-ui-layout-section')) {
