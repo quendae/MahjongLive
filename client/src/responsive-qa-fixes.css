@@ -19,6 +19,25 @@
   .mahjong-table:not(.table-3d-active) .player-right .player-tags { right: 10px !important; }
 }
 
+/* On a 2560-wide desktop the table reaches its maximum width and the center/rivers both grow to
+   their largest desktop presentation. Add a little more breathing room only at this wide breakpoint;
+   1920 and laptop layouts already passed the visual audit and should stay untouched. */
+@media (min-width: 2200px) {
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river {
+    top: calc(50% - (var(--dev2d-river-y, 192px) + 30px)) !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+    top: calc(50% + (var(--dev2d-river-y, 192px) + 30px)) !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river {
+    left: calc(50% - (var(--dev2d-river-x, 250px) + 26px)) !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    left: calc(50% + (var(--dev2d-river-x, 250px) + 26px)) !important;
+    right: auto !important;
+  }
+}
+
 /* 1024-class tablets were the only matrix size where header max-content widened the page. Give the
    action cluster a real shrinkable grid track so its existing flex-wrap can actually wrap. */
 @media (min-width: 900px) and (max-width: 1059px) {
@@ -43,10 +62,27 @@
 }
 
 /* Narrow portrait: leave an explicit visual gap between the top badge and its rotated concealed
-   rack. */
+   rack and keep all four rivers outside the compact center counter. The previous 43%-based river
+   anchor tried to reserve room for the hand but pulled the rivers into the center instead. */
 @media (max-width: 470px) and (orientation: portrait) {
   .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
     margin-top: 12px !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river {
+    top: calc(50% - 135px) !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+    top: calc(50% + 135px) !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river {
+    left: calc(50% - 145px) !important;
+    top: 50% !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    left: calc(50% + 145px) !important;
+    right: auto !important;
+    top: 50% !important;
   }
 }
 
