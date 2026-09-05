@@ -1,4 +1,5 @@
 import './visual-polish.css';
+import './responsive-qa-fixes.css';
 
 // The 3D renderer intentionally freezes its expensive shadow map while the table is static.
 // Hover lift animates a child visual rather than the authoritative actor transform, so without a
