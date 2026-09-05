@@ -22,9 +22,11 @@ and should be updated as the game grows.
 - [x] Restore live 3D Dev camera tuning after the renderer identity-cache optimization without reverting the performance fast-path.
 - [x] Add a separate live 2D Dev layout section for table width/height reserve, player panels, center, Dora, hand and river scaling/positioning.
 - [x] Reclaim desktop play space by keeping the move log DOM-only instead of reserving a permanent column and by removing the old 940/980px desktop table height caps.
-- [ ] Continue responsive table/camera QA on desktop, tablet and phone landscape.
+- [x] Add automated Chromium responsive-layout QA with screenshots for 2D and 3D across seven desktop/tablet/phone viewports.
+- [ ] Continue responsive table/camera QA on real browsers/devices, especially touch behavior and Firefox/WebKit-specific differences.
   - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports.
-  - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport. Full visual/camera QA remains open.
+  - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport.
+  - 2026-09-05: Playwright matrix now passes 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D. Real-device/touch QA remains open.
 
 ## Rules and scoring
 
@@ -58,6 +60,8 @@ Next rule work:
 - [x] Stage A polish for the fast 2D table: richer felt/frame treatment, lighter player cards, stronger center counter, structured discard rivers and a more prominent human hand.
 - [x] Move background/table/tile appearance out of Dev into user-facing Options shared by 2D and 3D, including presets, colors, felt texture and tile-back texture/pattern controls.
 - [x] Make user appearance Options update the 2D table live instead of being masked by the old Dev inline-preview styles.
+- [x] Give 2D seat-oriented concealed racks, rivers around the center, source-aware tsumogiri/tedashi discard motion, clearer player badges and seat-oriented meld groups.
+- [x] Refresh cached 3D shadows during hover-lift/settle instead of leaving the contact shadow at the tile's resting position.
 - [ ] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
 - [ ] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [ ] Improve meld orientation based on called-from seat while keeping exact physical called tile.
