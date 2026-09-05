@@ -1,0 +1,215 @@
+:root {
+  --dev2d-opponent-hand-scale: 1.08;
+  --dev2d-river-x: 250px;
+  --dev2d-river-y: 192px;
+}
+
+/* B2 — desktop overhead seating. Keep every river inside its authoritative player-zone so the 3D
+   renderer can read exactly the same DOM, but make the zone cover the whole table in 2D. Its
+   children can then be positioned independently around the centre counter. */
+@media (min-width: 1060px) {
+  .mahjong-table:not(.table-3d-active) .player-zone {
+    inset: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    scale: 1 !important;
+    pointer-events: none;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card,
+  .mahjong-table:not(.table-3d-active) .human-card,
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    position: absolute;
+  }
+
+  /* Opponent chrome becomes a small identity badge; the concealed rack itself is the visual seat. */
+  .mahjong-table:not(.table-3d-active) .opponent-card {
+    width: auto;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    overflow: visible;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-heading {
+    width: max-content;
+    min-height: 29px;
+    padding: 3px 7px;
+    border: 1px solid rgba(235, 213, 157, .13);
+    border-radius: 9px;
+    background: rgba(4, 15, 10, .79);
+    box-shadow: 0 5px 14px rgba(0,0,0,.18);
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-tags {
+    width: max-content;
+    min-height: 0;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand {
+    display: flex;
+    flex-wrap: nowrap !important;
+    justify-content: center;
+    gap: 2px;
+    width: max-content;
+    max-width: none;
+    max-height: none !important;
+    min-height: 0;
+    overflow: visible !important;
+    transform-origin: center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile {
+    flex: 0 0 auto;
+  }
+
+  /* The separated concealed tile is the opponent's current draw. This is public timing
+     information and mirrors the separated draw slot already used by the human hand / 3D rack. */
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile-drawn {
+    margin-left: 12px;
+    filter: brightness(1.08);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-card {
+    left: 50%;
+    top: var(--dev2d-player-inset-tb, 18px);
+    transform: translateX(-50%) scale(var(--dev2d-player-scale, 1));
+    transform-origin: top center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+    margin: 7px auto 0;
+    transform: rotate(180deg) scale(var(--dev2d-opponent-hand-scale));
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-top .player-tags {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card {
+    top: 50%;
+    width: 150px;
+    height: min(520px, 64%);
+    transform: translateY(-50%) scale(var(--dev2d-player-scale, 1));
+    transform-origin: center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card {
+    left: var(--dev2d-player-inset-sides, 24px);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card {
+    right: var(--dev2d-player-inset-sides, 24px);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading { left: 0; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading { right: 0; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags,
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags {
+    position: absolute;
+    top: calc(50% + 20px);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags { left: 0; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { right: 0; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    position: absolute;
+    top: 50%;
+    margin: 0;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
+    left: 94px;
+    transform: translate(-50%, -50%) rotate(90deg) scale(var(--dev2d-opponent-hand-scale));
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    right: 94px;
+    transform: translate(50%, -50%) rotate(-90deg) scale(var(--dev2d-opponent-hand-scale));
+  }
+
+  /* Keep open melds at the seat edge rather than letting them change the concealed rack line. */
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row {
+    justify-content: center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row,
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row {
+    position: absolute;
+    top: calc(50% + 122px);
+    width: max-content;
+    max-width: 130px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row { left: 0; }
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row { right: 0; }
+
+  /* Human card remains the lower rack. The full-zone conversion above means it must own its
+     explicit anchor instead of inheriting the old player-bottom box coordinates. */
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    left: 50%;
+    bottom: var(--dev2d-player-inset-tb, 18px);
+    width: min(86%, 1120px);
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  /* Rivers surround the counter exactly like the 3D world. Rotating the whole tray also rotates
+     its chronology from that player's point of view, not merely the individual artwork. */
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    z-index: 4;
+    width: max-content !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    grid-template-columns: repeat(6, calc(28px * var(--dev2d-river-scale))) !important;
+    transform-origin: center;
+    pointer-events: none;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river {
+    left: 50%;
+    top: calc(50% - var(--dev2d-river-y));
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+    left: 50%;
+    top: calc(50% + var(--dev2d-river-y));
+    transform: translate(-50%, -50%);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river {
+    left: calc(50% - var(--dev2d-river-x));
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    left: calc(50% + var(--dev2d-river-x));
+    right: auto !important;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+  }
+}
