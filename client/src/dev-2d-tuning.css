@@ -184,3 +184,15 @@ body:has(.mahjong-table:not(.table-3d-active)) .game-layout {
     max-width: none !important;
   }
 }
+
+@media (max-width: 760px) {
+  .game-layout {
+    padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)) !important;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .game-layout {
+    padding: 4px max(4px, env(safe-area-inset-right)) 4px max(4px, env(safe-area-inset-left)) !important;
+  }
+}
