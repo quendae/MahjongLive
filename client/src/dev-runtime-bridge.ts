@@ -43,6 +43,9 @@ function scheduleLegacyCleanup(): void {
 }
 
 window.addEventListener(DEV_TUNING_EVENT, (event) => {
+  // Dev applies its old inline appearance preview immediately before broadcasting. Remove it in
+  // the same task, then do one frame-late cleanup as a guard against MutationObserver ordering.
+  clearLegacyAppearanceInlineStyles();
   scheduleLegacyCleanup();
   const detail = (event as CustomEvent<Record<string, unknown> | null>).detail;
   if (!detail || typeof detail !== 'object' || forwardedDetails.has(detail)) return;
@@ -62,12 +65,10 @@ window.addEventListener(DEV_TUNING_EVENT, (event) => {
   });
 });
 
-// Dev's MutationObserver reapplies its DOM preview whenever #app is replaced. Run one frame
-// later and remove only the appearance-owned inline styles so 2D Options remain genuinely live.
-const app = document.querySelector('#app');
-if (app) {
-  const observer = new MutationObserver(scheduleLegacyCleanup);
-  observer.observe(app, { childList: true, subtree: true });
-}
+// Dev observes the whole body (including its own panel and the Options dialog) and may reapply its
+// legacy inline preview after any child-list update. Register after it and clean those properties
+// one frame later; attribute/style writes themselves are not observed, so this cannot loop.
+const observer = new MutationObserver(scheduleLegacyCleanup);
+observer.observe(document.body, { childList: true, subtree: true });
 
 scheduleLegacyCleanup();
