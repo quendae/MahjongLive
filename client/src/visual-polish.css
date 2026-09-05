@@ -1,0 +1,532 @@
+/* Final table presentation pass. Loaded after the historical 2D/3D/responsive styles so this file
+   can tune presentation without changing the authoritative DOM that both renderers share. */
+
+/* ---------- 2D desktop/tablet presentation ---------- */
+@media (min-width: 761px) {
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-heading {
+    z-index: 9;
+    min-height: 30px;
+    padding: 4px 8px;
+    border: 1px solid rgba(234, 213, 158, .18);
+    border-radius: 9px;
+    background: rgba(3, 14, 9, .86);
+    box-shadow: 0 6px 18px rgba(0,0,0,.20);
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-name {
+    white-space: nowrap;
+  }
+
+  /* The side labels used to sit directly on the rack's midpoint and could be clipped by the table
+     edge. Keep them visibly associated with the seat, but move them up and slightly inward. */
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    top: calc(50% - 172px) !important;
+    transform: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading { left: 34px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading { right: 34px !important; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags,
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags {
+    top: calc(50% - 137px) !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags { left: 34px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { right: 34px !important; }
+
+  /* Rivers should read as loose tiles on felt rather than dark UI panels. */
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    gap: 4px !important;
+    padding: 5px !important;
+    border-color: rgba(255,255,255,.025) !important;
+    border-radius: 9px !important;
+    background: rgba(2, 9, 6, .035) !important;
+    box-shadow: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river:empty {
+    display: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river .tile {
+    width: calc(31px * var(--dev2d-river-scale, 1)) !important;
+    height: calc(42px * var(--dev2d-river-scale, 1)) !important;
+    border-radius: 5px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    grid-template-columns: repeat(6, calc(31px * var(--dev2d-river-scale, 1))) !important;
+  }
+
+  /* Open groups are physical groups, not a second generic card row. */
+  .mahjong-table:not(.table-3d-active) .meld-row {
+    z-index: 7;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: max-content;
+    max-width: none !important;
+    min-height: 0;
+    margin: 0;
+    pointer-events: none;
+  }
+
+  .mahjong-table:not(.table-3d-active) .meld {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid rgba(255,255,255,.055);
+    border-radius: 7px;
+    background: rgba(3, 10, 7, .16);
+    box-shadow: 0 4px 10px rgba(0,0,0,.08);
+  }
+
+  .mahjong-table:not(.table-3d-active) .meld .tile {
+    width: 29px;
+    height: 39px;
+    border-radius: 5px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row {
+    position: absolute;
+    left: 50%;
+    top: 94px;
+    transform: translateX(-50%) rotate(180deg);
+    transform-origin: center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row,
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row {
+    top: calc(50% + 184px) !important;
+    max-width: none !important;
+    transform-origin: center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row {
+    left: 92px !important;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row {
+    right: 92px !important;
+    transform: translate(50%, -50%) rotate(-90deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-melds {
+    position: absolute;
+    right: 13px;
+    top: 6px;
+    justify-content: flex-end;
+  }
+}
+
+/* ---------- Medium tablets: use the overhead seating model too ---------- */
+@media (min-width: 761px) and (max-width: 1059px) {
+  .mahjong-table:not(.table-3d-active) .player-zone {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    pointer-events: none;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card,
+  .mahjong-table:not(.table-3d-active) .human-card,
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    position: absolute;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card {
+    width: auto;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    overflow: visible;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: max-content;
+    max-width: none;
+    max-height: none !important;
+    overflow: visible !important;
+    gap: 2px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile-drawn { margin-left: 9px; }
+
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-card {
+    left: 50%;
+    top: 12px;
+    transform: translateX(-50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+    margin-top: 5px;
+    transform: rotate(180deg) scale(.92);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card {
+    top: 50%;
+    width: 134px;
+    height: 440px;
+    transform: translateY(-50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card { left: 7px; }
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card { right: 7px; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    position: absolute;
+    top: 50%;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
+    left: 80px;
+    transform: translate(-50%, -50%) rotate(90deg) scale(.90);
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    right: 80px;
+    transform: translate(50%, -50%) rotate(-90deg) scale(.90);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    top: 44px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading { left: 12px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading { right: 12px !important; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags,
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { top: 78px !important; }
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags { left: 12px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { right: 12px !important; }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    left: 50%;
+    bottom: 10px;
+    width: min(96%, 940px);
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    z-index: 4;
+    width: max-content !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    transform-origin: center;
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river {
+    left: 50%; top: calc(50% - clamp(142px, 20vh, 172px));
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+    left: 50%; top: calc(50% + clamp(142px, 20vh, 172px));
+    transform: translate(-50%, -50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river {
+    left: calc(50% - clamp(185px, 24vw, 235px)); top: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    left: calc(50% + clamp(185px, 24vw, 235px)); right: auto !important; top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row { left: 76px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row { right: 76px !important; }
+}
+
+/* ---------- Phones / narrow tablets ---------- */
+@media (max-width: 760px) {
+  .mahjong-table:not(.table-3d-active) .player-zone {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    pointer-events: none;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card,
+  .mahjong-table:not(.table-3d-active) .human-card,
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    position: absolute;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card {
+    width: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    overflow: visible;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-heading {
+    width: max-content;
+    min-height: 23px;
+    padding: 2px 5px;
+    gap: 4px;
+    border: 1px solid rgba(235, 213, 157, .14);
+    border-radius: 7px;
+    background: rgba(3,14,9,.86);
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
+  }
+  .mahjong-table:not(.table-3d-active) .opponent-card .seat-wind {
+    width: 17px; height: 17px; border-radius: 5px; font-size: 9px;
+  }
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-name,
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-points { font-size: 8px; }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: max-content;
+    max-width: none;
+    max-height: none !important;
+    overflow: visible !important;
+    gap: 1px;
+  }
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile {
+    width: 19px !important;
+    height: 26px !important;
+    border-radius: 4px;
+  }
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile-drawn { margin-left: 5px; }
+
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-card {
+    left: 50%; top: 7px; transform: translateX(-50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+    margin-top: 4px;
+    transform: rotate(180deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .player-heading { margin: 0 auto; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card {
+    top: 50%;
+    width: 86px !important;
+    height: 330px;
+    transform: translateY(-50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card { left: 2px; }
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card { right: 2px; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    position: absolute;
+    top: 50%;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
+    left: 54px;
+    transform: translate(-50%, -50%) rotate(90deg) scale(.88);
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+    right: 54px;
+    transform: translate(50%, -50%) rotate(-90deg) scale(.88);
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    position: absolute;
+    top: 25px !important;
+    transform: none !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading { left: 4px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading { right: 4px !important; }
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags,
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { display: none !important; }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    left: 50%; bottom: 5px;
+    width: calc(100% - 10px) !important;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+  .mahjong-table:not(.table-3d-active) .human-hand {
+    justify-content: flex-start !important;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    z-index: 4;
+    display: grid;
+    width: max-content !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    gap: 2px !important;
+    padding: 2px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    grid-template-columns: repeat(6, 18px) !important;
+    transform-origin: center;
+  }
+  .mahjong-table:not(.table-3d-active) .discard-river .tile {
+    width: 18px !important;
+    height: 25px !important;
+    border-radius: 3px;
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river {
+    left: 50%; top: calc(50% - 116px);
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+    left: 50%; top: calc(50% + 116px);
+    transform: translate(-50%, -50%);
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river {
+    left: calc(50% - 142px); top: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    left: calc(50% + 142px); right: auto !important; top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+  }
+
+  .mahjong-table:not(.table-3d-active) .meld-row {
+    position: absolute;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: max-content;
+    max-width: none !important;
+    min-height: 0;
+    margin: 0;
+  }
+  .mahjong-table:not(.table-3d-active) .meld {
+    gap: 1px;
+    padding: 2px;
+    border-radius: 5px;
+    background: rgba(3,10,7,.12);
+  }
+  .mahjong-table:not(.table-3d-active) .meld .tile {
+    width: 20px !important;
+    height: 27px !important;
+    border-radius: 3px;
+  }
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row {
+    left: 50%; top: 66px;
+    transform: translateX(-50%) rotate(180deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row {
+    left: 52px; top: calc(50% + 136px);
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row {
+    right: 52px; top: calc(50% + 136px);
+    transform: translate(50%, -50%) rotate(-90deg);
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-melds {
+    right: 5px; top: 3px;
+    justify-content: flex-end;
+  }
+
+  /* Dora remains table information, never part of the top player's rack. */
+  .mahjong-table:not(.table-3d-active) .table-dora-tray {
+    left: 7px !important;
+    right: auto !important;
+    top: 7px !important;
+    transform: none !important;
+    scale: .78;
+    transform-origin: top left;
+  }
+}
+
+/* Very narrow portrait phones need the rivers closer to the compact counter. */
+@media (max-width: 470px) and (orientation: portrait) {
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river { top: calc(43% - 102px); }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river { top: calc(43% + 102px); }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river { left: calc(50% - 118px); top: 43%; }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river { left: calc(50% + 118px); top: 43%; }
+}
+
+/* Short landscape is the hardest layout: keep everything inside one viewport instead of inheriting
+   the old 480px minimum-height table. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .mahjong-table:not(.table-3d-active) {
+    height: calc(100dvh - 54px) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .opponent-hand .tile {
+    width: 15px !important;
+    height: 21px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-card,
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-card { height: 245px; }
+  .mahjong-table:not(.table-3d-active) .player-left .opponent-hand { left: 44px; }
+  .mahjong-table:not(.table-3d-active) .player-right .opponent-hand { right: 44px; }
+
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-heading {
+    min-height: 19px;
+    padding: 1px 4px;
+  }
+  .mahjong-table:not(.table-3d-active) .opponent-card .seat-wind { width: 14px; height: 14px; font-size: 7px; }
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-name,
+  .mahjong-table:not(.table-3d-active) .opponent-card .player-points { font-size: 7px; }
+
+  .mahjong-table:not(.table-3d-active) .table-center {
+    width: 142px !important;
+    min-height: 104px !important;
+    padding: 25px 13px 22px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .round-title { font-size: 20px !important; }
+  .mahjong-table:not(.table-3d-active) .center-meta { margin: 3px 0 4px; font-size: 7px !important; }
+  .mahjong-table:not(.table-3d-active) .turn-indicator { margin-top: 4px; font-size: 8px !important; }
+
+  .mahjong-table:not(.table-3d-active) .discard-river { grid-template-columns: repeat(6, 15px) !important; }
+  .mahjong-table:not(.table-3d-active) .discard-river .tile { width: 15px !important; height: 21px !important; }
+  .mahjong-table:not(.table-3d-active) .player-top .discard-river { top: calc(50% - 77px); }
+  .mahjong-table:not(.table-3d-active) .player-bottom .discard-river { top: calc(50% + 77px); }
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river { left: calc(50% - 104px); }
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river { left: calc(50% + 104px); }
+
+  .mahjong-table:not(.table-3d-active) .meld .tile { width: 16px !important; height: 22px !important; }
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row { top: 48px; }
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row,
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row { top: calc(50% + 102px); }
+
+  .mahjong-table:not(.table-3d-active) .human-card {
+    bottom: 2px !important;
+    padding: 3px 4px 4px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .human-hand { min-height: 40px !important; padding-top: 1px !important; }
+  .mahjong-table:not(.table-3d-active) .human-hand > .tile {
+    width: 25px !important;
+    height: 36px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .human-card .player-heading { min-height: 18px; }
+
+  .mahjong-table:not(.table-3d-active) .table-dora-tray {
+    left: 4px !important; top: 4px !important; scale: .58;
+  }
+}
+
+/* ---------- Shared mobile safety for 3D ---------- */
+@media (max-width: 760px) {
+  .mahjong-table.table-3d-active,
+  #table-3d-stage {
+    max-width: 100%;
+  }
+
+  .table-3d-active .table-dora-tray {
+    left: max(7px, env(safe-area-inset-left)) !important;
+    top: 7px !important;
+  }
+
+  .table-3d-active .player-left { left: max(4px, env(safe-area-inset-left)) !important; }
+  .table-3d-active .player-right { right: max(4px, env(safe-area-inset-right)) !important; }
+}
