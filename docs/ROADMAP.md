@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-04
+Updated: 2026-09-05
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -20,6 +20,7 @@ and should be updated as the game grows.
 - [x] Human Tenpai/Furiten status with visible wait tiles, without exposing opponent concealed info.
 - [x] Group-aware meld placement for all four legal meld groups without wrapping/collisions.
 - [ ] Continue responsive table/camera QA on desktop, tablet and phone landscape.
+  - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports. Full visual/camera QA remains open.
 
 ## Rules and scoring
 
