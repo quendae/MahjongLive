@@ -1,0 +1,67 @@
+.discard-flight-ghost {
+  position: fixed !important;
+  z-index: 120;
+  margin: 0 !important;
+  pointer-events: none !important;
+  opacity: 1;
+  transform-origin: center;
+  will-change: transform, opacity;
+  border-color: color-mix(in srgb, var(--user-tile-dark, #dfdfdf) 56%, #a79b82) !important;
+  border-bottom-color: color-mix(in srgb, var(--user-tile-dark, #dfdfdf) 76%, #8c806b) !important;
+  background: linear-gradient(
+    150deg,
+    var(--user-tile-light, #fff) 0%,
+    var(--user-tile-color, #fbfbfb) 54%,
+    var(--user-tile-dark, #dfdfdf) 100%
+  ) !important;
+  box-shadow:
+    0 13px 22px rgba(0,0,0,.36),
+    0 0 0 2px rgba(239, 210, 125, .30) !important;
+}
+
+.discard-flight-ghost .tile-art {
+  width: 95%;
+  height: 96%;
+  object-fit: contain;
+}
+
+.mahjong-table:not(.table-3d-active) .discard-flight-target {
+  opacity: .16 !important;
+}
+
+/* Keep a tiny source cue on the latest discard after the flight completes. Blue means the freshly
+   drawn tile was discarded (tsumogiri); warm gold means the discard came from the arranged hand. */
+.mahjong-table:not(.table-3d-active) .tile-discard-source-latest::before {
+  content: '';
+  position: absolute;
+  z-index: 7;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid rgba(5, 14, 10, .82);
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgba(0,0,0,.32);
+  pointer-events: none;
+}
+
+.mahjong-table:not(.table-3d-active) .tile-discard-tsumogiri::before {
+  background: #8dc8ff;
+}
+
+.mahjong-table:not(.table-3d-active) .tile-discard-tedashi::before {
+  background: #e8ca72;
+}
+
+/* The draw slot itself must be unmistakable before a bot acts. The hand remains fully concealed. */
+.mahjong-table:not(.table-3d-active) .opponent-hand .tile-drawn {
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.34),
+    0 0 0 1px rgba(151, 202, 172, .26),
+    0 5px 10px rgba(0,0,0,.22) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discard-flight-ghost { display: none !important; }
+  .mahjong-table:not(.table-3d-active) .discard-flight-target { opacity: 1 !important; }
+}
