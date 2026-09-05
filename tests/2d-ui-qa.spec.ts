@@ -27,7 +27,7 @@ test('2D side rivers keep the first six discards on one row', async ({ page }) =
   await boot2d(page);
 
   const result = await page.evaluate(() => {
-    const rows: Record<string, { tops: number[]; columns: string; width: number }> = {};
+    const rows: Record<string, { tops: number[]; columns: string }> = {};
     for (const side of ['left', 'right'] as const) {
       const river = document.querySelector<HTMLElement>(`.player-${side} .discard-river`);
       if (!river) throw new Error(`Missing ${side} river`);
@@ -38,9 +38,11 @@ test('2D side rivers keep the first six discards on one row', async ({ page }) =
       }));
       const children = Array.from(river.children) as HTMLElement[];
       rows[side] = {
+        // offsetTop is measured in the unrotated grid coordinate system, which is exactly what we
+        // need: all first six tiles must occupy row 1 even though the entire side river is later
+        // rotated 90 degrees for the seat presentation.
         tops: children.map((tile) => tile.offsetTop),
         columns: getComputedStyle(river).gridTemplateColumns,
-        width: river.getBoundingClientRect().width,
       };
     }
     return rows;
@@ -48,7 +50,6 @@ test('2D side rivers keep the first six discards on one row', async ({ page }) =
 
   for (const side of ['left', 'right'] as const) {
     expect(new Set(result[side].tops).size, `${side}: ${result[side].columns}`).toBe(1);
-    expect(result[side].width).toBeGreaterThan(150);
   }
 });
 

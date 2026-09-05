@@ -141,7 +141,13 @@ async function visualAudit(page: Page, mode: '2d' | '3d'): Promise<string[]> {
 
     const centerElement = table.querySelector('.table-center');
     const center = centerElement && visible(centerElement) ? rect(centerElement) : null;
-    if (center) {
+    const reactionPopup = document.querySelector('.reaction-popup');
+    const reactionPopupOpen = Boolean(reactionPopup && visible(reactionPopup));
+    // During a Chi/Pon/Kan/Ron decision the centered reaction modal deliberately covers the counter.
+    // Auditing hidden-under-modal river/counter geometry in that transient state produces false
+    // positives (especially on short landscape phones), so perform this collision audit only while
+    // the normal center counter is the active presentation surface.
+    if (center && !reactionPopupOpen) {
       for (const river of table.querySelectorAll('.discard-river')) {
         if (!visible(river) || river.children.length === 0) continue;
         const overlap = intersectionRatio(rect(river), center);
