@@ -51,9 +51,10 @@ function captureSources(): void {
     const hand = zone.querySelector<HTMLElement>('.opponent-hand, .human-hand');
     const drawn = hand?.querySelector<HTMLElement>('.tile-drawn') ?? null;
     const tiles = hand ? [...hand.querySelectorAll<HTMLElement>(':scope > .tile')] : [];
-    const handRect = tiles.length > 0
+    const arrangedTiles = tiles.filter((tile) => !tile.classList.contains('tile-drawn'));
+    const handRect = arrangedTiles.length > 0
       ? (() => {
-          const rects = tiles.map((tile) => tile.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
+          const rects = arrangedTiles.map((tile) => tile.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
           if (rects.length === 0) return null;
           const left = Math.min(...rects.map((rect) => rect.left));
           const top = Math.min(...rects.map((rect) => rect.top));
