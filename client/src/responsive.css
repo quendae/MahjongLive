@@ -1,0 +1,140 @@
+/*
+ * Responsive fixes are loaded after the 3D renderer styles on purpose.
+ * Dev tuning exposes desktop-width CSS variables late in table-3d.css; these
+ * breakpoint rules must win so tablet/phone layouts never reserve the log
+ * column or keep the desktop table minimum height.
+ */
+
+@media (max-width: 1050px) {
+  .game-layout:has(.mahjong-table.table-3d-active) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-layout:has(.mahjong-table.table-3d-active) .game-log {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .game-layout:has(.mahjong-table.table-3d-active) {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+
+  .game-layout:has(.mahjong-table.table-3d-active) .game-log {
+    display: none;
+  }
+
+  .mahjong-table.table-3d-active {
+    width: 100%;
+    height: min(760px, calc(100dvh - 92px));
+    min-height: 560px;
+  }
+}
+
+/* Phones and small tablets in landscape need a height-first layout. The
+   previous 610px minimum forced the table far below a 360-500px viewport. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .game-layout:has(.mahjong-table.table-3d-active) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 4px max(4px, env(safe-area-inset-right)) 4px max(4px, env(safe-area-inset-left));
+  }
+
+  .mahjong-table.table-3d-active {
+    width: 100%;
+    height: calc(100dvh - 58px);
+    min-height: 0;
+    max-height: none;
+    border-width: 5px;
+    border-radius: 16px;
+  }
+
+  #table-3d-stage {
+    border-radius: 16px;
+  }
+
+  .table-3d-active .human-card,
+  .table-3d-active .opponent-card {
+    width: 94px;
+    padding: 2px 3px;
+  }
+
+  .table-3d-active .player-top { top: 4px; }
+  .table-3d-active .player-bottom { bottom: 4px; }
+  .table-3d-active .player-left { left: 4px; }
+  .table-3d-active .player-right { right: 4px; }
+
+  .table-3d-active .player-heading {
+    min-height: 16px;
+  }
+
+  .table-3d-active .seat-wind {
+    width: 15px;
+    height: 15px;
+    font-size: 9px;
+  }
+
+  .table-3d-active .player-tags {
+    display: none;
+  }
+
+  .table-3d-active .table-dora-tray {
+    left: max(8px, env(safe-area-inset-left));
+    top: 8px;
+    min-height: 40px;
+    gap: 5px;
+    padding: 4px 6px;
+  }
+
+  .table-3d-active .dora-tray-title {
+    font-size: 8px;
+  }
+
+  .table-3d-active .table-dora-tray .tile {
+    width: 28px;
+    height: 38px;
+  }
+
+  .table-3d-active .table-center.classic-table-counter {
+    width: min(var(--dev-center-width, 160px), 160px);
+    height: min(var(--dev-center-height, 160px), 160px);
+    min-height: 0;
+    padding: 44px 24px 36px;
+    border-radius: 15px;
+  }
+
+  .table-3d-active .round-title {
+    font-size: 22px;
+  }
+
+  .table-3d-active .center-meta {
+    gap: 2px;
+    margin-top: 5px;
+    font-size: 8px;
+  }
+
+  .table-3d-active .turn-indicator {
+    left: 18px;
+    right: 18px;
+    bottom: 23px;
+    font-size: 9px;
+  }
+
+  .table-3d-active .counter-score {
+    min-width: 60px;
+    padding: 3px 5px;
+    font-size: 6px;
+  }
+
+  .table-3d-active .counter-score b { font-size: 10px; }
+  .table-3d-active .counter-score strong { font-size: 8px; }
+
+  .table-3d-active .reaction-popup {
+    width: min(360px, calc(100% - 24px));
+    max-height: calc(100% - 20px);
+    overflow-y: auto;
+  }
+}
