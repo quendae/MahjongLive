@@ -1,0 +1,65 @@
+name: Responsive table QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'tests/responsive-qa.spec.ts'
+      - '.github/workflows/responsive-qa.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'client/**'
+      - 'tests/responsive-qa.spec.ts'
+      - '.github/workflows/responsive-qa.yml'
+
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+      MAHJONG_QA_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install browser QA runner
+        run: pnpm add -Dw @playwright/test@1.55.0 --lockfile=false
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build client
+        run: pnpm client:build
+      - name: Start preview server
+        run: |
+          nohup pnpm client:preview > /tmp/mahjong-preview.log 2>&1 &
+          echo $! > /tmp/mahjong-preview.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/mahjong-preview.log
+          exit 1
+      - name: Audit responsive 2D and 3D layouts
+        run: pnpm exec playwright test tests/responsive-qa.spec.ts --workers=1 --reporter=line
+      - name: Upload responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: responsive-qa-screenshots
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preview server log
+        if: failure()
+        run: cat /tmp/mahjong-preview.log || true
