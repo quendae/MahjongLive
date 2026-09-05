@@ -1,0 +1,233 @@
+/* Late, authoritative 2D UI/appearance polish.
+   This entry is intentionally loaded after the historical tuning modules so user Options win over
+   old Dev inline previews and the component offset controls can safely fine-tune every viewport. */
+
+/* User-facing Options are authoritative in BOTH renderers. The old Dev module writes inline
+   background declarations while it refreshes its preview; !important here prevents those stale
+   inline values from masking the 2D appearance variables. */
+body {
+  background:
+    radial-gradient(circle at 50% -8%, var(--user-scene-glow), transparent 44%),
+    linear-gradient(180deg, var(--user-scene-color) 0%, var(--user-scene-deep) 100%) !important;
+}
+
+.mahjong-table:not(.table-3d-active) {
+  background-color: var(--user-felt-color) !important;
+  background-image:
+    radial-gradient(circle at 50% 44%, rgba(255,255,255,.045), transparent 38%),
+    var(--user-table-image),
+    repeating-linear-gradient(45deg, transparent 0 9px, rgba(255,255,255,.012) 9px 10px),
+    linear-gradient(145deg, var(--user-felt-color) 0%, var(--user-felt-deep) 100%) !important;
+  background-size: auto, cover, auto, auto !important;
+  background-position: center !important;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat !important;
+}
+
+.mahjong-table:not(.table-3d-active) .tile:not(.tile-back) {
+  border-color: color-mix(in srgb, var(--user-tile-dark) 56%, #a79b82) !important;
+  border-bottom-color: color-mix(in srgb, var(--user-tile-dark) 76%, #8c806b) !important;
+  background:
+    linear-gradient(150deg, var(--user-tile-light) 0%, var(--user-tile-color) 54%, var(--user-tile-dark) 100%) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .tile-back {
+  border-color: var(--user-back-light) !important;
+  background-color: var(--user-back-color) !important;
+  background-image:
+    var(--user-back-pattern-image),
+    linear-gradient(145deg, var(--user-back-light) 0%, var(--user-back-color) 38%, var(--user-back-dark) 100%) !important;
+  background-size: var(--user-back-pattern-size), auto !important;
+  background-position: center !important;
+  background-repeat: repeat, no-repeat !important;
+}
+
+/* Riichi rivers are six tiles wide for every seat. Side seats are rotated by the seating CSS; they
+   should not silently become 3-column mini-grids merely because their container is narrow. */
+.mahjong-table:not(.table-3d-active) .player-left .discard-river,
+.mahjong-table:not(.table-3d-active) .player-right .discard-river {
+  grid-template-columns: repeat(var(--devui-side-river-columns, 6), max-content) !important;
+  width: max-content !important;
+  max-width: none !important;
+}
+
+/* Additive offsets: individual CSS translate is deliberately used instead of transform so it does
+   not destroy the seat rotations / translate(-50%) rules already used by responsive 2D layout. */
+.mahjong-table:not(.table-3d-active) {
+  translate: var(--devui-table-x, 0px) var(--devui-table-y, 0px);
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .opponent-card {
+  translate: var(--devui-top-panel-x, 0px) var(--devui-top-panel-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .opponent-card {
+  translate: var(--devui-left-panel-x, 0px) var(--devui-left-panel-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .opponent-card {
+  translate: var(--devui-right-panel-x, 0px) var(--devui-right-panel-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+  translate: var(--devui-bottom-panel-x, 0px) var(--devui-bottom-panel-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .player-heading,
+.mahjong-table:not(.table-3d-active) .player-top .player-tags {
+  translate: var(--devui-top-badge-x, 0px) var(--devui-top-badge-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .player-heading,
+.mahjong-table:not(.table-3d-active) .player-left .player-tags {
+  translate: var(--devui-left-badge-x, 0px) var(--devui-left-badge-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .player-heading,
+.mahjong-table:not(.table-3d-active) .player-right .player-tags {
+  translate: var(--devui-right-badge-x, 0px) var(--devui-right-badge-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-bottom .player-heading,
+.mahjong-table:not(.table-3d-active) .player-bottom .player-tags {
+  translate: var(--devui-bottom-badge-x, 0px) var(--devui-bottom-badge-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+  translate: var(--devui-top-rack-x, 0px) var(--devui-top-rack-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
+  translate: var(--devui-left-rack-x, 0px) var(--devui-left-rack-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+  translate: var(--devui-right-rack-x, 0px) var(--devui-right-rack-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .human-hand {
+  translate: var(--devui-human-hand-x, 0px) var(--devui-human-hand-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .discard-river {
+  translate: var(--devui-top-river-x, 0px) var(--devui-top-river-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .discard-river {
+  translate: var(--devui-left-river-x, 0px) var(--devui-left-river-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .discard-river {
+  translate: var(--devui-right-river-x, 0px) var(--devui-right-river-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+  translate: var(--devui-bottom-river-x, 0px) var(--devui-bottom-river-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .meld-row {
+  translate: var(--devui-top-meld-x, 0px) var(--devui-top-meld-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .meld-row {
+  translate: var(--devui-left-meld-x, 0px) var(--devui-left-meld-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .meld-row {
+  translate: var(--devui-right-meld-x, 0px) var(--devui-right-meld-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-bottom .meld-row,
+.mahjong-table:not(.table-3d-active) .player-bottom .human-melds {
+  translate: var(--devui-bottom-meld-x, 0px) var(--devui-bottom-meld-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center {
+  translate: var(--devui-center-x, 0px) var(--devui-center-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .table-dora-tray {
+  translate: var(--devui-dora-x, 0px) var(--devui-dora-y, 0px) !important;
+}
+.mahjong-table:not(.table-3d-active) .call-bubble {
+  translate: var(--devui-call-bubble-x, 0px) var(--devui-call-bubble-y, 0px) !important;
+}
+.table-panel:has(.mahjong-table:not(.table-3d-active)) .action-dock {
+  translate: var(--devui-action-dock-x, 0px) var(--devui-action-dock-y, 0px) !important;
+}
+
+/* Dev panel organization. */
+.dev-tuning-panel {
+  width: min(590px, calc(100vw - 24px));
+}
+.dev-tuning-head {
+  position: sticky;
+  z-index: 5;
+  top: -14px;
+  margin: -14px -14px 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(5, 15, 10, .985);
+}
+.dev-tuning-group {
+  margin: 8px 0;
+  overflow: clip;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px;
+  background: rgba(255,255,255,.018);
+}
+.dev-tuning-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 37px;
+  padding: 8px 10px;
+  color: #e8d79f;
+  background: rgba(216,193,126,.045);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  user-select: none;
+}
+.dev-tuning-group > summary::-webkit-details-marker { display: none; }
+.dev-tuning-group > summary::before {
+  content: '›';
+  width: 14px;
+  color: #d8c17e;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform .14s ease;
+}
+.dev-tuning-group[open] > summary::before { transform: rotate(90deg); }
+.dev-tuning-group > summary small {
+  margin-left: auto;
+  color: #748b7e;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: .03em;
+  text-transform: none;
+}
+.dev-tuning-group-body { padding: 2px 9px 10px; }
+.dev-tuning-group-body > .dev-tuning-section:first-child {
+  margin-top: 4px;
+  border-top: 0;
+}
+
+.dev-ui-layout-section > h3 { margin-bottom: 4px; }
+.dev-ui-layout-note {
+  margin: 0 0 8px;
+  color: #82998d;
+  font-size: 10px;
+}
+.dev-ui-subgroup {
+  margin: 6px 0;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(0,0,0,.09);
+}
+.dev-ui-subgroup > summary {
+  padding: 7px 9px;
+  color: #b7c9bf;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  user-select: none;
+}
+.dev-ui-subgroup[open] > summary { color: #e1cb8c; }
+.dev-ui-subgroup-body { padding: 2px 8px 8px; }
+.dev-ui-layout-section .dev-tuning-control {
+  grid-template-columns: 118px minmax(0, 1fr) 72px 30px;
+}
+.dev-ui-layout-section .dev-tuning-actions { margin-top: 8px; }
+
+@media (max-width: 720px) {
+  .dev-tuning-panel { width: calc(100vw - 16px); }
+  .dev-ui-layout-section .dev-tuning-control {
+    grid-template-columns: 96px minmax(0, 1fr) 62px 30px;
+  }
+}
