@@ -1,0 +1,50 @@
+/* B1 — one late owner for the desktop 3D viewport.
+   Earlier table/dev styles intentionally keep their historical defaults; this file is loaded last
+   so the renderer gets the actual browser area instead of the old 1480/2200px layout envelope. */
+:root {
+  --mahjong-header-height: 68px;
+  --mahjong-3d-gutter-x: 8px;
+  --mahjong-3d-gutter-y: 7px;
+}
+
+@media (min-width: 1060px) {
+  body:has(.mahjong-table.table-3d-active) .game-layout {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding:
+      var(--mahjong-3d-gutter-y)
+      var(--mahjong-3d-gutter-x)
+      var(--mahjong-3d-gutter-y) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  body:has(.mahjong-table.table-3d-active) .table-panel {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .mahjong-table.table-3d-active {
+    width: 100% !important;
+    height: calc(
+      100dvh - var(--mahjong-header-height) - (var(--mahjong-3d-gutter-y) * 2)
+    ) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    border-radius: 18px;
+  }
+
+  #table-3d-stage {
+    border-radius: 18px;
+  }
+}
+
+/* When Dev/Options makes the header wrap on a shorter desktop, never let the table force a second
+   viewport below it. The JS companion updates --mahjong-header-height from the real header box. */
+@media (min-width: 1060px) and (max-height: 760px) {
+  :root {
+    --mahjong-3d-gutter-y: 4px;
+  }
+}
