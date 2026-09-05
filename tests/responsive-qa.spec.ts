@@ -14,6 +14,17 @@ const PROFILES: Profile[] = [
   { name: 'phone-landscape-844x390', width: 844, height: 390 },
 ];
 
+async function domClick(page: Page, selector: string): Promise<boolean> {
+  return page.evaluate((selector) => {
+    const element = document.querySelector<HTMLElement>(selector);
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= .01) return false;
+    element.click();
+    return true;
+  }, selector);
+}
+
 async function boot(page: Page, mode: '2d' | '3d'): Promise<void> {
   await page.addInitScript(({ mode }) => {
     localStorage.clear();
@@ -32,10 +43,9 @@ async function boot(page: Page, mode: '2d' | '3d'): Promise<void> {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await page.locator('.mahjong-table').waitFor({ state: 'visible' });
 
-  const start = page.locator('[data-ui-action="confirm-new-game"]');
-  if (await start.isVisible().catch(() => false)) await start.click();
-
+  await domClick(page, '[data-ui-action="confirm-new-game"]');
   await page.locator('.mahjong-table').waitFor({ state: 'visible' });
+
   if (mode === '3d') {
     await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
     await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
@@ -45,37 +55,21 @@ async function boot(page: Page, mode: '2d' | '3d'): Promise<void> {
   }
 }
 
-async function playSome2d(page: Page, turns = 12): Promise<void> {
+async function playSome2d(page: Page, turns = 14): Promise<void> {
   for (let turn = 0; turn < turns; turn += 1) {
-    await page.waitForTimeout(20);
+    await page.waitForTimeout(25);
 
-    const continueButton = page.locator('[data-ui-action="continue"]');
-    if (await continueButton.isVisible().catch(() => false)) {
-      await continueButton.click();
-      continue;
-    }
+    if (await domClick(page, '[data-ui-action="continue"]')) continue;
+    if (await domClick(page, '.choice-option')) continue;
+    if (await domClick(page, '.reaction-popup [data-proxy-action="pass"]')) continue;
+    if (await domClick(page, '[data-ui-action="pass"]')) continue;
+    if (await domClick(page, '#human-hand .tile-clickable')) continue;
 
-    const choice = page.locator('.choice-option').first();
-    if (await choice.isVisible().catch(() => false)) {
-      await choice.click();
-      continue;
-    }
-
-    const pass = page.locator('[data-ui-action="pass"]');
-    if (await pass.isVisible().catch(() => false)) {
-      await pass.click();
-      continue;
-    }
-
-    const tile = page.locator('#human-hand .tile-clickable').first();
-    try {
-      await tile.waitFor({ state: 'visible', timeout: 1500 });
-      await tile.click();
-    } catch {
-      // Automated presentation can replace the DOM between the wait and click. Retry on next loop.
-    }
+    // Instant presentation can briefly leave no human decision in the DOM. Let the engine advance
+    // and retry rather than treating that transient frame as an interaction failure.
+    await page.waitForTimeout(60);
   }
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(140);
 }
 
 type Rect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
@@ -173,7 +167,7 @@ async function capture(page: Page, testInfo: TestInfo, profile: Profile, mode: '
   await testInfo.attach(`${profile.name}-${mode}`, { path, contentType: 'image/png' });
 }
 
-test.describe.configure({ mode: 'serial' });
+test.setTimeout(60_000);
 
 for (const profile of PROFILES) {
   for (const mode of ['2d', '3d'] as const) {
