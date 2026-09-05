@@ -1,0 +1,67 @@
+/* Corrections driven by the automated responsive browser audit. Keep this intentionally narrow:
+   viewports that already passed the matrix should retain their established layout. */
+
+/* Desktop 2D: a vertical rack spans the seat midpoint, so a midpoint-ish identity badge will always
+   cross it. Place the side identity above the rack instead; the rack remains the dominant seat cue. */
+@media (min-width: 1060px) {
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    top: 18px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading { left: 10px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading { right: 10px !important; }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags,
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags {
+    top: 54px !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-left .player-tags { left: 10px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .player-tags { right: 10px !important; }
+}
+
+/* 1024-class tablets were the only matrix size where header max-content widened the page. Give the
+   action cluster a real shrinkable grid track so its existing flex-wrap can actually wrap. */
+@media (min-width: 900px) and (max-width: 1059px) {
+  .app-header {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: 132px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .app-header .header-status { display: none !important; }
+
+  .app-header .header-actions {
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap !important;
+    overflow: visible;
+  }
+}
+
+/* Narrow portrait: leave an explicit visual gap between the top badge and its rotated concealed
+   rack. */
+@media (max-width: 470px) and (orientation: portrait) {
+  .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+    margin-top: 12px !important;
+  }
+}
+
+/* Mobile 3D must not inherit the desktop Dev default player-card scale (currently 1.5x). It is a
+   desktop tuning value, not a useful phone default, and scales the side badges beyond the table. */
+@media (max-width: 760px) {
+  .table-3d-active .human-card,
+  .table-3d-active .opponent-card {
+    scale: 1 !important;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .table-3d-active .human-card,
+  .table-3d-active .opponent-card {
+    scale: .90 !important;
+  }
+}
