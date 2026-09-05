@@ -51,6 +51,8 @@ Next rule work:
 
 ## Presentation and game feel
 
+- [x] Stage A polish for the fast 2D table: richer felt/frame treatment, lighter player cards, stronger center counter, structured discard rivers and a more prominent human hand.
+- [x] Move background/table/tile appearance out of Dev into user-facing Options shared by 2D and 3D, including presets, colors, felt texture and tile-back texture/pattern controls.
 - [ ] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
 - [ ] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [ ] Improve meld orientation based on called-from seat while keeping exact physical called tile.
