@@ -1,0 +1,186 @@
+:root {
+  --dev2d-layout-max-width: 2200px;
+  --dev2d-bottom-reserve: 104px;
+  --dev2d-player-scale: 1;
+  --dev2d-player-inset-tb: 18px;
+  --dev2d-player-inset-sides: 24px;
+  --dev2d-center-scale: 1;
+  --dev2d-center-x: 0px;
+  --dev2d-center-y: 0px;
+  --dev2d-dora-scale: 1.12;
+  --dev2d-dora-x: 24px;
+  --dev2d-dora-y: 24px;
+  --dev2d-hand-scale: 1;
+  --dev2d-river-scale: 1;
+}
+
+/* The move log remains in the DOM because clarity.ts uses it as authoritative public history,
+   but it no longer consumes a permanent desktop column. This recovers the large empty strip that
+   was visible beside the 3D table and lets both table modes use the monitor. */
+.game-log {
+  display: none !important;
+}
+
+.game-layout {
+  width: 100%;
+  max-width: 2200px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  padding: 12px 14px 12px !important;
+}
+
+body:has(.mahjong-table:not(.table-3d-active)) .game-layout {
+  max-width: var(--dev2d-layout-max-width) !important;
+}
+
+@media (min-width: 1060px) {
+  .mahjong-table.table-3d-active {
+    height: calc(100dvh - 98px) !important;
+    min-height: 720px;
+    max-height: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) {
+    height: calc(100dvh - var(--dev2d-bottom-reserve)) !important;
+    min-height: 720px;
+    max-height: none !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-top {
+    top: var(--dev2d-player-inset-tb) !important;
+    scale: var(--dev2d-player-scale);
+    transform-origin: top center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom {
+    bottom: var(--dev2d-player-inset-tb) !important;
+    scale: var(--dev2d-player-scale);
+    transform-origin: bottom center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left {
+    left: var(--dev2d-player-inset-sides) !important;
+    scale: var(--dev2d-player-scale);
+    transform-origin: left center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right {
+    right: var(--dev2d-player-inset-sides) !important;
+    scale: var(--dev2d-player-scale);
+    transform-origin: right center;
+  }
+
+  .mahjong-table:not(.table-3d-active) .table-center {
+    left: calc(50% + var(--dev2d-center-x)) !important;
+    top: calc(50% + var(--dev2d-center-y)) !important;
+    scale: var(--dev2d-center-scale);
+    transform-origin: center;
+  }
+
+  /* Dora is table information, not part of the top opponent's rack. */
+  .mahjong-table:not(.table-3d-active) .table-dora-tray {
+    left: var(--dev2d-dora-x) !important;
+    right: auto !important;
+    top: var(--dev2d-dora-y) !important;
+    transform: none !important;
+    scale: var(--dev2d-dora-scale);
+    transform-origin: top left;
+    min-height: 68px;
+    gap: 10px;
+    padding: 8px 11px;
+    border-radius: 14px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .dora-tray-title {
+    font-size: 11px;
+    letter-spacing: .18em;
+  }
+
+  .mahjong-table:not(.table-3d-active) .table-dora-tray .tile {
+    width: 46px;
+    height: 62px;
+    border-radius: 7px;
+  }
+
+  .mahjong-table:not(.table-3d-active) .human-hand > .tile {
+    width: calc(46px * var(--dev2d-hand-scale)) !important;
+    height: calc(64px * var(--dev2d-hand-scale)) !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .human-hand > .tile-drawn {
+    margin-left: calc(16px * var(--dev2d-hand-scale)) !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river {
+    grid-template-columns: repeat(6, calc(28px * var(--dev2d-river-scale))) !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .discard-river .tile {
+    width: calc(28px * var(--dev2d-river-scale)) !important;
+    height: calc(38px * var(--dev2d-river-scale)) !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .discard-river,
+  .mahjong-table:not(.table-3d-active) .player-right .discard-river {
+    grid-template-columns: repeat(3, calc(28px * var(--dev2d-river-scale))) !important;
+    max-width: calc(112px * var(--dev2d-river-scale)) !important;
+  }
+
+  /* 3D already placed Dora in the top-left. Make that presentation deliberately larger while
+     preserving the existing Dev X/Y/scale variables. */
+  .table-3d-active .table-dora-tray {
+    min-height: 72px;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 15px;
+  }
+
+  .table-3d-active .dora-tray-title {
+    font-size: 12px;
+  }
+
+  .table-3d-active .table-dora-tray .tile {
+    width: 48px;
+    height: 64px;
+    border-radius: 8px;
+  }
+}
+
+.dev-2d-section {
+  position: relative;
+}
+
+.dev-2d-section::after {
+  content: 'LIVE 2D';
+  position: absolute;
+  right: 8px;
+  top: 7px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #9ce0bd;
+  background: rgba(65, 181, 121, .12);
+  border: 1px solid rgba(96, 213, 151, .18);
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+
+.dev-2d-section[data-active='false']::after {
+  content: '2D ONLY';
+  color: #b1b8b3;
+  background: rgba(255,255,255,.045);
+  border-color: rgba(255,255,255,.08);
+}
+
+.dev-2d-note {
+  margin: 4px 0 9px;
+  color: #8ea296;
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+@media (max-width: 1050px) {
+  .game-layout {
+    max-width: none !important;
+  }
+}
