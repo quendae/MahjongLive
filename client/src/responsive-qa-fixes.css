@@ -62,15 +62,15 @@
 }
 
 /* Narrow portrait: leave an explicit visual gap between the top badge and its rotated concealed
-   rack and keep all four rivers outside the compact center counter. The previous 43%-based river
-   anchor tried to reserve room for the hand but pulled the rivers into the center instead. */
+   rack and keep all four rivers outside the compact center counter. The top river can grow to three
+   rows early in a hand, so it needs more clearance than the other three seats. */
 @media (max-width: 470px) and (orientation: portrait) {
   .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
     margin-top: 12px !important;
   }
 
   .mahjong-table:not(.table-3d-active) .player-top .discard-river {
-    top: calc(50% - 135px) !important;
+    top: calc(50% - 180px) !important;
   }
   .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
     top: calc(50% + 135px) !important;
