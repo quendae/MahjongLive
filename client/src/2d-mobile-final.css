@@ -1,0 +1,27 @@
+/* Final short-landscape guardrails for the 2D table.
+   Keep rotated side badges centered on an explicit in-table rail instead of mixing desktop Dev
+   offsets with phone transforms. This is loaded after the historical responsive layers. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    position: absolute !important;
+    top: 50% !important;
+    bottom: auto !important;
+    scale: .72 !important;
+    transform-origin: center center !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading {
+    left: max(64px, calc(env(safe-area-inset-left) + 56px)) !important;
+    right: auto !important;
+    translate: -50% -50% !important;
+    rotate: 90deg !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    right: max(64px, calc(env(safe-area-inset-right) + 56px)) !important;
+    left: auto !important;
+    translate: 50% -50% !important;
+    rotate: -90deg !important;
+  }
+}
