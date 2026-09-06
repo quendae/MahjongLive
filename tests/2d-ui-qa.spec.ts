@@ -88,7 +88,7 @@ test('Options appearance is visually authoritative and 2D backs use the inset de
   expect(values.patternOpacity).toBeLessThan(.4);
 });
 
-test('Dev is grouped and exposes the refined 2D controls', async ({ page }) => {
+test('Dev is grouped and exposes one shared 2D tile size instead of per-zone tile scales', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await boot2d(page);
   await page.locator('.dev-tuning-toggle').click();
@@ -99,18 +99,26 @@ test('Dev is grouped and exposes the refined 2D controls', async ({ page }) => {
 
   const labels = await page.locator('.dev-ui-layout-section label').allTextContents();
   for (const required of [
-    'Side river columns', 'Back pattern scale', 'Back corner radius', 'Back pattern opacity', 'Back inner frame opacity',
+    'All 2D tiles size', 'Side river columns', 'Back pattern scale', 'Back corner radius', 'Back pattern opacity', 'Back inner frame opacity',
     'Your hand tile gap', 'Drawn tile gap',
     'Top panel X', 'Left panel Y', 'Right panel X', 'Your panel Y',
     'Top panel size', 'Your panel size', 'Your panel width', 'Your panel height',
     'Top badge X', 'Left badge size', 'Right badge size',
-    'Left rack Y', 'Left rack size', 'Your hand X', 'Your hand size',
-    'Top river X', 'Left river size', 'Right river Y', 'Your river size',
-    'Top melds X', 'Right melds size', 'Your melds X',
-    'Center X', 'Center size', 'Dora row Y', 'Dora row size', 'Dora indicator gap',
+    'Left rack Y', 'Your hand X',
+    'Top river X', 'Right river Y',
+    'Top melds X', 'Your melds X',
+    'Center X', 'Center size', 'Dora row Y', 'Dora indicator gap',
     'Action dock X', 'Call bubble size',
   ]) {
     expect(labels, `Missing Dev control: ${required}`).toContain(required);
+  }
+
+  for (const obsolete of [
+    'Top rack size', 'Left rack size', 'Right rack size', 'Your hand size',
+    'Top river size', 'Left river size', 'Right river size', 'Your river size',
+    'Top melds size', 'Left melds size', 'Right melds size', 'Your melds size', 'Dora row size',
+  ]) {
+    expect(labels, `Per-zone tile scale should be removed: ${obsolete}`).not.toContain(obsolete);
   }
 });
 
@@ -172,6 +180,29 @@ test('human hand has no visible browser scrollbar on desktop', async ({ page }) 
   expect(state.overflowY).toBe('visible');
   expect(state.scrollbarWidth).toBe('none');
   expect(state.cardOverflow).toBe('visible');
+});
+
+test('3D called tile spacing has separate Dev controls for left, across and right sources', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await boot2d(page);
+  await page.locator('.dev-tuning-toggle').click();
+  await expect(page.locator('.dev-tuning-panel')).toBeVisible();
+
+  const values: Array<[string, string, number]> = [
+    ['Called tile gap · from left', 'calledTileGapFromLeft', 0.17],
+    ['Called tile gap · across', 'calledTileGapAcross', 0.23],
+    ['Called tile gap · from right', 'calledTileGapFromRight', 0.29],
+  ];
+
+  for (const [label, key, value] of values) {
+    const row = page.locator('.dev-tuning-control').filter({ has: page.locator('label', { hasText: label }) }).first();
+    await expect(row, `Missing ${label}`).toBeVisible();
+    const input = row.locator('input[type="number"]');
+    await input.fill(String(value));
+    await input.press('Enter');
+    const stored = await page.evaluate(({ key }) => JSON.parse(localStorage.getItem('mahjong-live:dev-tuning:v1') ?? '{}').tiles?.[key], { key });
+    expect(stored).toBeCloseTo(value, 4);
+  }
 });
 
 test('3D rendering defaults to Maximum and can be lowered from Options', async ({ page }) => {
