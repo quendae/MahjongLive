@@ -1,7 +1,37 @@
 import './center-anchor-2d.css';
 
+const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
+const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v1';
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Missing #app root');
+
+/* The old 2D tuning baseline intentionally enlarged opponent racks and shrank Dora. The new table
+   model starts every physical tile at exactly the human-hand size. Preserve labels/panels/positions,
+   but normalize only tile-bearing group scales once. The existing Dev sliders remain available for
+   later deliberate art-direction after this clean baseline has been established. */
+function migrateUnifiedTileBaseline(): void {
+  if (localStorage.getItem(UNIFIED_BASELINE_MIGRATION_KEY) === '1') return;
+  let raw: any = null;
+  try { raw = JSON.parse(localStorage.getItem(DEV_UI_KEY) ?? 'null'); } catch { raw = null; }
+  if (raw && typeof raw === 'object') {
+    raw.scales = raw.scales && typeof raw.scales === 'object' ? raw.scales : {};
+    for (const id of [
+      'topRack', 'leftRack', 'rightRack', 'humanHand',
+      'topRiver', 'leftRiver', 'rightRiver', 'bottomRiver',
+      'topMeld', 'leftMeld', 'rightMeld', 'bottomMeld', 'dora',
+    ]) raw.scales[id] = 1;
+    raw.offsets = raw.offsets && typeof raw.offsets === 'object' ? raw.offsets : {};
+    for (const id of ['topRiver', 'leftRiver', 'rightRiver', 'bottomRiver']) raw.offsets[id] = { x: 0, y: 0 };
+    const serialized = JSON.stringify(raw);
+    try {
+      localStorage.setItem(DEV_UI_KEY, serialized);
+      window.dispatchEvent(new StorageEvent('storage', { key: DEV_UI_KEY, newValue: serialized }));
+    } catch {}
+  }
+  try { localStorage.setItem(UNIFIED_BASELINE_MIGRATION_KEY, '1'); } catch {}
+}
+
+migrateUnifiedTileBaseline();
 
 let scheduled = false;
 let observedCenter: HTMLElement | null = null;
