@@ -1,4 +1,5 @@
 import './center-anchor-2d.css';
+import './2d-mobile-final.css';
 
 const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
 const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v2';
