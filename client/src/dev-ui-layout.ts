@@ -1,6 +1,7 @@
 import './dev-ui-layout.css';
 
 const STORAGE_KEY = 'mahjong-live:dev-ui-layout:v2';
+const LAYOUT_VERSION = 3;
 
 type Offset = { x: number; y: number };
 type ComponentId =
@@ -15,12 +16,19 @@ type ComponentId =
 type ScaleId = Exclude<ComponentId, 'table'>;
 
 type LayoutSettings = {
+  layoutVersion: number;
   sideRiverColumns: number;
   offsets: Record<ComponentId, Offset>;
   scales: Record<ScaleId, number>;
   bottomPanelWidth: number;
   bottomPanelHeight: number;
   backTextureScale: number;
+  backCornerRadius: number;
+  backPatternOpacity: number;
+  backFrameOpacity: number;
+  doraGap: number;
+  humanHandGap: number;
+  drawnTileGap: number;
 };
 
 const COMPONENT_IDS: readonly ComponentId[] = [
@@ -42,27 +50,42 @@ function emptyOffsets(): Record<ComponentId, Offset> {
 function defaultOffsets(): Record<ComponentId, Offset> {
   const values = emptyOffsets();
   values.topBadge = { x: 0, y: -10 };
-  values.leftBadge = { x: 128, y: 202 };
-  values.rightBadge = { x: -128, y: 202 };
-  values.dora = { x: -82, y: -57 };
+  values.leftBadge = { x: 50, y: 202 };
+  values.rightBadge = { x: -50, y: 202 };
+  values.topRack = { x: 0, y: 18 };
+  values.leftRack = { x: 42, y: 0 };
+  values.rightRack = { x: -42, y: 0 };
+  // Dora is now a real row inside the centre counter. Its local offset starts at zero.
+  values.dora = { x: 0, y: 0 };
   return values;
 }
 
 function defaultScales(): Record<ScaleId, number> {
   const values = Object.fromEntries(SCALE_IDS.map((id) => [id, 1])) as Record<ScaleId, number>;
+  values.topBadge = 1.25;
   values.leftBadge = 1.25;
   values.rightBadge = 1.25;
+  values.topRack = 1.5;
+  values.leftRack = 1.5;
+  values.rightRack = 1.5;
   values.dora = .72;
   return values;
 }
 
 const DEFAULTS: LayoutSettings = {
+  layoutVersion: LAYOUT_VERSION,
   sideRiverColumns: 7,
   offsets: defaultOffsets(),
   scales: defaultScales(),
-  bottomPanelWidth: 760,
-  bottomPanelHeight: 104,
+  bottomPanelWidth: 910,
+  bottomPanelHeight: 189,
   backTextureScale: .72,
+  backCornerRadius: 2.5,
+  backPatternOpacity: .22,
+  backFrameOpacity: .30,
+  doraGap: 4,
+  humanHandGap: 4,
+  drawnTileGap: 16,
 };
 
 function finite(value: unknown, fallback = 0): number {
@@ -72,30 +95,40 @@ function finite(value: unknown, fallback = 0): number {
 function loadSettings(): LayoutSettings {
   let raw: any = {};
   try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); } catch { raw = {}; }
-  const legacyPositionOnly = !raw?.scales;
+  const oldVersion = Math.round(finite(raw?.layoutVersion, raw?.scales ? 2 : 1));
   const offsets = defaultOffsets();
   for (const id of COMPONENT_IDS) {
-    const oldX = finite(raw?.offsets?.[id]?.x, offsets[id].x);
-    const oldY = finite(raw?.offsets?.[id]?.y, offsets[id].y);
-    // v2 originally stored Dora as a free-floating upper-left overlay. When migrating those saved
-    // layouts, treat untouched 0/0 as "use the new centre-panel baseline" instead of pinning it to
-    // the centre text. Deliberately edited non-zero Dora offsets are preserved.
-    if (id === 'dora' && legacyPositionOnly && oldX === 0 && oldY === 0) continue;
-    offsets[id] = { x: oldX, y: oldY };
+    offsets[id] = {
+      x: finite(raw?.offsets?.[id]?.x, offsets[id].x),
+      y: finite(raw?.offsets?.[id]?.y, offsets[id].y),
+    };
   }
+  // v1/v2 Dora was a detached overlay. Preserve the rest of the user's hand-tuned layout, but
+  // reset only this obsolete coordinate now that the Dora row lives inside the centre counter.
+  if (oldVersion < LAYOUT_VERSION) offsets.dora = { x: 0, y: 0 };
+
   const scales = defaultScales();
   for (const id of SCALE_IDS) scales[id] = finite(raw?.scales?.[id], scales[id]);
+
   return {
+    layoutVersion: LAYOUT_VERSION,
     sideRiverColumns: Math.max(3, Math.min(9, Math.round(finite(raw?.sideRiverColumns, DEFAULTS.sideRiverColumns)))),
     offsets,
     scales,
     bottomPanelWidth: finite(raw?.bottomPanelWidth, DEFAULTS.bottomPanelWidth),
     bottomPanelHeight: finite(raw?.bottomPanelHeight, DEFAULTS.bottomPanelHeight),
     backTextureScale: finite(raw?.backTextureScale, DEFAULTS.backTextureScale),
+    backCornerRadius: finite(raw?.backCornerRadius, DEFAULTS.backCornerRadius),
+    backPatternOpacity: finite(raw?.backPatternOpacity, DEFAULTS.backPatternOpacity),
+    backFrameOpacity: finite(raw?.backFrameOpacity, DEFAULTS.backFrameOpacity),
+    doraGap: finite(raw?.doraGap, DEFAULTS.doraGap),
+    humanHandGap: finite(raw?.humanHandGap, DEFAULTS.humanHandGap),
+    drawnTileGap: finite(raw?.drawnTileGap, DEFAULTS.drawnTileGap),
   };
 }
 
 let settings = loadSettings();
+try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {}
 let scheduled = false;
 
 function kebab(id: ComponentId): string {
@@ -108,6 +141,12 @@ function applySettings(): void {
   style.setProperty('--devui-bottom-panel-width', `${settings.bottomPanelWidth}px`);
   style.setProperty('--devui-bottom-panel-height', `${settings.bottomPanelHeight}px`);
   style.setProperty('--devui-back-texture-scale', String(settings.backTextureScale));
+  style.setProperty('--devui-back-corner-radius', `${settings.backCornerRadius}px`);
+  style.setProperty('--devui-back-pattern-opacity', String(settings.backPatternOpacity));
+  style.setProperty('--devui-back-frame-opacity', String(settings.backFrameOpacity));
+  style.setProperty('--devui-dora-gap', `${settings.doraGap}px`);
+  style.setProperty('--devui-human-hand-gap', `${settings.humanHandGap}px`);
+  style.setProperty('--devui-drawn-tile-gap', `${settings.drawnTileGap}px`);
   for (const id of COMPONENT_IDS) {
     const name = kebab(id);
     style.setProperty(`--devui-${name}-x`, `${settings.offsets[id].x}px`);
@@ -150,6 +189,7 @@ function sliderRow(
   const reset = document.createElement('button');
   reset.type = 'button'; reset.className = 'dev-tuning-reset'; reset.textContent = '↺';
   reset.title = `Reset ${label} to ${defaultValue}${suffix}`;
+
   const sync = (value: number) => {
     slider.value = String(value);
     number.value = step < 1 ? value.toFixed(2) : String(Math.round(value));
@@ -161,6 +201,7 @@ function sliderRow(
     sync(value);
     saveSettings();
   };
+
   sync(get());
   slider.addEventListener('input', () => commit(Number(slider.value)));
   number.addEventListener('change', () => commit(Number(number.value)));
@@ -202,14 +243,22 @@ function buildAdvanced2dSection(): HTMLElement {
   section.className = 'dev-tuning-section dev-ui-layout-section';
   section.innerHTML = `
     <h3>Component positions & sizes</h3>
-    <p class="dev-ui-layout-note">X/Y and size are additive. Side badges are rotated with their seats. Dora is anchored to the centre counter in 2D.</p>
+    <p class="dev-ui-layout-note">X/Y and size are additive. Dora is a real row inside the centre counter; its controls now move that row, not a separate window.</p>
   `;
 
   const global = subgroup('Table / global', true);
   offsetRows(global.body, 'Whole table', 'table', 700);
   sliderRow(global.body, 'Side river columns', 3, 9, 1, () => settings.sideRiverColumns, (value) => { settings.sideRiverColumns = Math.round(value); }, DEFAULTS.sideRiverColumns, '');
-  sliderRow(global.body, '2D back texture scale', .30, 2.20, .01, () => settings.backTextureScale, (value) => { settings.backTextureScale = value; }, DEFAULTS.backTextureScale, '×');
   section.append(global.details);
+
+  const backs = subgroup('2D tile backs / hand spacing', true);
+  sliderRow(backs.body, 'Back pattern scale', .15, 1.60, .01, () => settings.backTextureScale, (value) => { settings.backTextureScale = value; }, DEFAULTS.backTextureScale, '×');
+  sliderRow(backs.body, 'Back corner radius', 0, 6, .1, () => settings.backCornerRadius, (value) => { settings.backCornerRadius = value; }, DEFAULTS.backCornerRadius, 'px');
+  sliderRow(backs.body, 'Back pattern opacity', 0, .65, .01, () => settings.backPatternOpacity, (value) => { settings.backPatternOpacity = value; }, DEFAULTS.backPatternOpacity, '');
+  sliderRow(backs.body, 'Back inner frame opacity', 0, .70, .01, () => settings.backFrameOpacity, (value) => { settings.backFrameOpacity = value; }, DEFAULTS.backFrameOpacity, '');
+  sliderRow(backs.body, 'Your hand tile gap', 0, 12, 1, () => settings.humanHandGap, (value) => { settings.humanHandGap = value; }, DEFAULTS.humanHandGap, 'px');
+  sliderRow(backs.body, 'Drawn tile gap', 0, 36, 1, () => settings.drawnTileGap, (value) => { settings.drawnTileGap = value; }, DEFAULTS.drawnTileGap, 'px');
+  section.append(backs.details);
 
   const panels = subgroup('Player backgrounds / panels');
   positionAndScale(panels.body, 'Top panel', 'topPanel');
@@ -217,7 +266,7 @@ function buildAdvanced2dSection(): HTMLElement {
   positionAndScale(panels.body, 'Right panel', 'rightPanel');
   positionAndScale(panels.body, 'Your panel', 'bottomPanel', 420, .55, 1.8);
   sliderRow(panels.body, 'Your panel width', 420, 1400, 5, () => settings.bottomPanelWidth, (value) => { settings.bottomPanelWidth = value; }, DEFAULTS.bottomPanelWidth, 'px');
-  sliderRow(panels.body, 'Your panel height', 72, 240, 1, () => settings.bottomPanelHeight, (value) => { settings.bottomPanelHeight = value; }, DEFAULTS.bottomPanelHeight, 'px');
+  sliderRow(panels.body, 'Your panel height', 72, 260, 1, () => settings.bottomPanelHeight, (value) => { settings.bottomPanelHeight = value; }, DEFAULTS.bottomPanelHeight, 'px');
   section.append(panels.details);
 
   const labels = subgroup('Badges / concealed racks');
@@ -247,7 +296,8 @@ function buildAdvanced2dSection(): HTMLElement {
 
   const overlays = subgroup('Center / Dora / prompts');
   positionAndScale(overlays.body, 'Center', 'center', 320, .55, 1.8);
-  positionAndScale(overlays.body, 'Dora in center', 'dora', 180, .45, 1.6);
+  positionAndScale(overlays.body, 'Dora row', 'dora', 120, .45, 1.6);
+  sliderRow(overlays.body, 'Dora indicator gap', 0, 12, 1, () => settings.doraGap, (value) => { settings.doraGap = value; }, DEFAULTS.doraGap, 'px');
   positionAndScale(overlays.body, 'Action dock', 'actionDock', 420, .55, 1.8);
   positionAndScale(overlays.body, 'Call bubble', 'callBubble', 320, .55, 2.0);
   section.append(overlays.details);
@@ -258,7 +308,7 @@ function buildAdvanced2dSection(): HTMLElement {
   reset.type = 'button'; reset.className = 'dev-tuning-action'; reset.textContent = 'Reset 2D UI baseline';
   reset.addEventListener('click', () => {
     settings = structuredClone(DEFAULTS);
-    localStorage.removeItem(STORAGE_KEY);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {}
     applySettings();
     section.replaceWith(buildAdvanced2dSection());
     setStatus('2D UI restored to the current baseline.');
