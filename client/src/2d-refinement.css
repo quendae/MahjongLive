@@ -132,6 +132,15 @@ html[data-user-back-pattern='solid'] .mahjong-table:not(.table-3d-active) .tile-
 }
 
 @media (max-width: 760px) {
+  /* Desktop Dev dimensions are useful as an art-directing baseline, but a 910x189 panel must not
+     become a literal 189px slab on a phone. Let content determine the mobile height. */
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    width: calc(100% - 10px) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
   .mahjong-table:not(.table-3d-active) .human-hand {
     overflow-x: auto !important;
     overflow-y: hidden !important;
@@ -151,5 +160,36 @@ html[data-user-back-pattern='solid'] .mahjong-table:not(.table-3d-active) .tile-
     width: 20px;
     height: 27px;
     border-radius: 3px;
+  }
+}
+
+/* Short phone landscape needs its own safety envelope. The user's desktop side-badge Y offsets are
+   intentionally large after the 90° rotation; applying those raw pixels on a 390px-high viewport
+   pushes both names below the table. Centre the labels on the side rails here while retaining their
+   seat rotation and scale. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    top: 50% !important;
+    translate: 0 -50% !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading {
+    left: max(5px, env(safe-area-inset-left)) !important;
+    right: auto !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading {
+    right: max(5px, env(safe-area-inset-right)) !important;
+    left: auto !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    bottom: 2px !important;
+    height: auto !important;
+    max-height: 78px !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .human-hand {
+    min-height: 36px !important;
   }
 }
