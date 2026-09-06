@@ -163,24 +163,28 @@ html[data-user-back-pattern='solid'] .mahjong-table:not(.table-3d-active) .tile-
   }
 }
 
-/* Short phone landscape needs its own safety envelope. The user's desktop side-badge Y offsets are
-   intentionally large after the 90° rotation; applying those raw pixels on a 390px-high viewport
-   pushes both names below the table. Centre the labels on the side rails here while retaining their
-   seat rotation and scale. */
+/* Short phone landscape needs its own safety envelope. Desktop badge offsets are deliberately not
+   reused here: labels stay rotated by seat, but become short compact pills between rack and centre. */
 @media (max-height: 560px) and (orientation: landscape) {
   .mahjong-table:not(.table-3d-active) .player-left .player-heading,
   .mahjong-table:not(.table-3d-active) .player-right .player-heading {
     top: 50% !important;
-    translate: 0 -50% !important;
+    translate: 0 0 !important;
+    scale: .80 !important;
   }
 
   .mahjong-table:not(.table-3d-active) .player-left .player-heading {
-    left: max(5px, env(safe-area-inset-left)) !important;
+    left: max(90px, calc(env(safe-area-inset-left) + 76px)) !important;
     right: auto !important;
   }
   .mahjong-table:not(.table-3d-active) .player-right .player-heading {
-    right: max(5px, env(safe-area-inset-right)) !important;
+    right: max(90px, calc(env(safe-area-inset-right) + 76px)) !important;
     left: auto !important;
+  }
+
+  .mahjong-table:not(.table-3d-active) .player-left .player-heading .player-points,
+  .mahjong-table:not(.table-3d-active) .player-right .player-heading .player-points {
+    display: none !important;
   }
 
   .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
