@@ -44,6 +44,7 @@ function defaultOffsets(): Record<ComponentId, Offset> {
   values.topBadge = { x: 0, y: -10 };
   values.leftBadge = { x: 128, y: 202 };
   values.rightBadge = { x: -128, y: 202 };
+  values.dora = { x: -82, y: -57 };
   return values;
 }
 
@@ -51,7 +52,7 @@ function defaultScales(): Record<ScaleId, number> {
   const values = Object.fromEntries(SCALE_IDS.map((id) => [id, 1])) as Record<ScaleId, number>;
   values.leftBadge = 1.25;
   values.rightBadge = 1.25;
-  values.dora = .82;
+  values.dora = .72;
   return values;
 }
 
@@ -71,12 +72,16 @@ function finite(value: unknown, fallback = 0): number {
 function loadSettings(): LayoutSettings {
   let raw: any = {};
   try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); } catch { raw = {}; }
+  const legacyPositionOnly = !raw?.scales;
   const offsets = defaultOffsets();
   for (const id of COMPONENT_IDS) {
-    offsets[id] = {
-      x: finite(raw?.offsets?.[id]?.x, offsets[id].x),
-      y: finite(raw?.offsets?.[id]?.y, offsets[id].y),
-    };
+    const oldX = finite(raw?.offsets?.[id]?.x, offsets[id].x);
+    const oldY = finite(raw?.offsets?.[id]?.y, offsets[id].y);
+    // v2 originally stored Dora as a free-floating upper-left overlay. When migrating those saved
+    // layouts, treat untouched 0/0 as "use the new centre-panel baseline" instead of pinning it to
+    // the centre text. Deliberately edited non-zero Dora offsets are preserved.
+    if (id === 'dora' && legacyPositionOnly && oldX === 0 && oldY === 0) continue;
+    offsets[id] = { x: oldX, y: oldY };
   }
   const scales = defaultScales();
   for (const id of SCALE_IDS) scales[id] = finite(raw?.scales?.[id], scales[id]);
