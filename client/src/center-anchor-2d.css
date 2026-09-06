@@ -9,7 +9,7 @@
   --table2d-tile-gap: 3px;
 }
 
-/* One physical tile scale in 2D: hand, concealed racks, rivers, melds and Dora all use it. */
+/* One physical tile baseline in 2D: hand, concealed racks, rivers, melds and Dora all use it. */
 .mahjong-table:not(.table-3d-active) .tile,
 .mahjong-table:not(.table-3d-active) .tile-compact,
 .mahjong-table:not(.table-3d-active) .opponent-hand .tile,
@@ -30,18 +30,9 @@
   height: 94% !important;
 }
 
-/* Previous Dev scales are useful for panels and labels, but tile-bearing groups must begin from a
-   common physical size. Fine-tuning can now happen through spacing/position rather than different
-   tile scales fighting each other. */
-.mahjong-table:not(.table-3d-active) .opponent-hand,
-.mahjong-table:not(.table-3d-active) .human-hand,
-.mahjong-table:not(.table-3d-active) .discard-river,
-.mahjong-table:not(.table-3d-active) .meld-row,
-.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated {
-  scale: 1 !important;
-}
-
-/* Remove the old seating-scale multiplier while preserving each seat's point of view. */
+/* Remove the old seating-scale multiplier while preserving each seat's point of view. The current
+   Dev UI component scales still work as optional fine tuning; center-anchor-2d.ts migrates the
+   tile-bearing groups to 1× once so the new baseline starts physically uniform. */
 .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
   transform: rotate(180deg) !important;
 }
