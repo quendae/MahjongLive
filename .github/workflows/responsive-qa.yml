@@ -38,6 +38,8 @@ jobs:
         run: pnpm add -Dw @playwright/test@1.55.0 --lockfile=false
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+      - name: Typecheck client
+        run: pnpm client:typecheck
       - name: Build client
         run: pnpm client:build
       - name: Start preview server
