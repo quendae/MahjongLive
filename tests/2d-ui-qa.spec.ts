@@ -50,7 +50,7 @@ test('2D side rivers keep the configured first seven discards on one row', async
   }
 });
 
-test('Options appearance is visually authoritative in 2D', async ({ page }) => {
+test('Options appearance is visually authoritative and 2D backs use the inset design', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await boot2d(page);
 
@@ -61,17 +61,20 @@ test('Options appearance is visually authoritative in 2D', async ({ page }) => {
     const root = getComputedStyle(document.documentElement);
     const table = document.querySelector<HTMLElement>('.mahjong-table:not(.table-3d-active)');
     const back = document.querySelector<HTMLElement>('.mahjong-table:not(.table-3d-active) .tile-back');
-    if (!table || !back) throw new Error('Missing 2D appearance targets');
+    const inner = back?.querySelector<HTMLElement>(':scope > span');
+    if (!table || !back || !inner) throw new Error('Missing 2D appearance targets');
     const tableStyle = getComputedStyle(table);
     const backStyle = getComputedStyle(back);
+    const patternStyle = getComputedStyle(inner, '::after');
     return {
       feltVar: root.getPropertyValue('--user-felt-color').trim(),
       frameVar: root.getPropertyValue('--user-frame-color').trim(),
       backVar: root.getPropertyValue('--user-back-color').trim(),
       tableColor: tableStyle.backgroundColor,
       frameColor: tableStyle.borderTopColor,
-      backColor: backStyle.backgroundColor,
-      backSize: backStyle.backgroundSize,
+      backRadius: Number.parseFloat(backStyle.borderRadius),
+      patternImage: patternStyle.backgroundImage,
+      patternOpacity: Number.parseFloat(patternStyle.opacity),
     };
   });
 
@@ -80,11 +83,12 @@ test('Options appearance is visually authoritative in 2D', async ({ page }) => {
   expect(values.backVar).toBe('#6b3444');
   expect(values.tableColor).toBe('rgb(90, 32, 50)');
   expect(values.frameColor).toBe('rgb(74, 48, 34)');
-  expect(values.backColor).toBe('rgb(107, 52, 68)');
-  expect(values.backSize).not.toBe('auto');
+  expect(values.backRadius).toBeLessThanOrEqual(3);
+  expect(values.patternImage).not.toBe('none');
+  expect(values.patternOpacity).toBeLessThan(.4);
 });
 
-test('Dev is grouped and exposes per-component 2D position and size controls', async ({ page }) => {
+test('Dev is grouped and exposes the refined 2D controls', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await boot2d(page);
   await page.locator('.dev-tuning-toggle').click();
@@ -95,21 +99,22 @@ test('Dev is grouped and exposes per-component 2D position and size controls', a
 
   const labels = await page.locator('.dev-ui-layout-section label').allTextContents();
   for (const required of [
-    'Side river columns', '2D back texture scale',
+    'Side river columns', 'Back pattern scale', 'Back corner radius', 'Back pattern opacity', 'Back inner frame opacity',
+    'Your hand tile gap', 'Drawn tile gap',
     'Top panel X', 'Left panel Y', 'Right panel X', 'Your panel Y',
     'Top panel size', 'Your panel size', 'Your panel width', 'Your panel height',
     'Top badge X', 'Left badge size', 'Right badge size',
     'Left rack Y', 'Left rack size', 'Your hand X', 'Your hand size',
     'Top river X', 'Left river size', 'Right river Y', 'Your river size',
     'Top melds X', 'Right melds size', 'Your melds X',
-    'Center X', 'Center size', 'Dora in center Y', 'Dora in center size',
+    'Center X', 'Center size', 'Dora row Y', 'Dora row size', 'Dora indicator gap',
     'Action dock X', 'Call bubble size',
   ]) {
     expect(labels, `Missing Dev control: ${required}`).toContain(required);
   }
 });
 
-test('2D side badges rotate with seats and Dora follows the center counter', async ({ page }) => {
+test('2D side badges rotate with seats and Dora is truly inside the center counter', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await boot2d(page);
 
@@ -117,20 +122,22 @@ test('2D side badges rotate with seats and Dora follows the center counter', asy
     const left = document.querySelector<HTMLElement>('.player-left .player-heading');
     const right = document.querySelector<HTMLElement>('.player-right .player-heading');
     const center = document.querySelector<HTMLElement>('.table-center');
-    const dora = document.querySelector<HTMLElement>('.table-dora-tray');
+    const dora = document.querySelector<HTMLElement>('.table-center .dora-row.center-dora-integrated');
+    const detachedTray = document.querySelector<HTMLElement>('.mahjong-table:not(.table-3d-active) > .table-dora-tray');
     if (!left || !right || !center || !dora) throw new Error('Missing 2D UI targets');
     const centerRect = center.getBoundingClientRect();
     const doraRect = dora.getBoundingClientRect();
-    const insideExpandedCenter = doraRect.left >= centerRect.left - 28
-      && doraRect.right <= centerRect.right + 28
-      && doraRect.top >= centerRect.top - 28
-      && doraRect.bottom <= centerRect.bottom + 28;
     return {
       leftRotate: getComputedStyle(left).rotate,
       rightRotate: getComputedStyle(right).rotate,
       leftScale: getComputedStyle(left).scale,
       rightScale: getComputedStyle(right).scale,
-      insideExpandedCenter,
+      doraParentIsCenter: dora.parentElement === center,
+      detachedTray: Boolean(detachedTray),
+      doraInsideCenter: doraRect.left >= centerRect.left - 1
+        && doraRect.right <= centerRect.right + 1
+        && doraRect.top >= centerRect.top - 1
+        && doraRect.bottom <= centerRect.bottom + 1,
     };
   });
 
@@ -138,5 +145,48 @@ test('2D side badges rotate with seats and Dora follows the center counter', asy
   expect(geometry.rightRotate).toContain('-90deg');
   expect(Number.parseFloat(geometry.leftScale)).toBeGreaterThan(1);
   expect(Number.parseFloat(geometry.rightScale)).toBeGreaterThan(1);
-  expect(geometry.insideExpandedCenter).toBe(true);
+  expect(geometry.doraParentIsCenter).toBe(true);
+  expect(geometry.detachedTray).toBe(false);
+  expect(geometry.doraInsideCenter).toBe(true);
+});
+
+test('human hand has no visible browser scrollbar on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await boot2d(page);
+  const state = await page.evaluate(() => {
+    const hand = document.querySelector<HTMLElement>('.human-hand');
+    const card = document.querySelector<HTMLElement>('.human-card');
+    if (!hand || !card) throw new Error('Missing human rack');
+    const handStyle = getComputedStyle(hand);
+    return {
+      overflowX: handStyle.overflowX,
+      overflowY: handStyle.overflowY,
+      scrollbarWidth: handStyle.getPropertyValue('scrollbar-width'),
+      cardOverflow: getComputedStyle(card).overflow,
+    };
+  });
+  expect(state.overflowX).toBe('visible');
+  expect(state.overflowY).toBe('visible');
+  expect(state.scrollbarWidth).toBe('none');
+  expect(state.cardOverflow).toBe('visible');
+});
+
+test('3D rendering defaults to Maximum and can be lowered from Options', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await boot2d(page);
+
+  const initial = await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem('mahjong-live:dev-tuning:v1') ?? '{}');
+    return { profile: localStorage.getItem('mahjong-live:graphics-profile:v1'), graphics: raw.graphics };
+  });
+  expect(initial.profile).toBe('max');
+  expect(initial.graphics).toEqual({ pixelRatio: 2, shadowQuality: 3, anisotropy: 16, geometryQuality: 3 });
+
+  await page.locator('.appearance-toggle').click();
+  const select = page.locator('[data-graphics-profile]');
+  await expect(select).toHaveValue('max');
+  await select.selectOption('balanced');
+
+  const changed = await page.evaluate(() => JSON.parse(localStorage.getItem('mahjong-live:dev-tuning:v1') ?? '{}').graphics);
+  expect(changed).toEqual({ pixelRatio: 1, shadowQuality: 1, anisotropy: 4, geometryQuality: 1 });
 });
