@@ -170,12 +170,13 @@
     padding: 7px 8px 6px !important;
   }
 
-  /* The unified 34px-wide rotated rack is wider than the old compact back. Keep the rotated name
-     badges on the outside of the rack rather than letting them sit on top of the concealed tiles. */
+  /* On very short landscape screens the rotated rack and rotated name both compete for the side
+     rail. Eight pixels is enough clearance for the wider unified rack while keeping the label inside
+     the wooden table frame. */
   .mahjong-table:not(.table-3d-active) .player-left .player-heading {
-    translate: -22px -50% !important;
+    translate: -8px -50% !important;
   }
   .mahjong-table:not(.table-3d-active) .player-right .player-heading {
-    translate: 22px -50% !important;
+    translate: 8px -50% !important;
   }
 }
