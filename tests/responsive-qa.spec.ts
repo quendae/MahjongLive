@@ -65,8 +65,6 @@ async function playSome2d(page: Page, turns = 14): Promise<void> {
     if (await domClick(page, '[data-ui-action="pass"]')) continue;
     if (await domClick(page, '#human-hand .tile-clickable')) continue;
 
-    // Instant presentation can briefly leave no human decision in the DOM. Let the engine advance
-    // and retry rather than treating that transient frame as an interaction failure.
     await page.waitForTimeout(60);
   }
   await page.waitForTimeout(140);
@@ -104,8 +102,9 @@ async function visualAudit(page: Page, mode: '2d' | '3d'): Promise<string[]> {
       issues.push(`table clipped horizontally: ${tableRect.left.toFixed(1)}..${tableRect.right.toFixed(1)} in ${innerWidth}`);
     }
 
+    const doraSelector = mode === '3d' ? '.table-dora-tray' : '.table-center .dora-row.center-dora-integrated';
     for (const [name, selector] of [
-      ['Dora', '.table-dora-tray'],
+      ['Dora', doraSelector],
       ['center', '.table-center'],
       ['top badge', '.player-top .player-heading'],
       ['right badge', '.player-right .player-heading'],
@@ -143,10 +142,6 @@ async function visualAudit(page: Page, mode: '2d' | '3d'): Promise<string[]> {
     const center = centerElement && visible(centerElement) ? rect(centerElement) : null;
     const reactionPopup = document.querySelector('.reaction-popup');
     const reactionPopupOpen = Boolean(reactionPopup && visible(reactionPopup));
-    // During a Chi/Pon/Kan/Ron decision the centered reaction modal deliberately covers the counter.
-    // Auditing hidden-under-modal river/counter geometry in that transient state produces false
-    // positives (especially on short landscape phones), so perform this collision audit only while
-    // the normal center counter is the active presentation surface.
     if (center && !reactionPopupOpen) {
       for (const river of table.querySelectorAll('.discard-river')) {
         if (!visible(river) || river.children.length === 0) continue;
