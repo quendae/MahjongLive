@@ -83,34 +83,47 @@ function decorateTileFaces(): void {
 function ensureDoraTray(table: HTMLElement): void {
   const source = table.querySelector<HTMLElement>('.table-center .dora-row');
   if (!source) return;
-  source.classList.add('clarity-source-hidden');
+  const tray = table.querySelector<HTMLElement>('.table-dora-tray');
 
+  // 2D has enough DOM space to render the actual Dora row inside the physical centre counter.
+  // Keep the original source in flow so 1–5 active indicators naturally expand as one row instead
+  // of cloning them into a detached overlay window.
+  if (!table.classList.contains('table-3d-active')) {
+    source.classList.remove('clarity-source-hidden');
+    source.classList.add('center-dora-integrated');
+    tray?.remove();
+    return;
+  }
+
+  // 3D still uses the detached HUD tray because the Three.js table covers the DOM counter source.
+  source.classList.remove('center-dora-integrated');
+  source.classList.add('clarity-source-hidden');
   const signature = [...source.querySelectorAll<HTMLElement>('.tile')]
     .map((tile) => tile.getAttribute('aria-label') ?? '')
     .join('|');
-  let tray = table.querySelector<HTMLElement>('.table-dora-tray');
-  if (tray?.dataset.signature === signature) return;
+  let currentTray = tray;
+  if (currentTray?.dataset.signature === signature) return;
 
-  if (!tray) {
-    tray = document.createElement('div');
-    tray.className = 'table-dora-tray';
-    tray.setAttribute('aria-label', 'Dora indicators');
-    table.appendChild(tray);
+  if (!currentTray) {
+    currentTray = document.createElement('div');
+    currentTray.className = 'table-dora-tray';
+    currentTray.setAttribute('aria-label', 'Dora indicators');
+    table.appendChild(currentTray);
   }
-  tray.dataset.signature = signature;
-  tray.replaceChildren();
+  currentTray.dataset.signature = signature;
+  currentTray.replaceChildren();
 
   const title = document.createElement('span');
   title.className = 'dora-tray-title';
   title.textContent = 'DORA';
-  tray.appendChild(title);
+  currentTray.appendChild(title);
 
   const tiles = document.createElement('div');
   tiles.className = 'dora-tray-tiles';
   for (const tile of source.querySelectorAll<HTMLElement>('.tile')) {
     tiles.appendChild(tile.cloneNode(true));
   }
-  tray.appendChild(tiles);
+  currentTray.appendChild(tiles);
 }
 
 function seatSide(zone: Element): 'bottom' | 'top' | 'left' | 'right' {
@@ -270,4 +283,11 @@ function scheduleEnhance(): void {
 const observer = new MutationObserver(scheduleEnhance);
 observer.observe(app, { childList: true, subtree: true });
 window.addEventListener('mahjong-live:tile-face-mode', scheduleEnhance);
+// The 3D/2D switch updates a class without necessarily re-rendering the game DOM. Re-run the Dora
+// integration one frame later so the source row and 3D HUD tray swap cleanly in either direction.
+document.addEventListener('click', (event) => {
+  if ((event.target as Element | null)?.closest('.table-3d-toggle')) {
+    requestAnimationFrame(() => requestAnimationFrame(scheduleEnhance));
+  }
+});
 scheduleEnhance();
