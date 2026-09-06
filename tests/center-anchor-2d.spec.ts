@@ -53,17 +53,23 @@ test('2D rivers stay flush with the measured center edges and all table tiles sh
       const value = element.getBoundingClientRect();
       return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
     };
+    const physicalSize = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) throw new Error(`Missing ${selector}`);
+      // offsetWidth/offsetHeight describe the physical tile before a player's 90° seat rotation.
+      return { width: element.offsetWidth, height: element.offsetHeight };
+    };
     const center = rect('.table-center');
     const top = rect('.player-top .discard-river');
     const right = rect('.player-right .discard-river');
     const bottom = rect('.player-bottom .discard-river');
     const left = rect('.player-left .discard-river');
     const sizes = [
-      rect('.human-hand .tile'),
-      rect('.player-top .opponent-hand .tile'),
-      rect('.player-left .discard-river .tile'),
-      rect('.table-center .dora-row .tile'),
-    ].map(({ width, height }) => ({ width, height }));
+      physicalSize('.human-hand .tile'),
+      physicalSize('.player-top .opponent-hand .tile'),
+      physicalSize('.player-left .discard-river .tile'),
+      physicalSize('.table-center .dora-row .tile'),
+    ];
     return { center, top, right, bottom, left, sizes };
   });
 
