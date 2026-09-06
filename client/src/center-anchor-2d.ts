@@ -1,14 +1,14 @@
 import './center-anchor-2d.css';
 
 const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
-const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v1';
+const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v2';
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
 /* The old 2D tuning baseline intentionally enlarged opponent racks and shrank Dora. The new table
-   model starts every physical tile at exactly the human-hand size. Preserve labels/panels/positions,
-   but normalize only tile-bearing group scales once. The existing Dev sliders remain available for
-   later deliberate art-direction after this clean baseline has been established. */
+   model starts every physical tile at exactly the human-hand size. Preserve panels and most labels,
+   but normalize tile-bearing groups and obsolete river offsets once. Side-badge X offsets also
+   return to the seat edge because the old ±50px values were tuned around much smaller side racks. */
 function migrateUnifiedTileBaseline(): void {
   if (localStorage.getItem(UNIFIED_BASELINE_MIGRATION_KEY) === '1') return;
   let raw: any = null;
@@ -22,6 +22,8 @@ function migrateUnifiedTileBaseline(): void {
     ]) raw.scales[id] = 1;
     raw.offsets = raw.offsets && typeof raw.offsets === 'object' ? raw.offsets : {};
     for (const id of ['topRiver', 'leftRiver', 'rightRiver', 'bottomRiver']) raw.offsets[id] = { x: 0, y: 0 };
+    raw.offsets.leftBadge = { ...(raw.offsets.leftBadge ?? {}), x: 0 };
+    raw.offsets.rightBadge = { ...(raw.offsets.rightBadge ?? {}), x: 0 };
     const serialized = JSON.stringify(raw);
     try {
       localStorage.setItem(DEV_UI_KEY, serialized);
@@ -73,6 +75,10 @@ function relativeCenterRect(table: HTMLElement, center: HTMLElement): {
   };
 }
 
+function important(element: HTMLElement, property: string, value: string): void {
+  element.style.setProperty(property, value, 'important');
+}
+
 function positionRiver(
   table: HTMLElement,
   center: HTMLElement,
@@ -121,11 +127,14 @@ function positionRiver(
     rotation = -90;
   }
 
-  river.style.left = `${left}px`;
-  river.style.right = 'auto';
-  river.style.top = `${top}px`;
-  river.style.bottom = 'auto';
-  river.style.transform = rotation === 0 ? 'none' : `rotate(${rotation}deg)`;
+  // A lot of historical responsive CSS deliberately used !important. This measured anchor is now
+  // the single owner of river geometry, so its inline values must explicitly outrank those rules.
+  important(river, 'left', `${left}px`);
+  important(river, 'right', 'auto');
+  important(river, 'top', `${top}px`);
+  important(river, 'bottom', 'auto');
+  important(river, 'transform', rotation === 0 ? 'none' : `rotate(${rotation}deg)`);
+  important(river, 'translate', '0 0');
   river.dataset.centerAnchored = 'true';
 }
 
@@ -133,6 +142,7 @@ function clear3dMarkers(table: HTMLElement): void {
   table.classList.remove('center-anchored-2d');
   table.querySelectorAll<HTMLElement>('.discard-river[data-center-anchored]').forEach((river) => {
     delete river.dataset.centerAnchored;
+    for (const property of ['left', 'right', 'top', 'bottom', 'transform', 'translate']) river.style.removeProperty(property);
   });
 }
 
