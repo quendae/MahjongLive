@@ -1,12 +1,12 @@
 /* 2D centre-anchored table geometry.
    This layer is intentionally loaded last. The authoritative river DOM stays inside each player-zone
    (so the 3D renderer still reads the same state), while JS anchors its visual position to the real
-   centre panel. All table tiles share one visual size per responsive breakpoint. */
+   centre panel. All physical 2D tiles share one Dev-controlled size per responsive breakpoint. */
 
 .mahjong-table:not(.table-3d-active) {
-  --table2d-tile-w: 43px;
-  --table2d-tile-h: 58px;
-  --table2d-tile-gap: 3px;
+  --table2d-tile-w: var(--devui-tile-w-desktop, 43px);
+  --table2d-tile-h: var(--devui-tile-h-desktop, 58px);
+  --table2d-tile-gap: var(--devui-tile-gap-desktop, 3px);
 }
 
 /* One physical tile baseline in 2D: hand, concealed racks, rivers, melds and Dora all use it. */
@@ -30,9 +30,8 @@
   height: 94% !important;
 }
 
-/* Remove the old seating-scale multiplier while preserving each seat's point of view. The current
-   Dev UI component scales still work as optional fine tuning; center-anchor-2d.ts migrates the
-   tile-bearing groups to 1× once so the new baseline starts physically uniform. */
+/* Seat orientation is independent from size. Per-zone scale controls are intentionally normalized
+   to 1× by dev-ui-layout.ts so one global tile slider stays authoritative. */
 .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
   transform: rotate(180deg) !important;
 }
@@ -44,7 +43,7 @@
 }
 
 /* Every player-zone becomes a transparent table-sized coordinate plane. Player cards/racks keep
-   their existing seat anchors; rivers are positioned by center-anchor-2d.ts. */
+   their existing seat anchors; rivers and meld groups can then be positioned against table geometry. */
 .mahjong-table:not(.table-3d-active) .player-zone {
   inset: 0 !important;
   left: 0 !important;
@@ -93,20 +92,19 @@
   grid-template-columns: repeat(var(--devui-side-river-columns, 7), var(--table2d-tile-w)) !important;
 }
 
-/* The center now reads as a physical table component rather than a floating HUD card. The exact
-   visual bounds are measured at runtime, so Dora wrapping or Dev center resizing automatically
-   moves all four rivers with it. */
+/* The center is a physical square table component. Its measured visual bounds are the sole anchor
+   for all four discard rivers, so resizing the viewport or Dev center scale cannot desynchronize it. */
 .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
   z-index: 6;
   width: 292px !important;
-  min-height: 190px !important;
-  height: auto !important;
+  height: 292px !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1;
   padding: 14px 16px 13px !important;
   overflow: visible !important;
   border: 2px solid rgba(214, 194, 139, .22) !important;
   border-radius: 9px !important;
-  background:
-    linear-gradient(145deg, rgba(9, 24, 17, .98), rgba(3, 12, 8, .99)) !important;
+  background: linear-gradient(145deg, rgba(9, 24, 17, .98), rgba(3, 12, 8, .99)) !important;
   box-shadow:
     0 0 0 6px rgba(4, 12, 8, .38),
     0 12px 28px rgba(0, 0, 0, .28),
@@ -122,33 +120,77 @@
   gap: var(--devui-dora-gap, 4px);
   margin: 5px auto 4px;
   translate: var(--devui-dora-x, 0px) var(--devui-dora-y, 0px) !important;
+  scale: 1 !important;
 }
 
 .mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated > span:first-child {
   align-self: center;
 }
 
+/* Open melds live at the seat-local right end, matching the 3D table convention. For the human this
+   is the physical bottom-right corner; top/side opponents get the corresponding perspective-aware
+   corner. The rows remain in their original DOM owners so 3D state extraction is unchanged. */
+.mahjong-table:not(.table-3d-active) .meld-row {
+  position: absolute !important;
+  z-index: 4;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  transform-origin: center center !important;
+}
+.mahjong-table:not(.table-3d-active) .player-bottom .human-melds {
+  left: auto !important;
+  right: 22px !important;
+  top: auto !important;
+  bottom: 22px !important;
+  transform: none !important;
+}
+.mahjong-table:not(.table-3d-active) .player-top .meld-row {
+  left: 22px !important;
+  right: auto !important;
+  top: 22px !important;
+  bottom: auto !important;
+  transform: rotate(180deg) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .meld-row {
+  left: 22px !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: 22px !important;
+  transform: rotate(90deg) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .meld-row {
+  left: auto !important;
+  right: 22px !important;
+  top: 22px !important;
+  bottom: auto !important;
+  transform: rotate(-90deg) !important;
+}
+
 @media (min-width: 761px) and (max-width: 1059px) {
   .mahjong-table:not(.table-3d-active) {
-    --table2d-tile-w: 35px;
-    --table2d-tile-h: 47px;
-    --table2d-tile-gap: 3px;
+    --table2d-tile-w: var(--devui-tile-w-tablet, 35px);
+    --table2d-tile-h: var(--devui-tile-h-tablet, 47px);
+    --table2d-tile-gap: var(--devui-tile-gap-tablet, 3px);
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 238px !important;
-    min-height: 164px !important;
+    height: 238px !important;
   }
 }
 
 @media (max-width: 760px) {
   .mahjong-table:not(.table-3d-active) {
-    --table2d-tile-w: 28px;
-    --table2d-tile-h: 38px;
-    --table2d-tile-gap: 2px;
+    --table2d-tile-w: var(--devui-tile-w-phone, 28px);
+    --table2d-tile-h: var(--devui-tile-h-phone, 38px);
+    --table2d-tile-gap: var(--devui-tile-gap-phone, 2px);
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 188px !important;
-    min-height: 132px !important;
+    height: 188px !important;
+    min-height: 0 !important;
     padding: 9px 10px 8px !important;
     border-radius: 7px !important;
     box-shadow:
@@ -156,27 +198,37 @@
       0 8px 20px rgba(0,0,0,.24),
       inset 0 0 0 1px rgba(255,255,255,.03) !important;
   }
+  .mahjong-table:not(.table-3d-active) .meld-row {
+    scale: 1 !important;
+  }
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-melds { right: 10px !important; bottom: 10px !important; }
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row { left: 10px !important; top: 10px !important; }
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row { left: 10px !important; bottom: 10px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row { right: 10px !important; top: 10px !important; }
 }
 
 @media (max-height: 560px) and (orientation: landscape) {
   .mahjong-table:not(.table-3d-active) {
-    --table2d-tile-w: 25px;
-    --table2d-tile-h: 34px;
-    --table2d-tile-gap: 2px;
+    --table2d-tile-w: var(--devui-tile-w-landscape, 25px);
+    --table2d-tile-h: var(--devui-tile-h-landscape, 34px);
+    --table2d-tile-gap: var(--devui-tile-gap-landscape, 2px);
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 168px !important;
-    min-height: 112px !important;
+    height: 168px !important;
+    min-height: 0 !important;
     padding: 7px 8px 6px !important;
   }
 
-  /* On very short landscape screens the rotated rack and rotated name both compete for the side
-     rail. Eight pixels is enough clearance for the wider unified rack while keeping the label inside
-     the wooden table frame. */
   .mahjong-table:not(.table-3d-active) .player-left .player-heading {
     translate: -8px -50% !important;
   }
   .mahjong-table:not(.table-3d-active) .player-right .player-heading {
     translate: 8px -50% !important;
   }
+
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-melds { right: 8px !important; bottom: 6px !important; }
+  .mahjong-table:not(.table-3d-active) .player-top .meld-row { left: 8px !important; top: 6px !important; }
+  .mahjong-table:not(.table-3d-active) .player-left .meld-row { left: 8px !important; bottom: 6px !important; }
+  .mahjong-table:not(.table-3d-active) .player-right .meld-row { right: 8px !important; top: 6px !important; }
 }
