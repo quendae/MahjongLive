@@ -117,6 +117,7 @@ test('Dev is grouped and exposes the refined 2D controls', async ({ page }) => {
 test('2D side badges rotate with seats and Dora is truly inside the center counter', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await boot2d(page);
+  await expect(page.locator('.table-center .dora-row.center-dora-integrated')).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const left = document.querySelector<HTMLElement>('.player-left .player-heading');
@@ -134,6 +135,7 @@ test('2D side badges rotate with seats and Dora is truly inside the center count
       rightScale: getComputedStyle(right).scale,
       doraParentIsCenter: dora.parentElement === center,
       detachedTray: Boolean(detachedTray),
+      indicatorCount: dora.querySelectorAll('.tile').length,
       doraInsideCenter: doraRect.left >= centerRect.left - 1
         && doraRect.right <= centerRect.right + 1
         && doraRect.top >= centerRect.top - 1
@@ -147,6 +149,7 @@ test('2D side badges rotate with seats and Dora is truly inside the center count
   expect(Number.parseFloat(geometry.rightScale)).toBeGreaterThan(1);
   expect(geometry.doraParentIsCenter).toBe(true);
   expect(geometry.detachedTray).toBe(false);
+  expect(geometry.indicatorCount).toBeGreaterThanOrEqual(1);
   expect(geometry.doraInsideCenter).toBe(true);
 });
 
