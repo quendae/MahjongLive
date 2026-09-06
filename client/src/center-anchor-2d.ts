@@ -58,7 +58,6 @@ function relativeCenterRect(table: HTMLElement, center: HTMLElement): {
 } {
   const tableRect = table.getBoundingClientRect();
   const centerRect = center.getBoundingClientRect();
-  // Absolutely positioned player-zones use the table padding box as their coordinate space.
   const originX = tableRect.left + table.clientLeft;
   const originY = tableRect.top + table.clientTop;
   const left = centerRect.left - originX;
@@ -93,8 +92,8 @@ function positionRiver(
   }
 
   const c = relativeCenterRect(table, center);
-  // offsetWidth/offsetHeight deliberately ignore transforms. That lets us calculate the visual
-  // bounding box after a 90° seat rotation without relying on browser-specific transform matrices.
+  // offsetWidth/offsetHeight deliberately ignore transforms. For the side rivers, a 90° rotation
+  // swaps their visual dimensions; the formulas below solve from the requested visual corner.
   const width = river.offsetWidth;
   const height = river.offsetHeight;
   if (width <= 0 || height <= 0) {
@@ -107,34 +106,33 @@ function positionRiver(
   let rotation = 0;
 
   if (side === 'top') {
-    left = c.centerX - width / 2;
+    // Horizontal rivers start at the center's left edge and extend outward from its top edge.
+    left = c.left;
     top = c.top - height;
     rotation = 180;
   } else if (side === 'bottom') {
-    left = c.centerX - width / 2;
+    left = c.left;
     top = c.bottom;
   } else if (side === 'left') {
-    // After a 90° rotation visual width = unrotated height. Keep the visual right edge exactly on
-    // the center's left edge, while keeping the river centered vertically on the center component.
-    const visualCenterX = c.left - height / 2;
-    left = visualCenterX - width / 2;
-    top = c.centerY - height / 2;
+    // After +90° rotation: visual right = c.left and visual top = c.top.
+    left = c.left - (width + height) / 2;
+    top = c.top + (width - height) / 2;
     rotation = 90;
   } else {
-    const visualCenterX = c.right + height / 2;
-    left = visualCenterX - width / 2;
-    top = c.centerY - height / 2;
+    // After -90° rotation: visual left = c.right and visual top = c.top.
+    left = c.right + (height - width) / 2;
+    top = c.top + (width - height) / 2;
     rotation = -90;
   }
 
-  // A lot of historical responsive CSS deliberately used !important. This measured anchor is now
-  // the single owner of river geometry, so its inline values must explicitly outrank those rules.
   important(river, 'left', `${left}px`);
   important(river, 'right', 'auto');
   important(river, 'top', `${top}px`);
   important(river, 'bottom', 'auto');
   important(river, 'transform', rotation === 0 ? 'none' : `rotate(${rotation}deg)`);
-  important(river, 'translate', '0 0');
+  // Individual Dev X/Y offsets remain additive through the CSS translate property. The measured
+  // left/top geometry is always recomputed from the center and therefore stays stable on resize.
+  river.style.removeProperty('translate');
   river.dataset.centerAnchored = 'true';
 }
 
