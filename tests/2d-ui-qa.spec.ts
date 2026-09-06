@@ -187,6 +187,9 @@ test('3D called tile spacing has separate Dev controls for left, across and righ
   await boot2d(page);
   await page.locator('.dev-tuning-toggle').click();
   await expect(page.locator('.dev-tuning-panel')).toBeVisible();
+  const worldGroup = page.locator('.dev-tuning-group[data-dev-group="3d-world"]');
+  if (!(await worldGroup.getAttribute('open'))) await worldGroup.locator(':scope > summary').click();
+  await expect(worldGroup).toHaveAttribute('open', '');
 
   const values: Array<[string, string, number]> = [
     ['Called tile gap · from left', 'calledTileGapFromLeft', 0.17],
