@@ -1,0 +1,65 @@
+name: One-shot 2D meld DOM patch
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/patch-2d-meld-dom.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move meld rows out of transformed player cards
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'client/src/main.ts';
+          let source = fs.readFileSync(path, 'utf8');
+          function replaceExact(before, after) {
+            if (!source.includes(before)) throw new Error(`Expected main.ts block not found:\n${before}`);
+            source = source.replace(before, after);
+          }
+
+          replaceExact(
+`      <div class="opponent-card">
+        ${'${playerStatusMarkup(player, state)}'}
+        <div class="opponent-hand" aria-label="${'${concealedCount}'} concealed tiles">${'${backs}'}</div>
+        <div class="meld-row">${'${melds}'}</div>
+      </div>
+      <div class="discard-river">${'${discards}'}</div>`,
+`      <div class="opponent-card">
+        ${'${playerStatusMarkup(player, state)}'}
+        <div class="opponent-hand" aria-label="${'${concealedCount}'} concealed tiles">${'${backs}'}</div>
+      </div>
+      <div class="meld-row">${'${melds}'}</div>
+      <div class="discard-river">${'${discards}'}</div>`);
+
+          replaceExact(
+`      <div class="human-card">
+        ${'${playerStatusMarkup(human, state)}'}
+        <div class="human-hand" id="human-hand">${'${humanHandMarkup()}'}</div>
+        <div class="meld-row human-melds">${'${melds}'}</div>
+      </div>`,
+`      <div class="human-card">
+        ${'${playerStatusMarkup(human, state)}'}
+        <div class="human-hand" id="human-hand">${'${humanHandMarkup()}'}</div>
+      </div>
+      <div class="meld-row human-melds">${'${melds}'}</div>`);
+
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Commit DOM restructuring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/main.ts
+          git diff --cached --check
+          git commit -m "fix: anchor meld rows to player zones"
+          git push origin HEAD:master
