@@ -55,6 +55,9 @@ type DevTuning = {
     meldRowGap: number;
     calledTileRotation: number;
     calledTileGap: number;
+    calledTileGapFromLeft: number;
+    calledTileGapAcross: number;
+    calledTileGapFromRight: number;
   };
   tableGeometry: { frameTopY: number; feltTopY: number; frameWidth: number; frameThickness: number; feltThickness: number };
   ui: {
@@ -118,6 +121,9 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     meldRowGap: .48,
     calledTileRotation: 90,
     calledTileGap: .10,
+    calledTileGapFromLeft: .10,
+    calledTileGapAcross: .10,
+    calledTileGapFromRight: .10,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -365,6 +371,9 @@ function readDevTuning(): DevTuning {
       meldRowGap: finiteNumber(raw.tiles?.meldRowGap, DEFAULT_DEV_TUNING.tiles.meldRowGap),
       calledTileRotation: finiteNumber(raw.tiles?.calledTileRotation, DEFAULT_DEV_TUNING.tiles.calledTileRotation),
       calledTileGap: finiteNumber(raw.tiles?.calledTileGap, DEFAULT_DEV_TUNING.tiles.calledTileGap),
+      calledTileGapFromLeft: finiteNumber(raw.tiles?.calledTileGapFromLeft, finiteNumber(raw.tiles?.calledTileGap, DEFAULT_DEV_TUNING.tiles.calledTileGapFromLeft)),
+      calledTileGapAcross: finiteNumber(raw.tiles?.calledTileGapAcross, finiteNumber(raw.tiles?.calledTileGap, DEFAULT_DEV_TUNING.tiles.calledTileGapAcross)),
+      calledTileGapFromRight: finiteNumber(raw.tiles?.calledTileGapFromRight, finiteNumber(raw.tiles?.calledTileGap, DEFAULT_DEV_TUNING.tiles.calledTileGapFromRight)),
     },
     tableGeometry: {
       frameTopY: finiteNumber(raw.tableGeometry?.frameTopY, DEFAULT_DEV_TUNING.tableGeometry.frameTopY),
@@ -685,7 +694,15 @@ function baseTransform(spec: TileSpec): Transform {
     }
     if (spec.called) {
       transform.yaw += radians(tuning.tiles.calledTileRotation);
-      const extra = tuning.tiles.calledTileGap;
+      const owner = Number(spec.player);
+      const source = spec.calledFrom;
+      let extra = tuning.tiles.calledTileGap;
+      if (Number.isFinite(owner) && typeof source === 'number' && Number.isFinite(source)) {
+        const relativeSource = (source - owner + 4) % 4;
+        if (relativeSource === 1) extra = tuning.tiles.calledTileGapFromRight;
+        else if (relativeSource === 2) extra = tuning.tiles.calledTileGapAcross;
+        else if (relativeSource === 3) extra = tuning.tiles.calledTileGapFromLeft;
+      }
       if (spec.side === 'bottom') transform.x += extra;
       else if (spec.side === 'top') transform.x -= extra;
       else if (spec.side === 'left') transform.z += extra;

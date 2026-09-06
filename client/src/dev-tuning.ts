@@ -34,6 +34,9 @@ type DevTuning = {
     meldRowGap: number;
     calledTileRotation: number;
     calledTileGap: number;
+    calledTileGapFromLeft: number;
+    calledTileGapAcross: number;
+    calledTileGapFromRight: number;
   };
   tableGeometry: {
     frameTopY: number;
@@ -103,6 +106,9 @@ const DEFAULTS: DevTuning = {
     meldRowGap: .48,
     calledTileRotation: 90,
     calledTileGap: .10,
+    calledTileGapFromLeft: .10,
+    calledTileGapAcross: .10,
+    calledTileGapFromRight: .10,
   },
   tableGeometry: { frameTopY: .25, feltTopY: .11, frameWidth: .22, frameThickness: .45, feltThickness: .10 },
   ui: {
@@ -189,6 +195,9 @@ function loadSettings(): DevTuning {
       meldRowGap: finite(raw.tiles?.meldRowGap, DEFAULTS.tiles.meldRowGap),
       calledTileRotation: finite(raw.tiles?.calledTileRotation, DEFAULTS.tiles.calledTileRotation),
       calledTileGap: finite(raw.tiles?.calledTileGap, DEFAULTS.tiles.calledTileGap),
+      calledTileGapFromLeft: finite(raw.tiles?.calledTileGapFromLeft, finite(raw.tiles?.calledTileGap, DEFAULTS.tiles.calledTileGapFromLeft)),
+      calledTileGapAcross: finite(raw.tiles?.calledTileGapAcross, finite(raw.tiles?.calledTileGap, DEFAULTS.tiles.calledTileGapAcross)),
+      calledTileGapFromRight: finite(raw.tiles?.calledTileGapFromRight, finite(raw.tiles?.calledTileGap, DEFAULTS.tiles.calledTileGapFromRight)),
     },
     tableGeometry: {
       frameTopY: finite(raw.tableGeometry?.frameTopY, DEFAULTS.tableGeometry.frameTopY),
@@ -897,7 +906,7 @@ function buildPanel(): HTMLElement {
   numberSlider(tileSection, 'Meld gap', .30, .55, .01, () => settings.tiles.meldGap, (v) => { settings.tiles.meldGap = v; }, '', DEFAULTS.tiles.meldGap);
   numberSlider(tileSection, 'Meld group gap', .10, .70, .01, () => settings.tiles.meldRowGap, (v) => { settings.tiles.meldRowGap = v; }, '', DEFAULTS.tiles.meldRowGap);
   numberSlider(tileSection, 'Called tile turn', -180, 180, 1, () => settings.tiles.calledTileRotation, (v) => { settings.tiles.calledTileRotation = v; }, '°', DEFAULTS.tiles.calledTileRotation);
-  numberSlider(tileSection, 'Called tile gap', -.30, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
+  numberSlider(tileSection, 'Called tile gap · fallback', -.30, .30, .01, () => settings.tiles.calledTileGap, (v) => { settings.tiles.calledTileGap = v; }, '', DEFAULTS.tiles.calledTileGap);
   tileSection.insertAdjacentHTML('beforeend', '<p class="dev-tuning-note">Front UVs are normalized in code; these controls now tune material/plane appearance rather than compensating for broken UV mapping.</p>');
   root.append(tileSection);
 
