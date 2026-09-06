@@ -1,0 +1,155 @@
+/* Final lightweight-table refinements. Loaded after the historical responsive/Dev layers. */
+
+/* Dora belongs to the physical centre counter in 2D. The detached tray remains a 3D-only HUD. */
+.mahjong-table:not(.table-3d-active) > .table-dora-tray {
+  display: none !important;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated {
+  position: relative;
+  z-index: 3;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  min-height: 34px;
+  margin: 4px auto 3px;
+  gap: var(--devui-dora-gap, 4px);
+  translate: var(--devui-dora-x, 0px) var(--devui-dora-y, 0px) !important;
+  scale: var(--devui-dora-scale, .72);
+  transform-origin: center;
+  overflow: visible !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated > span:first-child {
+  flex: 0 0 auto;
+  margin: 0 3px 0 0;
+  color: #d9c47e;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .14em;
+  line-height: 1;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated .tile {
+  width: 27px;
+  height: 36px;
+  margin: 0;
+  border-radius: 4px;
+}
+
+/* 2D backs intentionally do NOT paint the full 3D texture across the entire DOM tile. The tile is
+   a cleaner coloured shell with a fine inset panel; the selected pattern lives only inside it. */
+.mahjong-table:not(.table-3d-active) .tile-back {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--user-back-light) 72%, #d8e1dc) !important;
+  border-bottom-color: color-mix(in srgb, var(--user-back-dark) 82%, #15251d) !important;
+  border-radius: var(--devui-back-corner-radius, 2.5px) !important;
+  background:
+    linear-gradient(155deg,
+      color-mix(in srgb, var(--user-back-light) 72%, white) 0%,
+      var(--user-back-color) 24%,
+      var(--user-back-color) 68%,
+      var(--user-back-dark) 100%) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.16),
+    inset -1px -1px 0 rgba(0,0,0,.18),
+    0 2px 4px rgba(0,0,0,.22) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .tile-back > span {
+  position: relative;
+  width: 76% !important;
+  height: 80% !important;
+  overflow: hidden;
+  border: 1px solid rgb(239 247 242 / var(--devui-back-frame-opacity, .30)) !important;
+  border-radius: max(0px, calc(var(--devui-back-corner-radius, 2.5px) - 1px)) !important;
+  background: rgba(3, 15, 9, .08) !important;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.055);
+}
+
+.mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background-image: var(--user-back-pattern-image);
+  background-position: center;
+  background-repeat: repeat;
+  opacity: var(--devui-back-pattern-opacity, .22);
+  pointer-events: none;
+}
+
+html[data-user-back-pattern='ribbed'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  background-size: calc(5px * var(--devui-back-texture-scale, .72)) auto;
+}
+html[data-user-back-pattern='woven'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  background-size: calc(7px * var(--devui-back-texture-scale, .72)) calc(7px * var(--devui-back-texture-scale, .72));
+}
+html[data-user-back-pattern='diamond'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  background-size: calc(9px * var(--devui-back-texture-scale, .72)) calc(9px * var(--devui-back-texture-scale, .72));
+}
+html[data-user-back-pattern='classic'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  background-size: calc(12px * var(--devui-back-texture-scale, .72)) calc(12px * var(--devui-back-texture-scale, .72));
+}
+html[data-user-back-pattern='waves'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  background-size: calc(18px * var(--devui-back-texture-scale, .72)) calc(10px * var(--devui-back-texture-scale, .72));
+}
+html[data-user-back-pattern='custom'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  inset: 0;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 1;
+}
+html[data-user-back-pattern='solid'] .mahjong-table:not(.table-3d-active) .tile-back > span::after {
+  display: none;
+}
+
+/* The human rack never needs a visible browser scrollbar. Desktop can show the whole rack; narrow
+   screens may still swipe horizontally, but the native scrollbar itself stays hidden. */
+.mahjong-table:not(.table-3d-active) .human-card {
+  overflow: visible !important;
+}
+
+.mahjong-table:not(.table-3d-active) .human-hand {
+  gap: var(--devui-human-hand-gap, 4px) !important;
+  overflow: visible !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+
+.mahjong-table:not(.table-3d-active) .human-hand::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.mahjong-table:not(.table-3d-active) .human-hand > .tile-drawn {
+  margin-left: var(--devui-drawn-tile-gap, 16px) !important;
+}
+
+@media (max-width: 760px) {
+  .mahjong-table:not(.table-3d-active) .human-hand {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+  }
+
+  .mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated {
+    min-height: 25px;
+    margin-top: 2px;
+    gap: min(var(--devui-dora-gap, 4px), 3px);
+  }
+  .mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated > span:first-child {
+    font-size: 7px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated .tile {
+    width: 20px;
+    height: 27px;
+    border-radius: 3px;
+  }
+}
