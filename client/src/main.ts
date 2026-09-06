@@ -275,8 +275,8 @@ function opponentPanel(player: PlayerIndex): string {
       <div class="opponent-card">
         ${playerStatusMarkup(player, state)}
         <div class="opponent-hand" aria-label="${concealedCount} concealed tiles">${backs}</div>
-        <div class="meld-row">${melds}</div>
       </div>
+      <div class="meld-row">${melds}</div>
       <div class="discard-river">${discards}</div>
     </section>
   `;
@@ -361,8 +361,8 @@ function humanZone(): string {
       <div class="human-card">
         ${playerStatusMarkup(human, state)}
         <div class="human-hand" id="human-hand">${humanHandMarkup()}</div>
-        <div class="meld-row human-melds">${melds}</div>
       </div>
+      <div class="meld-row human-melds">${melds}</div>
     </section>
   `;
 }
