@@ -1,7 +1,9 @@
 import './dev-ui-layout.css';
 
 const STORAGE_KEY = 'mahjong-live:dev-ui-layout:v2';
-const LAYOUT_VERSION = 3;
+const DEV_TUNING_KEY = 'mahjong-live:dev-tuning:v1';
+const DEV_TUNING_EVENT = 'mahjong-live:dev-tuning';
+const LAYOUT_VERSION = 4;
 
 type Offset = { x: number; y: number };
 type ComponentId =
@@ -14,9 +16,11 @@ type ComponentId =
   | 'center' | 'dora' | 'actionDock' | 'callBubble';
 
 type ScaleId = Exclude<ComponentId, 'table'>;
+type CalledGapKey = 'calledTileGapFromLeft' | 'calledTileGapAcross' | 'calledTileGapFromRight';
 
 type LayoutSettings = {
   layoutVersion: number;
+  tileScale: number;
   sideRiverColumns: number;
   offsets: Record<ComponentId, Offset>;
   scales: Record<ScaleId, number>;
@@ -42,6 +46,11 @@ const COMPONENT_IDS: readonly ComponentId[] = [
 ];
 
 const SCALE_IDS = COMPONENT_IDS.filter((id): id is ScaleId => id !== 'table');
+const TILE_BEARING_SCALE_IDS: readonly ScaleId[] = [
+  'topRack', 'leftRack', 'rightRack', 'humanHand',
+  'topRiver', 'leftRiver', 'rightRiver', 'bottomRiver',
+  'topMeld', 'leftMeld', 'rightMeld', 'bottomMeld', 'dora',
+];
 
 function emptyOffsets(): Record<ComponentId, Offset> {
   return Object.fromEntries(COMPONENT_IDS.map((id) => [id, { x: 0, y: 0 }])) as Record<ComponentId, Offset>;
@@ -55,7 +64,6 @@ function defaultOffsets(): Record<ComponentId, Offset> {
   values.topRack = { x: 0, y: 18 };
   values.leftRack = { x: 42, y: 0 };
   values.rightRack = { x: -42, y: 0 };
-  // Dora is now a real row inside the centre counter. Its local offset starts at zero.
   values.dora = { x: 0, y: 0 };
   return values;
 }
@@ -65,15 +73,12 @@ function defaultScales(): Record<ScaleId, number> {
   values.topBadge = 1.25;
   values.leftBadge = 1.25;
   values.rightBadge = 1.25;
-  values.topRack = 1.5;
-  values.leftRack = 1.5;
-  values.rightRack = 1.5;
-  values.dora = .72;
   return values;
 }
 
 const DEFAULTS: LayoutSettings = {
   layoutVersion: LAYOUT_VERSION,
+  tileScale: 1,
   sideRiverColumns: 7,
   offsets: defaultOffsets(),
   scales: defaultScales(),
@@ -103,15 +108,19 @@ function loadSettings(): LayoutSettings {
       y: finite(raw?.offsets?.[id]?.y, offsets[id].y),
     };
   }
-  // v1/v2 Dora was a detached overlay. Preserve the rest of the user's hand-tuned layout, but
-  // reset only this obsolete coordinate now that the Dora row lives inside the centre counter.
-  if (oldVersion < LAYOUT_VERSION) offsets.dora = { x: 0, y: 0 };
+  if (oldVersion < 3) offsets.dora = { x: 0, y: 0 };
 
   const scales = defaultScales();
   for (const id of SCALE_IDS) scales[id] = finite(raw?.scales?.[id], scales[id]);
+  // v4 establishes one physical tile scale. Legacy rack/river/meld/Dora multipliers would break
+  // that invariant, so normalize only the tile-bearing groups while preserving panels and badges.
+  if (oldVersion < LAYOUT_VERSION) {
+    for (const id of TILE_BEARING_SCALE_IDS) scales[id] = 1;
+  }
 
   return {
     layoutVersion: LAYOUT_VERSION,
+    tileScale: Math.max(.55, Math.min(1.65, finite(raw?.tileScale, DEFAULTS.tileScale))),
     sideRiverColumns: Math.max(3, Math.min(9, Math.round(finite(raw?.sideRiverColumns, DEFAULTS.sideRiverColumns)))),
     offsets,
     scales,
@@ -135,8 +144,23 @@ function kebab(id: ComponentId): string {
   return id.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
 }
 
+function px(value: number): string {
+  return `${Number(value.toFixed(2))}px`;
+}
+
+function applyTileProfile(style: CSSStyleDeclaration, name: string, width: number, height: number, gap: number): void {
+  style.setProperty(`--devui-tile-w-${name}`, px(width * settings.tileScale));
+  style.setProperty(`--devui-tile-h-${name}`, px(height * settings.tileScale));
+  style.setProperty(`--devui-tile-gap-${name}`, px(gap * settings.tileScale));
+}
+
 function applySettings(): void {
   const style = document.documentElement.style;
+  style.setProperty('--devui-tile-scale', String(settings.tileScale));
+  applyTileProfile(style, 'desktop', 43, 58, 3);
+  applyTileProfile(style, 'tablet', 35, 47, 3);
+  applyTileProfile(style, 'phone', 28, 38, 2);
+  applyTileProfile(style, 'landscape', 25, 34, 2);
   style.setProperty('--devui-side-river-columns', String(settings.sideRiverColumns));
   style.setProperty('--devui-bottom-panel-width', `${settings.bottomPanelWidth}px`);
   style.setProperty('--devui-bottom-panel-height', `${settings.bottomPanelHeight}px`);
@@ -176,6 +200,7 @@ function sliderRow(
   set: (value: number) => void,
   defaultValue = 0,
   suffix = 'px',
+  onSave: () => void = () => saveSettings(),
 ): void {
   const row = document.createElement('div');
   row.className = 'dev-tuning-control';
@@ -199,7 +224,7 @@ function sliderRow(
     const value = Math.max(min, Math.min(max, raw));
     set(value);
     sync(value);
-    saveSettings();
+    onSave();
   };
 
   sync(get());
@@ -243,11 +268,12 @@ function buildAdvanced2dSection(): HTMLElement {
   section.className = 'dev-tuning-section dev-ui-layout-section';
   section.innerHTML = `
     <h3>Component positions & sizes</h3>
-    <p class="dev-ui-layout-note">X/Y and size are additive. Dora is a real row inside the centre counter; its controls now move that row, not a separate window.</p>
+    <p class="dev-ui-layout-note">All physical 2D tiles share one size. X/Y controls only move groups; they no longer secretly rescale rack, river, meld or Dora tiles.</p>
   `;
 
   const global = subgroup('Table / global', true);
   offsetRows(global.body, 'Whole table', 'table', 700);
+  sliderRow(global.body, 'All 2D tiles size', .55, 1.65, .01, () => settings.tileScale, (value) => { settings.tileScale = value; }, DEFAULTS.tileScale, '×');
   sliderRow(global.body, 'Side river columns', 3, 9, 1, () => settings.sideRiverColumns, (value) => { settings.sideRiverColumns = Math.round(value); }, DEFAULTS.sideRiverColumns, '');
   section.append(global.details);
 
@@ -274,29 +300,29 @@ function buildAdvanced2dSection(): HTMLElement {
   positionAndScale(labels.body, 'Left badge', 'leftBadge', 360, .6, 2.5);
   positionAndScale(labels.body, 'Right badge', 'rightBadge', 360, .6, 2.5);
   positionAndScale(labels.body, 'Your badge', 'bottomBadge', 320, .6, 2.2);
-  positionAndScale(labels.body, 'Top rack', 'topRack', 360, .45, 2.1);
-  positionAndScale(labels.body, 'Left rack', 'leftRack', 360, .45, 2.1);
-  positionAndScale(labels.body, 'Right rack', 'rightRack', 360, .45, 2.1);
-  positionAndScale(labels.body, 'Your hand', 'humanHand', 360, .55, 1.8);
+  offsetRows(labels.body, 'Top rack', 'topRack', 360);
+  offsetRows(labels.body, 'Left rack', 'leftRack', 360);
+  offsetRows(labels.body, 'Right rack', 'rightRack', 360);
+  offsetRows(labels.body, 'Your hand', 'humanHand', 360);
   section.append(labels.details);
 
   const rivers = subgroup('Discard rivers');
-  positionAndScale(rivers.body, 'Top river', 'topRiver');
-  positionAndScale(rivers.body, 'Left river', 'leftRiver');
-  positionAndScale(rivers.body, 'Right river', 'rightRiver');
-  positionAndScale(rivers.body, 'Your river', 'bottomRiver');
+  offsetRows(rivers.body, 'Top river', 'topRiver');
+  offsetRows(rivers.body, 'Left river', 'leftRiver');
+  offsetRows(rivers.body, 'Right river', 'rightRiver');
+  offsetRows(rivers.body, 'Your river', 'bottomRiver');
   section.append(rivers.details);
 
   const melds = subgroup('Meld groups');
-  positionAndScale(melds.body, 'Top melds', 'topMeld');
-  positionAndScale(melds.body, 'Left melds', 'leftMeld');
-  positionAndScale(melds.body, 'Right melds', 'rightMeld');
-  positionAndScale(melds.body, 'Your melds', 'bottomMeld');
+  offsetRows(melds.body, 'Top melds', 'topMeld');
+  offsetRows(melds.body, 'Left melds', 'leftMeld');
+  offsetRows(melds.body, 'Right melds', 'rightMeld');
+  offsetRows(melds.body, 'Your melds', 'bottomMeld');
   section.append(melds.details);
 
   const overlays = subgroup('Center / Dora / prompts');
   positionAndScale(overlays.body, 'Center', 'center', 320, .55, 1.8);
-  positionAndScale(overlays.body, 'Dora row', 'dora', 120, .45, 1.6);
+  offsetRows(overlays.body, 'Dora row', 'dora', 120);
   sliderRow(overlays.body, 'Dora indicator gap', 0, 12, 1, () => settings.doraGap, (value) => { settings.doraGap = value; }, DEFAULTS.doraGap, 'px');
   positionAndScale(overlays.body, 'Action dock', 'actionDock', 420, .55, 1.8);
   positionAndScale(overlays.body, 'Call bubble', 'callBubble', 320, .55, 2.0);
@@ -324,13 +350,45 @@ function buildAdvanced2dSection(): HTMLElement {
   return section;
 }
 
+function read3dTuning(): any {
+  try { return JSON.parse(localStorage.getItem(DEV_TUNING_KEY) ?? '{}'); } catch { return {}; }
+}
+
+function calledGap(key: CalledGapKey): number {
+  const raw = read3dTuning();
+  return finite(raw?.tiles?.[key], finite(raw?.tiles?.calledTileGap, .10));
+}
+
+function setCalledGap(key: CalledGapKey, value: number): void {
+  const raw = read3dTuning();
+  raw.tiles = raw.tiles && typeof raw.tiles === 'object' ? raw.tiles : {};
+  raw.tiles[key] = value;
+  try { localStorage.setItem(DEV_TUNING_KEY, JSON.stringify(raw)); } catch {}
+  window.dispatchEvent(new CustomEvent(DEV_TUNING_EVENT, { detail: raw }));
+  setStatus('3D called-tile spacing updated live.');
+}
+
+function build3dCalledTileSection(): HTMLElement {
+  const section = document.createElement('section');
+  section.className = 'dev-tuning-section dev-called-tile-section';
+  section.innerHTML = '<h3>3D called tile spacing</h3><p class="dev-ui-layout-note">Separate spacing for the sideways tile depending on which opponent supplied it.</p>';
+  for (const [label, key] of [
+    ['Called tile gap · from left', 'calledTileGapFromLeft'],
+    ['Called tile gap · across', 'calledTileGapAcross'],
+    ['Called tile gap · from right', 'calledTileGapFromRight'],
+  ] as const) {
+    sliderRow(section, label, -.40, .40, .01, () => calledGap(key), (value) => setCalledGap(key, value), .10, '', () => {});
+  }
+  return section;
+}
+
 type GroupId = '2d' | '3d-view' | '3d-world' | 'performance' | 'appearance' | 'more';
 type GroupSpec = { id: GroupId; label: string; copy: string; open?: boolean };
 
 const GROUPS: readonly GroupSpec[] = [
   { id: '2d', label: '2D · Layout', copy: 'table, seats, rivers, sizes', open: true },
   { id: '3d-view', label: '3D · Camera & UI', copy: 'camera, seat rotation, overlays' },
-  { id: '3d-world', label: '3D · Tiles & table', copy: 'geometry, rivers, materials' },
+  { id: '3d-world', label: '3D · Tiles & table', copy: 'geometry, rivers, meld spacing' },
   { id: 'performance', label: 'Rendering & diagnostics', copy: 'renderer, FPS, benchmark' },
   { id: 'appearance', label: 'Advanced appearance', copy: 'prefer Options for normal use' },
   { id: 'more', label: 'Other / legacy', copy: 'uncategorized controls' },
@@ -342,7 +400,7 @@ function groupIdFor(title: string): GroupId {
   if (value === 'performance & graphics') return 'performance';
   if (value === 'scene background' || value === 'felt & tile backs') return 'appearance';
   if (value === 'camera' || value === 'ui overlays' || value.includes('opponent tiles') || value === 'your tiles') return '3d-view';
-  if (value === 'tiles & front material' || value === 'discard layout' || value === 'table geometry') return '3d-world';
+  if (value === 'tiles & front material' || value === 'discard layout' || value === 'table geometry' || value.startsWith('3d called tile')) return '3d-world';
   return 'more';
 }
 
@@ -390,6 +448,8 @@ function organizePanel(panel: HTMLElement): void {
   if (baseHeading && baseHeading.textContent !== 'Base table / scaling') baseHeading.textContent = 'Base table / scaling';
   const twoDBody = bodies.get('2d');
   if (twoDBody && !twoDBody.querySelector('.dev-ui-layout-section')) twoDBody.append(buildAdvanced2dSection());
+  const worldBody = bodies.get('3d-world');
+  if (worldBody && !worldBody.querySelector('.dev-called-tile-section')) worldBody.append(build3dCalledTileSection());
 }
 
 function scheduleOrganize(): void {
