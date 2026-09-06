@@ -1,0 +1,181 @@
+/* 2D centre-anchored table geometry.
+   This layer is intentionally loaded last. The authoritative river DOM stays inside each player-zone
+   (so the 3D renderer still reads the same state), while JS anchors its visual position to the real
+   centre panel. All table tiles share one visual size per responsive breakpoint. */
+
+.mahjong-table:not(.table-3d-active) {
+  --table2d-tile-w: 43px;
+  --table2d-tile-h: 58px;
+  --table2d-tile-gap: 3px;
+}
+
+/* One physical tile scale in 2D: hand, concealed racks, rivers, melds and Dora all use it. */
+.mahjong-table:not(.table-3d-active) .tile,
+.mahjong-table:not(.table-3d-active) .tile-compact,
+.mahjong-table:not(.table-3d-active) .opponent-hand .tile,
+.mahjong-table:not(.table-3d-active) .human-hand .tile,
+.mahjong-table:not(.table-3d-active) .discard-river .tile,
+.mahjong-table:not(.table-3d-active) .meld .tile,
+.mahjong-table:not(.table-3d-active) .table-center .dora-row .tile {
+  width: var(--table2d-tile-w) !important;
+  height: var(--table2d-tile-h) !important;
+  flex: 0 0 auto;
+}
+
+.mahjong-table:not(.table-3d-active) .tile-compact .tile-art,
+.mahjong-table:not(.table-3d-active) .discard-river .tile-art,
+.mahjong-table:not(.table-3d-active) .meld .tile-art,
+.mahjong-table:not(.table-3d-active) .table-center .dora-row .tile-art {
+  width: 94% !important;
+  height: 94% !important;
+}
+
+/* Previous Dev scales are useful for panels and labels, but tile-bearing groups must begin from a
+   common physical size. Fine-tuning can now happen through spacing/position rather than different
+   tile scales fighting each other. */
+.mahjong-table:not(.table-3d-active) .opponent-hand,
+.mahjong-table:not(.table-3d-active) .human-hand,
+.mahjong-table:not(.table-3d-active) .discard-river,
+.mahjong-table:not(.table-3d-active) .meld-row,
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated {
+  scale: 1 !important;
+}
+
+/* Remove the old seating-scale multiplier while preserving each seat's point of view. */
+.mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
+  transform: rotate(180deg) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
+  transform: translate(-50%, -50%) rotate(90deg) !important;
+}
+.mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
+  transform: translate(50%, -50%) rotate(-90deg) !important;
+}
+
+/* Every player-zone becomes a transparent table-sized coordinate plane. Player cards/racks keep
+   their existing seat anchors; rivers are positioned by center-anchor-2d.ts. */
+.mahjong-table:not(.table-3d-active) .player-zone {
+  inset: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  transform: none !important;
+  pointer-events: none;
+}
+
+.mahjong-table:not(.table-3d-active) .discard-river {
+  position: absolute !important;
+  z-index: 5;
+  display: grid !important;
+  width: max-content !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: var(--table2d-tile-gap) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  justify-content: start !important;
+  transform-origin: center center !important;
+  translate: 0 0 !important;
+  scale: 1 !important;
+  visibility: hidden;
+}
+
+.mahjong-table:not(.table-3d-active) .discard-river[data-center-anchored='true'] {
+  visibility: visible;
+}
+
+.mahjong-table:not(.table-3d-active) .player-top .discard-river,
+.mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
+  grid-template-columns: repeat(6, var(--table2d-tile-w)) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .player-left .discard-river,
+.mahjong-table:not(.table-3d-active) .player-right .discard-river {
+  grid-template-columns: repeat(var(--devui-side-river-columns, 7), var(--table2d-tile-w)) !important;
+}
+
+/* The center now reads as a physical table component rather than a floating HUD card. The exact
+   visual bounds are measured at runtime, so Dora wrapping or Dev center resizing automatically
+   moves all four rivers with it. */
+.mahjong-table:not(.table-3d-active) .table-center.table-center-core {
+  z-index: 6;
+  width: 292px !important;
+  min-height: 190px !important;
+  height: auto !important;
+  padding: 14px 16px 13px !important;
+  overflow: visible !important;
+  border: 2px solid rgba(214, 194, 139, .22) !important;
+  border-radius: 9px !important;
+  background:
+    linear-gradient(145deg, rgba(9, 24, 17, .98), rgba(3, 12, 8, .99)) !important;
+  box-shadow:
+    0 0 0 6px rgba(4, 12, 8, .38),
+    0 12px 28px rgba(0, 0, 0, .28),
+    inset 0 0 0 1px rgba(255,255,255,.035),
+    inset 0 0 30px rgba(0,0,0,.16) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated {
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--table2d-tile-h);
+  flex-wrap: wrap;
+  gap: var(--devui-dora-gap, 4px);
+  margin: 5px auto 4px;
+  translate: var(--devui-dora-x, 0px) var(--devui-dora-y, 0px) !important;
+}
+
+.mahjong-table:not(.table-3d-active) .table-center .dora-row.center-dora-integrated > span:first-child {
+  align-self: center;
+}
+
+@media (min-width: 761px) and (max-width: 1059px) {
+  .mahjong-table:not(.table-3d-active) {
+    --table2d-tile-w: 35px;
+    --table2d-tile-h: 47px;
+    --table2d-tile-gap: 3px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
+    width: 238px !important;
+    min-height: 164px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .mahjong-table:not(.table-3d-active) {
+    --table2d-tile-w: 28px;
+    --table2d-tile-h: 38px;
+    --table2d-tile-gap: 2px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
+    width: 188px !important;
+    min-height: 132px !important;
+    padding: 9px 10px 8px !important;
+    border-radius: 7px !important;
+    box-shadow:
+      0 0 0 4px rgba(4, 12, 8, .34),
+      0 8px 20px rgba(0,0,0,.24),
+      inset 0 0 0 1px rgba(255,255,255,.03) !important;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .mahjong-table:not(.table-3d-active) {
+    --table2d-tile-w: 25px;
+    --table2d-tile-h: 34px;
+    --table2d-tile-gap: 2px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
+    width: 168px !important;
+    min-height: 112px !important;
+    padding: 7px 8px 6px !important;
+  }
+}
