@@ -1,10 +1,7 @@
 /* Late, authoritative 2D UI/appearance polish.
    This entry is intentionally loaded after the historical tuning modules so user Options win over
-   old Dev inline previews and the component offset controls can safely fine-tune every viewport. */
+   old Dev inline previews and the component controls can safely fine-tune every viewport. */
 
-/* User-facing Options are authoritative in BOTH renderers. The old Dev module writes inline
-   background declarations while it refreshes its preview; !important here prevents those stale
-   inline values from masking the 2D appearance variables. */
 body {
   background:
     radial-gradient(circle at 50% -8%, var(--user-scene-glow), transparent 44%),
@@ -21,6 +18,7 @@ body {
   background-size: auto, cover, auto, auto !important;
   background-position: center !important;
   background-repeat: no-repeat, no-repeat, repeat, no-repeat !important;
+  translate: var(--devui-table-x, 0px) var(--devui-table-y, 0px);
 }
 
 .mahjong-table:not(.table-3d-active) .tile:not(.tile-back) {
@@ -36,107 +34,176 @@ body {
   background-image:
     var(--user-back-pattern-image),
     linear-gradient(145deg, var(--user-back-light) 0%, var(--user-back-color) 38%, var(--user-back-dark) 100%) !important;
-  background-size: var(--user-back-pattern-size), auto !important;
   background-position: center !important;
   background-repeat: repeat, no-repeat !important;
 }
 
-/* Riichi rivers are six tiles wide for every seat. Side seats are rotated by the seating CSS; they
-   should not silently become 3-column mini-grids merely because their container is narrow. */
+/* Generated back patterns use the same design as 3D but scale with the much smaller 2D backs.
+   The Dev slider changes only the 2D pattern density, never the actual 3D material. */
+html[data-user-back-pattern='ribbed'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: calc(11px * var(--devui-back-texture-scale, .72)) auto, auto !important;
+}
+html[data-user-back-pattern='woven'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: calc(12px * var(--devui-back-texture-scale, .72)) calc(12px * var(--devui-back-texture-scale, .72)), auto !important;
+}
+html[data-user-back-pattern='diamond'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: calc(20px * var(--devui-back-texture-scale, .72)) calc(20px * var(--devui-back-texture-scale, .72)), auto !important;
+}
+html[data-user-back-pattern='classic'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: calc(26px * var(--devui-back-texture-scale, .72)) calc(26px * var(--devui-back-texture-scale, .72)), auto !important;
+}
+html[data-user-back-pattern='waves'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: calc(42px * var(--devui-back-texture-scale, .72)) calc(24px * var(--devui-back-texture-scale, .72)), auto !important;
+}
+html[data-user-back-pattern='custom'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-size: cover, auto !important;
+  background-repeat: no-repeat, no-repeat !important;
+}
+html[data-user-back-pattern='solid'] .mahjong-table:not(.table-3d-active) .tile-back {
+  background-image: linear-gradient(145deg, var(--user-back-light) 0%, var(--user-back-color) 38%, var(--user-back-dark) 100%) !important;
+  background-size: auto !important;
+}
+
 .mahjong-table:not(.table-3d-active) .player-left .discard-river,
 .mahjong-table:not(.table-3d-active) .player-right .discard-river {
-  grid-template-columns: repeat(var(--devui-side-river-columns, 6), max-content) !important;
+  grid-template-columns: repeat(var(--devui-side-river-columns, 7), max-content) !important;
   width: max-content !important;
   max-width: none !important;
 }
 
-/* Additive offsets: individual CSS translate is deliberately used instead of transform so it does
-   not destroy the seat rotations / translate(-50%) rules already used by responsive 2D layout. */
-.mahjong-table:not(.table-3d-active) {
-  translate: var(--devui-table-x, 0px) var(--devui-table-y, 0px);
-}
-
+/* Additive position and scale controls. CSS translate/scale are independent from transform,
+   therefore the existing seat rotations remain intact. */
 .mahjong-table:not(.table-3d-active) .player-top .opponent-card {
   translate: var(--devui-top-panel-x, 0px) var(--devui-top-panel-y, 0px) !important;
+  scale: var(--devui-top-panel-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-left .opponent-card {
   translate: var(--devui-left-panel-x, 0px) var(--devui-left-panel-y, 0px) !important;
+  scale: var(--devui-left-panel-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-right .opponent-card {
   translate: var(--devui-right-panel-x, 0px) var(--devui-right-panel-y, 0px) !important;
+  scale: var(--devui-right-panel-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
   translate: var(--devui-bottom-panel-x, 0px) var(--devui-bottom-panel-y, 0px) !important;
+  scale: var(--devui-bottom-panel-scale, 1);
+}
+
+@media (min-width: 761px) {
+  .mahjong-table:not(.table-3d-active) .player-bottom .human-card {
+    width: min(var(--devui-bottom-panel-width, 760px), calc(100% - 20px)) !important;
+    min-height: var(--devui-bottom-panel-height, 104px) !important;
+  }
 }
 
 .mahjong-table:not(.table-3d-active) .player-top .player-heading,
 .mahjong-table:not(.table-3d-active) .player-top .player-tags {
-  translate: var(--devui-top-badge-x, 0px) var(--devui-top-badge-y, 0px) !important;
+  translate: var(--devui-top-badge-x, 0px) var(--devui-top-badge-y, -10px) !important;
+  scale: var(--devui-top-badge-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-left .player-heading,
 .mahjong-table:not(.table-3d-active) .player-left .player-tags {
-  translate: var(--devui-left-badge-x, 0px) var(--devui-left-badge-y, 0px) !important;
+  translate: var(--devui-left-badge-x, 128px) var(--devui-left-badge-y, 202px) !important;
+  rotate: 90deg;
+  scale: var(--devui-left-badge-scale, 1.25);
+  transform-origin: center;
 }
 .mahjong-table:not(.table-3d-active) .player-right .player-heading,
 .mahjong-table:not(.table-3d-active) .player-right .player-tags {
-  translate: var(--devui-right-badge-x, 0px) var(--devui-right-badge-y, 0px) !important;
+  translate: var(--devui-right-badge-x, -128px) var(--devui-right-badge-y, 202px) !important;
+  rotate: -90deg;
+  scale: var(--devui-right-badge-scale, 1.25);
+  transform-origin: center;
 }
 .mahjong-table:not(.table-3d-active) .player-bottom .player-heading,
 .mahjong-table:not(.table-3d-active) .player-bottom .player-tags {
   translate: var(--devui-bottom-badge-x, 0px) var(--devui-bottom-badge-y, 0px) !important;
+  scale: var(--devui-bottom-badge-scale, 1);
 }
 
 .mahjong-table:not(.table-3d-active) .player-top .opponent-hand {
   translate: var(--devui-top-rack-x, 0px) var(--devui-top-rack-y, 0px) !important;
+  scale: var(--devui-top-rack-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-left .opponent-hand {
   translate: var(--devui-left-rack-x, 0px) var(--devui-left-rack-y, 0px) !important;
+  scale: var(--devui-left-rack-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-right .opponent-hand {
   translate: var(--devui-right-rack-x, 0px) var(--devui-right-rack-y, 0px) !important;
+  scale: var(--devui-right-rack-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .human-hand {
   translate: var(--devui-human-hand-x, 0px) var(--devui-human-hand-y, 0px) !important;
+  scale: var(--devui-human-hand-scale, 1);
+  transform-origin: center bottom;
 }
 
 .mahjong-table:not(.table-3d-active) .player-top .discard-river {
   translate: var(--devui-top-river-x, 0px) var(--devui-top-river-y, 0px) !important;
+  scale: var(--devui-top-river-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-left .discard-river {
   translate: var(--devui-left-river-x, 0px) var(--devui-left-river-y, 0px) !important;
+  scale: var(--devui-left-river-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-right .discard-river {
   translate: var(--devui-right-river-x, 0px) var(--devui-right-river-y, 0px) !important;
+  scale: var(--devui-right-river-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-bottom .discard-river {
   translate: var(--devui-bottom-river-x, 0px) var(--devui-bottom-river-y, 0px) !important;
+  scale: var(--devui-bottom-river-scale, 1);
 }
 
 .mahjong-table:not(.table-3d-active) .player-top .meld-row {
   translate: var(--devui-top-meld-x, 0px) var(--devui-top-meld-y, 0px) !important;
+  scale: var(--devui-top-meld-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-left .meld-row {
   translate: var(--devui-left-meld-x, 0px) var(--devui-left-meld-y, 0px) !important;
+  scale: var(--devui-left-meld-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-right .meld-row {
   translate: var(--devui-right-meld-x, 0px) var(--devui-right-meld-y, 0px) !important;
+  scale: var(--devui-right-meld-scale, 1);
 }
 .mahjong-table:not(.table-3d-active) .player-bottom .meld-row,
 .mahjong-table:not(.table-3d-active) .player-bottom .human-melds {
   translate: var(--devui-bottom-meld-x, 0px) var(--devui-bottom-meld-y, 0px) !important;
+  scale: var(--devui-bottom-meld-scale, 1);
 }
 
 .mahjong-table:not(.table-3d-active) .table-center {
   translate: var(--devui-center-x, 0px) var(--devui-center-y, 0px) !important;
+  scale: var(--devui-center-scale, 1);
 }
+
+/* 2D Dora is now visually part of the centre counter instead of floating in the upper-left field.
+   Its local X/Y sliders are relative to the counter centre and the counter's own offset is inherited. */
 .mahjong-table:not(.table-3d-active) .table-dora-tray {
-  translate: var(--devui-dora-x, 0px) var(--devui-dora-y, 0px) !important;
+  position: absolute !important;
+  z-index: 8 !important;
+  left: 50% !important;
+  right: auto !important;
+  top: 50% !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  translate:
+    calc(-50% + var(--devui-center-x, 0px) + var(--devui-dora-x, 0px))
+    calc(-50% + var(--devui-center-y, 0px) + var(--devui-dora-y, -64px)) !important;
+  scale: var(--devui-dora-scale, .82);
+  transform-origin: center;
 }
+
 .mahjong-table:not(.table-3d-active) .call-bubble {
   translate: var(--devui-call-bubble-x, 0px) var(--devui-call-bubble-y, 0px) !important;
+  scale: var(--devui-call-bubble-scale, 1);
 }
 .table-panel:has(.mahjong-table:not(.table-3d-active)) .action-dock {
   translate: var(--devui-action-dock-x, 0px) var(--devui-action-dock-y, 0px) !important;
+  scale: var(--devui-action-dock-scale, 1);
 }
 
 /* Dev panel organization. */
@@ -193,17 +260,9 @@ body {
   text-transform: none;
 }
 .dev-tuning-group-body { padding: 2px 9px 10px; }
-.dev-tuning-group-body > .dev-tuning-section:first-child {
-  margin-top: 4px;
-  border-top: 0;
-}
-
+.dev-tuning-group-body > .dev-tuning-section:first-child { margin-top: 4px; border-top: 0; }
 .dev-ui-layout-section > h3 { margin-bottom: 4px; }
-.dev-ui-layout-note {
-  margin: 0 0 8px;
-  color: #82998d;
-  font-size: 10px;
-}
+.dev-ui-layout-note { margin: 0 0 8px; color: #82998d; font-size: 10px; }
 .dev-ui-subgroup {
   margin: 6px 0;
   border: 1px solid rgba(255,255,255,.07);
@@ -221,13 +280,13 @@ body {
 .dev-ui-subgroup[open] > summary { color: #e1cb8c; }
 .dev-ui-subgroup-body { padding: 2px 8px 8px; }
 .dev-ui-layout-section .dev-tuning-control {
-  grid-template-columns: 118px minmax(0, 1fr) 72px 30px;
+  grid-template-columns: 124px minmax(0, 1fr) 72px 30px;
 }
 .dev-ui-layout-section .dev-tuning-actions { margin-top: 8px; }
 
 @media (max-width: 720px) {
   .dev-tuning-panel { width: calc(100vw - 16px); }
   .dev-ui-layout-section .dev-tuning-control {
-    grid-template-columns: 96px minmax(0, 1fr) 62px 30px;
+    grid-template-columns: 100px minmax(0, 1fr) 62px 30px;
   }
 }
