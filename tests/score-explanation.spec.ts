@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-const modulePath = '../client/src/score-explanation';
-
-type ScoreModule = typeof import('../client/src/score-explanation');
-
-async function loadScoreModule(): Promise<ScoreModule | null> {
-  return import(modulePath).catch(() => null) as Promise<ScoreModule | null>;
-}
+import { buildScoreExplanation, scoreExplanationMarkup } from '../client/src/score-explanation';
 
 function ordinaryScore() {
   return {
@@ -42,12 +35,8 @@ function ordinaryScore() {
   };
 }
 
-test('ordinary hand explains yaku, Dora, Fu rounding, limit and final payment separately', async () => {
-  const module = await loadScoreModule();
-  expect(module, 'score-explanation module should exist').not.toBeNull();
-  if (!module) return;
-
-  const explanation = module.buildScoreExplanation(ordinaryScore());
+test('ordinary hand explains yaku, Dora, Fu rounding, limit and final payment separately', () => {
+  const explanation = buildScoreExplanation(ordinaryScore());
 
   expect(explanation.yaku).toEqual([
     { label: 'Riichi', value: '1 han' },
@@ -82,11 +71,7 @@ test('ordinary hand explains yaku, Dora, Fu rounding, limit and final payment se
   ]);
 });
 
-test('fixed Fu hands explain Chiitoitsu and Pinfu Tsumo without fake rounding', async () => {
-  const module = await loadScoreModule();
-  expect(module).not.toBeNull();
-  if (!module) return;
-
+test('fixed Fu hands explain Chiitoitsu and Pinfu Tsumo without fake rounding', () => {
   const chiitoitsu = ordinaryScore();
   chiitoitsu.han = 2;
   chiitoitsu.yakuHan = 2;
@@ -113,23 +98,19 @@ test('fixed Fu hands explain Chiitoitsu and Pinfu Tsumo without fake rounding', 
   };
   pinfu.base = { basePoints: 160, limit: 'none' };
 
-  expect(module.buildScoreExplanation(chiitoitsu).fu).toMatchObject({
+  expect(buildScoreExplanation(chiitoitsu).fu).toMatchObject({
     fixed: 'Chiitoitsu is fixed at 25 fu',
     raw: null,
     rounded: null,
   });
-  expect(module.buildScoreExplanation(pinfu).fu).toMatchObject({
+  expect(buildScoreExplanation(pinfu).fu).toMatchObject({
     fixed: 'Pinfu Tsumo is fixed at 20 fu',
     raw: null,
     rounded: null,
   });
 });
 
-test('Yakuman explanation omits Fu and ordinary bonus math', async () => {
-  const module = await loadScoreModule();
-  expect(module).not.toBeNull();
-  if (!module) return;
-
+test('Yakuman explanation omits Fu and ordinary bonus math', () => {
   const score = {
     ...ordinaryScore(),
     scoringYaku: [{ name: 'Tsuuiisou', han: 0, yakuman: 1 }],
@@ -149,18 +130,14 @@ test('Yakuman explanation omits Fu and ordinary bonus math', async () => {
     },
   };
 
-  const explanation = module.buildScoreExplanation(score);
+  const explanation = buildScoreExplanation(score);
   expect(explanation.yaku).toEqual([{ label: 'Tsuuiisou', value: '1× Yakuman' }]);
   expect(explanation.fu).toBeNull();
   expect(explanation.bonus).toEqual([]);
   expect(explanation.base).toMatchObject({ limit: 'Yakuman', reason: 'True Yakuman hand' });
 });
 
-test('details markup stays collapsible and includes payment rows for Tsumo variants', async () => {
-  const module = await loadScoreModule();
-  expect(module).not.toBeNull();
-  if (!module) return;
-
+test('details markup stays collapsible and includes payment rows for Tsumo variants', () => {
   const score = ordinaryScore();
   score.payments = {
     type: 'tsumo-nondealer',
@@ -171,7 +148,7 @@ test('details markup stays collapsible and includes payment rows for Tsumo varia
     winnerGain: 9000,
   };
 
-  const html = module.scoreExplanationMarkup(score);
+  const html = scoreExplanationMarkup(score);
   expect(html).toContain('<details class="scoring-details">');
   expect(html).toContain('Scoring details');
   expect(html).toContain('Dealer pays');
