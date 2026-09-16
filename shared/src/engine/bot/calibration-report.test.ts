@@ -42,7 +42,7 @@ function profile(samples: number, placement: number, points: number): ProfileSum
 }
 
 describe('bot calibration report', () => {
-  it('prints match totals and one comparable row per difficulty profile', () => {
+  it('prints match totals and normalized per-round rates so unequal sample counts stay comparable', () => {
     expect(api.formatBotCalibrationReport, 'report formatter should be exported').toBeTypeOf('function');
     if (!api.formatBotCalibrationReport) return;
 
@@ -68,9 +68,14 @@ describe('bot calibration report', () => {
     expect(report).toContain('Expert');
     expect(report).toContain('23,500');
     expect(report).toContain('26,500');
-    expect(report).toContain('Wins');
-    expect(report).toContain('Deal-ins');
-    expect(report).toContain('Riichi');
-    expect(report).toContain('Calls');
+    expect(report).toContain('Win%');
+    expect(report).toContain('Deal-in%');
+    expect(report).toContain('Riichi%');
+    expect(report).toContain('Calls/rnd');
+    // 8 wins / 32 player-rounds = 25%; 4 deal-ins = 12.5%; 12 Riichi = 37.5%; 16 calls = 0.50/round.
+    expect(report).toContain('25.0%');
+    expect(report).toContain('12.5%');
+    expect(report).toContain('37.5%');
+    expect(report).toContain('0.50');
   });
 });
