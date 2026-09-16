@@ -31,7 +31,9 @@ export function parseBenchmarkArgs(args) {
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === '--help' || argument === '-h') {
+    if (argument === '--') {
+      continue;
+    } else if (argument === '--help' || argument === '-h') {
       config.help = true;
     } else if (argument === '--seeds') {
       config.seeds = listArgument(args[++index], '--seeds');
