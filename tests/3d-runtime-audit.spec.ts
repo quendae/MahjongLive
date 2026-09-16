@@ -89,7 +89,23 @@ async function waitForAudit(
     await page.waitForTimeout(20);
     latest = await audit(page);
   }
-  expect(predicate(latest), '3D audit condition should become true before timeout').toBe(true);
+  if (!predicate(latest)) {
+    const movingVisuals = latest.actors
+      .filter((actor) => {
+        const offset = actor.visual.worldOffset;
+        return Math.abs(offset.x) > .001 || Math.abs(offset.y) > .001 || Math.abs(offset.z) > .001;
+      })
+      .map((actor) => ({ key: actor.key, zone: actor.zone, offset: actor.visual.worldOffset }));
+    expect(
+      predicate(latest),
+      `3D audit condition should become true before timeout; latest=${JSON.stringify({
+        hoveredKey: latest.hoveredKey,
+        pressedKey: latest.pressedKey,
+        shadowRefreshSerial: latest.shadowRefreshSerial,
+        movingVisuals,
+      })}`,
+    ).toBe(true);
+  }
   return latest;
 }
 
