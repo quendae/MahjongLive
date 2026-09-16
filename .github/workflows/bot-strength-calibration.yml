@@ -4,10 +4,8 @@ on:
   push:
     branches: [feature/bot-strength-calibration]
     paths:
-      - 'shared/src/engine/bot/**'
-      - 'scripts/bot-benchmark.mjs'
-      - 'package.json'
-      - '.github/workflows/bot-strength-calibration.yml'
+      - 'shared/src/engine/bot/difficulty.ts'
+      - 'shared/src/engine/bot/bot.ts'
   workflow_dispatch:
 
 jobs:
