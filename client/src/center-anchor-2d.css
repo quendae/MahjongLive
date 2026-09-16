@@ -7,6 +7,7 @@
   --table2d-tile-w: var(--devui-tile-w-desktop, 43px);
   --table2d-tile-h: var(--devui-tile-h-desktop, 58px);
   --table2d-tile-gap: var(--devui-tile-gap-desktop, 3px);
+  --table2d-center-river-gap: 10px;
 }
 
 /* One physical tile baseline in 2D: hand, concealed racks, rivers, melds and Dora all use it. */
@@ -174,6 +175,7 @@
     --table2d-tile-w: var(--devui-tile-w-tablet, 35px);
     --table2d-tile-h: var(--devui-tile-h-tablet, 47px);
     --table2d-tile-gap: var(--devui-tile-gap-tablet, 3px);
+    --table2d-center-river-gap: 8px;
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 238px !important;
@@ -186,6 +188,7 @@
     --table2d-tile-w: var(--devui-tile-w-phone, 28px);
     --table2d-tile-h: var(--devui-tile-h-phone, 38px);
     --table2d-tile-gap: var(--devui-tile-gap-phone, 2px);
+    --table2d-center-river-gap: 6px;
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 188px !important;
@@ -212,6 +215,7 @@
     --table2d-tile-w: var(--devui-tile-w-landscape, 25px);
     --table2d-tile-h: var(--devui-tile-h-landscape, 34px);
     --table2d-tile-gap: var(--devui-tile-gap-landscape, 2px);
+    --table2d-center-river-gap: 5px;
   }
   .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
     width: 168px !important;
