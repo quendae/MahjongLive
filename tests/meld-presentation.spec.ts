@@ -23,6 +23,9 @@ function openMeld(
   } as const;
 }
 
+// Meld DOM order follows the physical 3D anchor: index 0 is the owner's right-hand end and the
+// final index is the owner's left-hand end. 2D reverses the flex row so the same DOM convention is
+// visible from every seat perspective.
 test('called tile occupies the source-facing slot without changing its physical id', () => {
   const owner = 1 as const;
 
@@ -30,9 +33,9 @@ test('called tile occupies the source-facing slot without changing its physical 
   const across = openMeld([10, 20, 30], owner, 3, 30);
   const fromRight = openMeld([10, 20, 30], owner, 2, 30);
 
-  expect(orderMeldTilesForPresentation(fromLeft.meld, owner).map((entry) => entry.id)).toEqual([30, 10, 20]);
+  expect(orderMeldTilesForPresentation(fromLeft.meld, owner).map((entry) => entry.id)).toEqual([10, 20, 30]);
   expect(orderMeldTilesForPresentation(across.meld, owner).map((entry) => entry.id)).toEqual([10, 30, 20]);
-  expect(orderMeldTilesForPresentation(fromRight.meld, owner).map((entry) => entry.id)).toEqual([10, 20, 30]);
+  expect(orderMeldTilesForPresentation(fromRight.meld, owner).map((entry) => entry.id)).toEqual([30, 10, 20]);
 
   for (const fixture of [fromLeft, across, fromRight]) {
     const ordered = orderMeldTilesForPresentation(fixture.meld, owner);
@@ -45,9 +48,9 @@ test('called tile occupies the source-facing slot without changing its physical 
 test('daiminkan uses the same left/across/right convention and preserves all four physical tiles', () => {
   const owner = 2 as const;
   const fixtures = [
-    { source: 1 as const, expected: [99, 11, 12, 13] }, // left
-    { source: 0 as const, expected: [11, 99, 12, 13] }, // across
-    { source: 3 as const, expected: [11, 12, 13, 99] }, // right
+    { source: 1 as const, expected: [11, 12, 13, 99] }, // left source -> owner's left end
+    { source: 0 as const, expected: [11, 99, 12, 13] }, // across -> inner slot
+    { source: 3 as const, expected: [99, 11, 12, 13] }, // right source -> owner's right end
   ];
 
   for (const fixture of fixtures) {
