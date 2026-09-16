@@ -454,6 +454,7 @@ function performDiscard(
     tileId: physicalId,
     tsumogiri: phase.drawnTileId !== null && physicalId === phase.drawnTileId,
     wasLastLiveDraw: phase.isRinshan !== true && phase.wasLastLiveDraw,
+    ...(pendingRiichi ? { riichiDeclaration: true } : {}),
   } as const;
   const updatedPlayer: RoundPlayerState = {
     ...player,

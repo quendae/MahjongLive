@@ -18,6 +18,8 @@ export interface RoundDiscard {
   tsumogiri: boolean;
   /** This discard followed the final normal live-wall draw, so a Ron on it is Houtei. */
   wasLastLiveDraw: boolean;
+  /** This physical discard was used to declare Riichi / Double Riichi. */
+  riichiDeclaration?: boolean;
   /** Set when this discard is consumed by a Chi/Pon/Daiminkan. */
   calledBy?: PlayerIndex;
 }
