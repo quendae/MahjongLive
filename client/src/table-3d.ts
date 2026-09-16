@@ -2323,6 +2323,12 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
   pollGpuTimer(rt);
+  // Hover/lift used to interpolate by a fixed amount per rendered frame. That made the same
+  // interaction much slower on throttled/30 Hz renderers and much faster at 120+ Hz. Preserve the
+  // old ~60 Hz feel with exponential, wall-clock-based damping instead.
+  const frameDeltaMs = rt.lastFrameAt > 0
+    ? Math.max(0, Math.min(250, time - rt.lastFrameAt))
+    : 1000 / 60;
   if (rt.lastFrameAt > 0) rt.frameIntervalTotal += time - rt.lastFrameAt;
   rt.lastFrameAt = time;
 
@@ -2391,11 +2397,15 @@ function frameRuntime(rt: TableRuntime, time: number): void {
       const hoverY = hovered ? (pressed ? .08 : .16) : 0;
       inverseRotation.copy(actor.group.quaternion).invert();
       hoverOffset.set(0, hoverY, 0).applyQuaternion(inverseRotation);
-      actor.visual.position.lerp(hoverOffset, .22);
+      // 67/75 ms time constants reproduce the previous .22/.20 blend at 60 Hz while keeping
+      // lift and settle duration stable across 30, 60, 120 Hz and temporarily throttled RAF.
+      const hoverBlend = 1 - Math.exp(-frameDeltaMs / 67);
+      const tiltBlend = 1 - Math.exp(-frameDeltaMs / 75);
+      actor.visual.position.lerp(hoverOffset, hoverBlend);
       const targetTiltX = hovered ? -.04 : 0;
       const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
-      actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
-      actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
+      actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * tiltBlend;
+      actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * tiltBlend;
       if (!hovered && actor.visual.position.lengthSq() < .000002
         && Math.abs(actor.visual.rotation.x) < .0005 && Math.abs(actor.visual.rotation.z) < .0005) {
         actor.visual.position.set(0, 0, 0);
