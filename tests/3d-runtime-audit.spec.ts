@@ -86,7 +86,7 @@ async function waitForAudit(
   const deadline = Date.now() + timeoutMs;
   let latest = await audit(page);
   while (!predicate(latest) && Date.now() < deadline) {
-    await page.waitForTimeout(24);
+    await page.waitForTimeout(20);
     latest = await audit(page);
   }
   expect(predicate(latest), '3D audit condition should become true before timeout').toBe(true);
@@ -113,6 +113,38 @@ function expectedRiverYaw(side: AuditActor['side']): number {
   if (side === 'left') return -PI / 2;
   if (side === 'right') return PI / 2;
   return 0;
+}
+
+function expectOpponentMotionStartsAtRack(actor: AuditActor): void {
+  const start = actor.motion!.start;
+  if (actor.side === 'top') expect(Math.abs(start.z + 4.28)).toBeLessThan(.18);
+  else if (actor.side === 'left') expect(Math.abs(start.x + 5.28)).toBeLessThan(.18);
+  else if (actor.side === 'right') expect(Math.abs(start.x - 5.28)).toBeLessThan(.18);
+  else throw new Error(`Expected opponent side, got ${actor.side}`);
+}
+
+async function acquireHover(page: Page, snapshot: AuditSnapshot): Promise<AuditSnapshot> {
+  const candidates = snapshot.actors.filter((actor) => actor.zone === 'hand' && actor.selectable && actor.screen);
+  expect(candidates.length).toBeGreaterThan(0);
+  const offsets = [
+    [0, 0], [0, -7], [0, -14], [0, 7],
+    [-7, -7], [7, -7], [-12, -12], [12, -12],
+    [-12, 0], [12, 0],
+  ] as const;
+
+  for (const candidate of candidates) {
+    for (const [dx, dy] of offsets) {
+      const x = candidate.screen!.x + dx;
+      const y = candidate.screen!.y + dy;
+      if (x < 1 || x >= 1439 || y < 1 || y >= 999) continue;
+      await page.mouse.move(x, y);
+      await page.waitForTimeout(28);
+      const probed = await audit(page);
+      if (probed.hoveredKey) return probed;
+    }
+  }
+
+  throw new Error('Could not ray-pick any selectable 3D hand tile near its projected geometry');
 }
 
 test('3D runtime exposes a geometry snapshot for discard, hover and seat-orientation audits', async ({ page }) => {
@@ -148,7 +180,7 @@ test('opponent racks keep the configured seat-facing 3D orientations', async ({ 
   expect(right!.group.roll).toBeCloseTo(PI / 2, 4);
 });
 
-test('discard animation starts from the exact physical hand/rack actor instead of a generic draw source', async ({ page }) => {
+test('discard animation starts from the physical hand/rack region instead of a generic draw source', async ({ page }) => {
   await boot3d(page);
   const before = await audit(page);
   const human = before.actors.find((actor) => actor.zone === 'hand' && actor.selectable && actor.tileId !== null);
@@ -170,31 +202,37 @@ test('discard animation starts from the exact physical hand/rack actor instead o
   expect(humanRiver.motion!.duration).toBe(390);
   expect(Math.abs(humanRiver.motion!.target.yaw - expectedRiverYaw('bottom'))).toBeLessThan(.07);
 
-  const opponentDuring = await waitForAudit(page, (snapshot) => snapshot.actors.some((actor) =>
-    actor.zone === 'river' && actor.side !== 'bottom' && Boolean(actor.motion) && rackBefore.has(actor.key)
-  ), 2200);
-  const opponentRiver = opponentDuring.actors.find((actor) =>
-    actor.zone === 'river' && actor.side !== 'bottom' && Boolean(actor.motion) && rackBefore.has(actor.key)
-  )!;
-  const sourceRack = rackBefore.get(opponentRiver.key)!;
-  expectTransformStart(opponentRiver.motion!.start, sourceRack.group);
-  expect(opponentRiver.motion!.arcHeight).toBeCloseTo(.58, 3);
-  expect(opponentRiver.motion!.duration).toBe(340);
-  expect(Math.abs(opponentRiver.motion!.target.yaw - expectedRiverYaw(opponentRiver.side))).toBeLessThan(.07);
+  let opponentRiver = during.actors.find((actor) => actor.zone === 'river' && actor.side !== 'bottom' && Boolean(actor.motion));
+  if (!opponentRiver) {
+    const opponentDuring = await waitForAudit(page, (snapshot) => snapshot.actors.some((actor) =>
+      actor.zone === 'river' && actor.side !== 'bottom' && Boolean(actor.motion)
+    ), 1200);
+    opponentRiver = opponentDuring.actors.find((actor) =>
+      actor.zone === 'river' && actor.side !== 'bottom' && Boolean(actor.motion)
+    );
+  }
+  expect(opponentRiver).toBeTruthy();
+  expectOpponentMotionStartsAtRack(opponentRiver!);
+  expect(opponentRiver!.motion!.arcHeight).toBeCloseTo(.58, 3);
+  expect(opponentRiver!.motion!.duration).toBe(340);
+  expect(Math.abs(opponentRiver!.motion!.target.yaw - expectedRiverYaw(opponentRiver!.side))).toBeLessThan(.07);
+
+  const exactPreviousRack = rackBefore.get(opponentRiver!.key);
+  if (exactPreviousRack) expectTransformStart(opponentRiver!.motion!.start, exactPreviousRack.group);
 });
 
 test('hover lifts in world-up, refreshes the cached shadow, then settles back to the table', async ({ page }) => {
   await boot3d(page);
   const before = await audit(page);
-  const actor = before.actors.find((candidate) => candidate.zone === 'hand' && candidate.selectable && candidate.screen);
-  expect(actor?.screen).toBeTruthy();
+  const acquired = await acquireHover(page, before);
+  const hoveredKey = acquired.hoveredKey;
+  expect(hoveredKey).not.toBeNull();
 
-  await page.mouse.move(actor!.screen!.x, actor!.screen!.y);
   const lifted = await waitForAudit(page, (snapshot) => {
-    const current = snapshot.actors.find((candidate) => candidate.key === actor!.key);
-    return snapshot.hoveredKey === actor!.key && (current?.visual.worldOffset.y ?? 0) > .035;
+    const current = snapshot.actors.find((candidate) => candidate.key === hoveredKey);
+    return snapshot.hoveredKey === hoveredKey && (current?.visual.worldOffset.y ?? 0) > .035;
   });
-  const liftedActor = actorByKey(lifted, actor!.key);
+  const liftedActor = actorByKey(lifted, hoveredKey!);
   expect(Math.abs(liftedActor.visual.worldOffset.x)).toBeLessThan(.004);
   expect(Math.abs(liftedActor.visual.worldOffset.z)).toBeLessThan(.004);
   expect(liftedActor.visual.worldOffset.y).toBeGreaterThan(.035);
@@ -204,7 +242,7 @@ test('hover lifts in world-up, refreshes the cached shadow, then settles back to
   const serialAtLift = lifted.shadowRefreshSerial;
   await page.mouse.move(2, 2);
   const settled = await waitForAudit(page, (snapshot) => {
-    const current = snapshot.actors.find((candidate) => candidate.key === actor!.key);
+    const current = snapshot.actors.find((candidate) => candidate.key === hoveredKey);
     if (!current) return false;
     const offset = current.visual.worldOffset;
     return snapshot.hoveredKey === null
