@@ -157,6 +157,7 @@ function tileMarkup(
     eligible?: boolean;
     disabled?: boolean;
     called?: boolean;
+    riichiDeclaration?: boolean;
     meldCalled?: boolean;
     calledFrom?: PlayerIndex;
     advised?: boolean;
@@ -176,8 +177,9 @@ function tileMarkup(
   const engineAttr = id >= 0 ? ` data-engine-tile-id="${id}"` : '';
   const actionAttr = options.clickable && id >= 0 ? ` data-tile-id="${id}" role="button" tabindex="0"` : '';
   const calledFromAttr = options.calledFrom !== undefined ? ` data-called-from="${options.calledFrom}"` : '';
+  const riichiDeclarationAttr = options.riichiDeclaration ? ' data-riichi-declaration="true"' : '';
   const title = options.adviceText ? ` title="${options.adviceText}"` : '';
-  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${engineAttr}${actionAttr}${calledFromAttr}${title}>${tileFace(tile)}</div>`;
+  return `<div class="${classes.join(' ')}" aria-label="${tileLabel(tile)}"${engineAttr}${actionAttr}${calledFromAttr}${riichiDeclarationAttr}${title}>${tileFace(tile)}</div>`;
 }
 
 function tileBackMarkup(
@@ -269,6 +271,7 @@ function opponentPanel(player: PlayerIndex): string {
   const discards = state.discards.map((discard) => tileMarkup(discard.tile, {
     compact: true,
     called: discard.calledBy !== undefined,
+    riichiDeclaration: discard.riichiDeclaration === true,
   })).join('');
 
   return `
@@ -354,6 +357,7 @@ function humanZone(): string {
   const discards = state.discards.map((discard) => tileMarkup(discard.tile, {
     compact: true,
     called: discard.calledBy !== undefined,
+    riichiDeclaration: discard.riichiDeclaration === true,
   })).join('');
 
   return `

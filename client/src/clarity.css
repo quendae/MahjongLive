@@ -403,3 +403,17 @@
   transform: translate(var(--dev-dora-label-x, 0px), var(--dev-dora-label-y, 0px)) scale(var(--dev-dora-label-scale, .72));
   transform-origin: top right;
 }
+
+
+/* A Riichi declaration is placed sideways in the river. If that physical discard was called,
+   clarity.ts transfers this class to the next uncalled discard. Scale keeps the rotated long edge
+   inside the existing river track instead of colliding with neighbouring tiles. */
+.mahjong-table:not(.table-3d-active) .discard-river .tile-riichi-discard {
+  z-index: 6;
+  transform: rotate(90deg) scale(.82) !important;
+  transform-origin: center center !important;
+}
+
+.mahjong-table:not(.table-3d-active) .discard-river .tile-riichi-discard.tile-latest-discard {
+  transform: rotate(90deg) scale(.82) translateX(-5px) !important;
+}

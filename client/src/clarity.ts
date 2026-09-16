@@ -203,6 +203,30 @@ function enhanceCenterCounter(table: HTMLElement): void {
   center.appendChild(ring);
 }
 
+function markRiichiDiscards(table: HTMLElement): void {
+  let changed = false;
+  for (const river of table.querySelectorAll<HTMLElement>('.discard-river')) {
+    const tiles = [...river.querySelectorAll<HTMLElement>(':scope > .tile[data-engine-tile-id]')];
+    let declarationSeen = false;
+    let marker: HTMLElement | null = null;
+    for (const tile of tiles) {
+      if (tile.dataset.riichiDeclaration === 'true') declarationSeen = true;
+      if (declarationSeen && !tile.classList.contains('tile-called')) {
+        marker = tile;
+        break;
+      }
+    }
+    for (const tile of tiles) {
+      const wanted = tile === marker;
+      if (tile.classList.contains('tile-riichi-discard') !== wanted) {
+        tile.classList.toggle('tile-riichi-discard', wanted);
+        changed = true;
+      }
+    }
+  }
+  if (changed) window.dispatchEvent(new Event('mahjong-live:riichi-marker'));
+}
+
 type LatestDiscard = {
   player: string;
   label: string;
@@ -317,6 +341,7 @@ function enhanceNow(): void {
   }
   ensureDoraTray(table);
   enhanceCenterCounter(table);
+  markRiichiDiscards(table);
   const latest = markLatestDiscard(table);
   ensureReactionPopup(table, latest);
   decorateTileFaces();
