@@ -13,6 +13,7 @@ on:
       - 'tests/presentation-transitions.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
+      - 'tests/performance-diagnostics.spec.ts'
       - 'tests/claim-choice.spec.ts'
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
@@ -29,6 +30,7 @@ on:
       - 'tests/presentation-transitions.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
+      - 'tests/performance-diagnostics.spec.ts'
       - 'tests/claim-choice.spec.ts'
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
@@ -72,6 +74,8 @@ jobs:
           done
           cat /tmp/mahjong-preview.log
           exit 1
+      - name: Audit performance diagnostics
+        run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
         run: pnpm exec playwright test tests/riichi-discard-presentation.spec.ts --workers=1 --reporter=line
       - name: Audit 3D discard, hover, seats and meld claims

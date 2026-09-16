@@ -318,6 +318,9 @@ type TableRuntime = {
   faceTint: string;
   textureAnisotropy: number;
   shadowRefreshSerial: number;
+  syncActorsMs: number;
+  reconcileMs: number;
+  staticBatchMs: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -1469,6 +1472,7 @@ function rackInsertOrigin(spec: TileSpec, target: Transform): Transform {
 }
 
 function syncActors(rt: TableRuntime, table: HTMLElement): void {
+  const syncActorsStarted = performance.now();
   syncFaceMode(rt);
   const draws = remainingDraws();
   const drawJustOccurred = draws < rt.lastRemainingDraws;
@@ -1530,10 +1534,12 @@ function syncActors(rt: TableRuntime, table: HTMLElement): void {
   rt.lastRemainingDraws = draws;
   rt.initialized = true;
   applyBenchmarkVisibility(rt);
+  rt.syncActorsMs = performance.now() - syncActorsStarted;
 }
 
 function syncStaticRiverInstances(rt: TableRuntime): void {
   if (!rt.staticRiverDirty) return;
+  const staticBatchStarted = performance.now();
   rt.staticRiverDirty = false;
   const THREE = rt.THREE;
   const bodyMatrix = new THREE.Matrix4();
@@ -1588,6 +1594,7 @@ function syncStaticRiverInstances(rt: TableRuntime): void {
   rebuildMergedStaticFaceBatch(rt, mergedFaces);
   applyBenchmarkVisibility(rt);
   if (rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
+  rt.staticBatchMs = performance.now() - staticBatchStarted;
 }
 
 const STRESS_TILE_LABELS = [
@@ -1901,6 +1908,9 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
     faceTint: tuning.tiles.faceTint,
     textureAnisotropy: Math.min(tuning.graphics.anisotropy, renderer.capabilities?.getMaxAnisotropy?.() ?? 1),
     shadowRefreshSerial: 0,
+    syncActorsMs: 0,
+    reconcileMs: 0,
+    staticBatchMs: 0,
   };
 
   rebuildFaceAtlas(rt);
@@ -2486,6 +2496,10 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         geometryQuality: rt.geometryQuality,
         pixelRatio: rt.renderer.getPixelRatio(),
         visibility: document.visibilityState,
+        syncActorsMs: rt.syncActorsMs,
+        reconcileMs: rt.reconcileMs,
+        staticBatchMs: rt.staticBatchMs,
+        shadowRefreshSerial: rt.shadowRefreshSerial,
       } }));
     }
     rt.fpsFrames = 0;
@@ -2552,6 +2566,7 @@ function deactivateStage(): void {
 }
 
 async function reconcile(): Promise<void> {
+  const reconcileStarted = performance.now();
   reconcileScheduled = false;
   ensureModeButton();
   updateModeButton();
@@ -2607,6 +2622,7 @@ async function reconcile(): Promise<void> {
   if (tableReplaced) syncWorldUiAnchor(rt);
   syncActors(rt, table);
   updateModeButton();
+  rt.reconcileMs = performance.now() - reconcileStarted;
 }
 
 function scheduleReconcile(): void {
