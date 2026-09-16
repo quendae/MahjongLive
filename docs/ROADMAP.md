@@ -42,7 +42,9 @@ and should be updated as the game grows.
    - 2026-09-16: the 3D animation audit found motion driven by elapsed wall-clock time: discard flights use duration/progress, hover/settle uses exponential damping from frame delta, and halo pulse uses absolute time. No frame-count-dependent interaction animation remains in the renderer loop.
    - Final Windows Firefox and Edge/ANGLE captures at 120 Hz are still required before changing renderer scheduling; Linux/headless CI cannot reproduce the user's D3D11/ANGLE path or monitor refresh behavior.
 4. [x] Improve Riichi-stick and table-state presentation without covering the play field.
-5. [ ] Then return to rule/scoring explanations, bot calibration and replay/history work.
+5. [ ] Continue bot-strength tuning and replay/history work after the completed scoring-explanation and calibration-harness sprints.
+   - 2026-09-16: winning-hand results now expose expandable Yaku/Han, Dora, Fu, limit and payment explanations.
+   - 2026-09-16: deterministic bot calibration now rotates Casual / Standard / Expert / Expert across seats and records placement, points, wins, deal-ins, Riichi, calls and match-length statistics.
 
 ## Rules and scoring
 
@@ -57,7 +59,7 @@ Current product rule decision:
 Next rule work:
 
 - [ ] Continue edge-case audit using deterministic full-match simulation and regression seeds.
-- [ ] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
+- [x] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
 - [ ] Add rule-profile plumbing before introducing optional table/rules variants.
 - [ ] Keep save-state compatibility tests whenever engine state changes.
 
@@ -66,8 +68,9 @@ Next rule work:
 - [x] Casual / Standard / Expert bot profiles.
 - [x] Public-information discard advisor.
 - [x] Autosave/resume and seeded deterministic games.
+- [x] Add deterministic bot calibration statistics with seat rotations and a reproducible `pnpm bot:benchmark` report.
 - [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
-- [ ] Improve bot strength calibration and defense/offense tuning with simulation statistics.
+- [ ] Use calibration statistics to tune bot strength and defense/offense behavior.
 - [ ] Match history and replay viewer/export from deterministic action history.
 - [ ] More accessibility/touch/keyboard QA and UI scaling presets.
 
