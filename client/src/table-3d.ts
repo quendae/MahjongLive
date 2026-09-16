@@ -192,6 +192,7 @@ type TileSpec = {
   advised: boolean;
   drawn: boolean;
   latest: boolean;
+  riichiMarker?: boolean;
   tileId: number | null;
   called?: boolean;
   calledFrom?: number | null;
@@ -647,6 +648,9 @@ function baseTransform(spec: TileSpec): Transform {
       transform.z = -cross;
       transform.yaw = Math.PI / 2;
     }
+    // Riichi uses the standard sideways declaration tile. Keep the rotation exact relative to
+    // the owner's seat; random river yaw is disabled for this marker in humanizeTransform().
+    if (spec.riichiMarker) transform.yaw += Math.PI / 2;
     // The latest discard stays in its row. A conditional halo is enough feedback.
     transform.scale = .88 * tuning.tiles.riverScale;
   } else if (spec.zone === 'rack') {
@@ -723,7 +727,7 @@ function humanizeTransform(spec: TileSpec, input: Transform): Transform {
   let tilt = 0;
   if (spec.zone === 'river') {
     position = tuning.tiles.riverJitter;
-    yaw = radians(tuning.tiles.riverYawJitter);
+    yaw = spec.riichiMarker ? 0 : radians(tuning.tiles.riverYawJitter);
     tilt = radians(tuning.tiles.riverTiltJitter);
   } else if (spec.zone === 'meld') {
     position = .008;
@@ -1349,6 +1353,7 @@ function gatherSpecs(table: HTMLElement): TileSpec[] {
         advised: false,
         drawn: false,
         latest: element.classList.contains('tile-latest-discard'),
+        riichiMarker: element.classList.contains('tile-riichi-discard'),
         tileId,
         element,
       });
@@ -2708,6 +2713,7 @@ function scheduleAlign(): void {
 }
 window.addEventListener('scroll', scheduleAlign, { passive: true });
 window.addEventListener('mahjong-live:tile-face-mode', scheduleReconcile);
+window.addEventListener('mahjong-live:riichi-marker', scheduleReconcile);
 window.addEventListener('mahjong-live:dev-tuning', (event) => {
   const detail = (event as CustomEvent<DevTuning>).detail;
   devTuningCache = detail && typeof detail === 'object' ? detail : null;
