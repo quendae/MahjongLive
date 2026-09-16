@@ -39,6 +39,14 @@ export function describeClaimAction(
   tileLabel: TileLabel,
 ): string {
   const handTiles = actionTiles(action, hand);
+
+  if (action.type === 'shouminkan') {
+    const tile = handTiles[0];
+    return tile
+      ? `${tileLabel(tile)} · meld ${action.meldIndex + 1}`
+      : `meld ${action.meldIndex + 1}`;
+  }
+
   if (action.type !== 'chi' || !calledTile) {
     return handTiles.map(tileLabel).join(' · ');
   }
