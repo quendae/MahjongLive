@@ -133,10 +133,57 @@ function seatSide(zone: Element): 'bottom' | 'top' | 'left' | 'right' {
   return 'bottom';
 }
 
+function counterValue(element: Element | undefined): number {
+  const match = /\d+/.exec(element?.textContent ?? '');
+  return match ? Number(match[0]) : 0;
+}
+
+function ensureTableStatePanel(table: HTMLElement, center: HTMLElement): void {
+  const meta = center.querySelector<HTMLElement>('.center-meta');
+  if (!meta) return;
+  meta.classList.add('clarity-source-hidden');
+
+  const values = [...meta.querySelectorAll<HTMLElement>(':scope > span')];
+  const honba = counterValue(values[0]);
+  const riichiSticks = counterValue(values[1]);
+  const draws = counterValue(values[2]);
+  const dealerZone = [...table.querySelectorAll<HTMLElement>('.player-zone')]
+    .find((zone) => Boolean(zone.querySelector('.dealer-tag')));
+  const dealer = dealerZone?.querySelector('.player-name')?.textContent?.trim() || '—';
+  const round = center.querySelector('.round-title')?.textContent?.trim() || '';
+  const signature = `${round}|${dealer}|${honba}|${riichiSticks}|${draws}`;
+  let panel = center.querySelector<HTMLElement>('.table-state-panel');
+  if (panel?.dataset.signature === signature) return;
+  panel?.remove();
+
+  panel = document.createElement('div');
+  panel.className = 'table-state-panel';
+  panel.dataset.signature = signature;
+  panel.dataset.honba = String(honba);
+  panel.dataset.riichiSticks = String(riichiSticks);
+  panel.dataset.draws = String(draws);
+  panel.innerHTML = `
+    <div class="table-state-dealer"><span>Dealer</span><strong>${dealer}</strong></div>
+    <div class="table-state-item table-state-honba" title="Honba counter">
+      <i class="counter-stick honba-stick" aria-hidden="true"></i><strong>${honba}</strong><small>Honba</small>
+    </div>
+    <div class="table-state-item table-state-riichi" title="Riichi sticks in the pot">
+      <i class="riichi-stick" aria-hidden="true"></i><strong>${riichiSticks}</strong><small>Riichi pot</small>
+    </div>
+    <div class="table-state-item table-state-draws" title="Live-wall draws remaining">
+      <i class="draws-mark" aria-hidden="true">牌</i><strong>${draws}</strong><small>Draws</small>
+    </div>
+  `;
+  const dora = center.querySelector('.dora-row');
+  if (dora) center.insertBefore(panel, dora);
+  else center.appendChild(panel);
+}
+
 function enhanceCenterCounter(table: HTMLElement): void {
   const center = table.querySelector<HTMLElement>('.table-center');
   if (!center) return;
   center.classList.add('classic-table-counter');
+  ensureTableStatePanel(table, center);
   if (center.querySelector('.counter-score-ring')) return;
 
   const ring = document.createElement('div');
@@ -147,9 +194,10 @@ function enhanceCenterCounter(table: HTMLElement): void {
     const points = zone.querySelector('.player-points')?.textContent?.trim() ?? '';
     const wind = zone.querySelector('.seat-wind')?.textContent?.trim() ?? '';
     if (!name || !points) continue;
+    const riichi = Boolean(zone.querySelector('.riichi-tag'));
     const score = document.createElement('div');
-    score.className = `counter-score counter-score-${side}`;
-    score.innerHTML = `<b>${wind}</b><span>${name}</span><strong>${points}</strong>`;
+    score.className = `counter-score counter-score-${side}${riichi ? ' is-riichi' : ''}`;
+    score.innerHTML = `<b>${wind}</b><span>${name}</span><strong>${points}</strong>${riichi ? '<i class="counter-riichi-stick" aria-label="Riichi declared"></i>' : ''}`;
     ring.appendChild(score);
   }
   center.appendChild(ring);
