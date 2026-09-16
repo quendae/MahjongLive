@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { formatBotCalibrationReport, runBotCalibration } from './calibration';
 import type { BotSeatProfiles } from './calibration';
 
-const enabled = process.env.BOT_BENCHMARK_RUN === '1';
+type BenchmarkRuntime = {
+  process?: {
+    env?: Record<string, string | undefined>;
+  };
+};
+
+const env = (globalThis as unknown as BenchmarkRuntime).process?.env ?? {};
+const enabled = env.BOT_BENCHMARK_RUN === '1';
 const benchmarkIt = enabled ? it : it.skip;
 const lineup = ['casual', 'standard', 'expert', 'expert'] as const satisfies BotSeatProfiles;
 
@@ -22,10 +29,10 @@ function positiveInteger(value: string | undefined, fallback: number): number {
 
 describe('bot calibration benchmark', () => {
   benchmarkIt('runs deterministic full-match profile calibration and prints the report', () => {
-    const seeds = parseNumberList(process.env.BOT_BENCHMARK_SEEDS, [20260916, 20260917]);
-    const rotations = parseNumberList(process.env.BOT_BENCHMARK_ROTATIONS, [0, 1, 2, 3]);
-    const maxRounds = positiveInteger(process.env.BOT_BENCHMARK_MAX_ROUNDS, 64);
-    const maxActionsPerRound = positiveInteger(process.env.BOT_BENCHMARK_MAX_ACTIONS, 2048);
+    const seeds = parseNumberList(env.BOT_BENCHMARK_SEEDS, [20260916, 20260917]);
+    const rotations = parseNumberList(env.BOT_BENCHMARK_ROTATIONS, [0, 1, 2, 3]);
+    const maxRounds = positiveInteger(env.BOT_BENCHMARK_MAX_ROUNDS, 64);
+    const maxActionsPerRound = positiveInteger(env.BOT_BENCHMARK_MAX_ACTIONS, 2048);
 
     const result = runBotCalibration({
       seeds,
