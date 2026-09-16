@@ -39,10 +39,21 @@ async function boot(page: Page, threeD: boolean): Promise<void> {
 
 async function installSyntheticRiichiMarker(page: Page): Promise<{ declarationId: number; fallbackId: number }> {
   return page.evaluate(() => {
-    const rivers = [...document.querySelectorAll<HTMLElement>('.discard-river')];
-    const river = rivers.find((candidate) => candidate.querySelectorAll<HTMLElement>('.tile[data-engine-tile-id]').length >= 2);
-    if (!river) throw new Error('Need a river with at least two physical discards');
-    const tiles = [...river.querySelectorAll<HTMLElement>('.tile[data-engine-tile-id]')];
+    const river = document.querySelector<HTMLElement>('.player-bottom .discard-river')
+      ?? document.querySelector<HTMLElement>('.discard-river');
+    if (!river) throw new Error('Missing discard river');
+
+    let tiles = [...river.querySelectorAll<HTMLElement>('.tile[data-engine-tile-id]')];
+    while (tiles.length < 2) {
+      const tile = document.createElement('div');
+      tile.className = 'tile tile-compact tile-man';
+      tile.setAttribute('aria-label', tiles.length === 0 ? '3m' : '4m');
+      tile.dataset.engineTileId = String(990001 + tiles.length);
+      tile.innerHTML = `<span class="tile-rank">${tiles.length === 0 ? '3' : '4'}</span><span class="tile-suit">萬</span>`;
+      river.appendChild(tile);
+      tiles = [...river.querySelectorAll<HTMLElement>('.tile[data-engine-tile-id]')];
+    }
+
     const declaration = tiles[0];
     const fallback = tiles[1];
     const declarationId = Number(declaration.dataset.engineTileId);
