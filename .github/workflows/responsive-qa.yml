@@ -17,6 +17,7 @@ on:
       - 'tests/claim-choice.spec.ts'
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
+      - 'tests/score-explanation.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
@@ -34,6 +35,7 @@ on:
       - 'tests/claim-choice.spec.ts'
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
+      - 'tests/score-explanation.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
@@ -74,6 +76,8 @@ jobs:
           done
           cat /tmp/mahjong-preview.log
           exit 1
+      - name: Audit scoring explanation
+        run: pnpm exec playwright test tests/score-explanation.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
         run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
