@@ -3,6 +3,7 @@ import './2d-mobile-final.css';
 
 const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
 const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v2';
+const MELD_ANCHOR_MIGRATION_KEY = 'mahjong-live:center-anchor-meld-offsets:v1';
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
@@ -34,7 +35,28 @@ function migrateUnifiedTileBaseline(): void {
   try { localStorage.setItem(UNIFIED_BASELINE_MIGRATION_KEY, '1'); } catch {}
 }
 
+/* Meld rows were moved from the old panel-relative layout to canonical seat corners. Existing users
+   can still have large Dev X/Y offsets saved from the former geometry, which repositions an otherwise
+   correct bottom-right meld row back over the hand panel. Reset those obsolete offsets exactly once;
+   after this migration, any new Dev tuning remains user-controlled and is not touched again. */
+function migrateMeldAnchorOffsets(): void {
+  if (localStorage.getItem(MELD_ANCHOR_MIGRATION_KEY) === '1') return;
+  let raw: any = null;
+  try { raw = JSON.parse(localStorage.getItem(DEV_UI_KEY) ?? 'null'); } catch { raw = null; }
+  if (raw && typeof raw === 'object') {
+    raw.offsets = raw.offsets && typeof raw.offsets === 'object' ? raw.offsets : {};
+    for (const id of ['topMeld', 'leftMeld', 'rightMeld', 'bottomMeld']) raw.offsets[id] = { x: 0, y: 0 };
+    const serialized = JSON.stringify(raw);
+    try {
+      localStorage.setItem(DEV_UI_KEY, serialized);
+      window.dispatchEvent(new StorageEvent('storage', { key: DEV_UI_KEY, newValue: serialized }));
+    } catch {}
+  }
+  try { localStorage.setItem(MELD_ANCHOR_MIGRATION_KEY, '1'); } catch {}
+}
+
 migrateUnifiedTileBaseline();
+migrateMeldAnchorOffsets();
 
 let scheduled = false;
 let observedCenter: HTMLElement | null = null;
@@ -75,6 +97,12 @@ function relativeCenterRect(table: HTMLElement, center: HTMLElement): {
   };
 }
 
+function centerRiverGap(table: HTMLElement): number {
+  const raw = getComputedStyle(table).getPropertyValue('--table2d-center-river-gap');
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? Math.max(0, value) : 8;
+}
+
 function important(element: HTMLElement, property: string, value: string): void {
   element.style.setProperty(property, value, 'important');
 }
@@ -93,8 +121,10 @@ function positionRiver(
   }
 
   const c = relativeCenterRect(table, center);
+  const clearance = centerRiverGap(table);
   // offsetWidth/offsetHeight deliberately ignore transforms. For the side rivers, a 90° rotation
-  // swaps their visual dimensions; the formulas below solve from the requested visual corner.
+  // swaps their visual dimensions; the formulas below solve from the requested visual corner and
+  // then leave a small physical gap so tile depth/shadows never disappear under the center counter.
   const width = river.offsetWidth;
   const height = river.offsetHeight;
   if (width <= 0 || height <= 0) {
@@ -107,21 +137,21 @@ function positionRiver(
   let rotation = 0;
 
   if (side === 'top') {
-    // Horizontal rivers start at the center's left edge and extend outward from its top edge.
+    // Horizontal rivers start at the center's left edge and extend outward above its top edge.
     left = c.left;
-    top = c.top - height;
+    top = c.top - height - clearance;
     rotation = 180;
   } else if (side === 'bottom') {
     left = c.left;
-    top = c.bottom;
+    top = c.bottom + clearance;
   } else if (side === 'left') {
-    // After +90° rotation: visual right = c.left and visual top = c.top.
-    left = c.left - (width + height) / 2;
+    // After +90° rotation: visual right sits clearance pixels left of c.left; visual top = c.top.
+    left = c.left - (width + height) / 2 - clearance;
     top = c.top + (width - height) / 2;
     rotation = 90;
   } else {
-    // After -90° rotation: visual left = c.right and visual top = c.top.
-    left = c.right + (height - width) / 2;
+    // After -90° rotation: visual left sits clearance pixels right of c.right; visual top = c.top.
+    left = c.right + (height - width) / 2 + clearance;
     top = c.top + (width - height) / 2;
     rotation = -90;
   }
