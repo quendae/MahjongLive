@@ -69,7 +69,7 @@ function stateFor(tiles: readonly Tile[], drawnTileId: number): RoundState {
 }
 
 describe('Riichi declaration discard marker', () => {
-  it('persists the declaration fact on the physical discard before Riichi resolution', () => {
+  it('persists the Double Riichi declaration fact on the physical discard before resolution', () => {
     const ready = riichiReady(10);
     const result = applyAction(stateFor(ready.tiles, ready.extra.id!), {
       type: 'riichi-discard',
@@ -79,6 +79,7 @@ describe('Riichi declaration discard marker', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok || result.state.phase.kind !== 'reactions') return;
+    expect(result.state.phase.pendingRiichi?.doubleRiichi).toBe(true);
     expect(result.state.players[0].discards.at(-1)).toMatchObject({
       tileId: ready.extra.id,
       riichiDeclaration: true,
@@ -87,6 +88,24 @@ describe('Riichi declaration discard marker', () => {
       type: 'TileDiscarded',
       discard: expect.objectContaining({ riichiDeclaration: true }),
     }));
+  });
+
+  it('marks the physical declaration discard for ordinary Riichi too', () => {
+    const ready = riichiReady(60);
+    const base = stateFor(ready.tiles, ready.extra.id!);
+    const result = applyAction({ ...base, callsMade: 1 }, {
+      type: 'riichi-discard',
+      player: 0,
+      tileId: ready.extra.id!,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.state.phase.kind !== 'reactions') return;
+    expect(result.state.phase.pendingRiichi?.doubleRiichi).toBe(false);
+    expect(result.state.players[0].discards.at(-1)).toMatchObject({
+      tileId: ready.extra.id,
+      riichiDeclaration: true,
+    });
   });
 
   it('does not mark an ordinary discard as a Riichi declaration', () => {
