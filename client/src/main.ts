@@ -38,6 +38,7 @@ import {
 } from './preferences';
 import type { PresentationSpeed } from './preferences';
 import { presentationCaption } from './presentation';
+import { buildClaimChoices, describeClaimAction } from './claim-choice';
 import { tileAssetUrlForLabel } from './table-3d-faces';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
@@ -640,17 +641,23 @@ function resultOverlay(): string {
   return '';
 }
 
+function activeClaimTile(): Tile | undefined {
+  if (!current) return undefined;
+  const round = current.state.match.round;
+  if (round.phase.kind !== 'reactions') return undefined;
+  return round.players[round.phase.discarder].discards[round.phase.discardIndex]?.tile;
+}
+
 function actionDescription(action: RoundAction): string {
   if (!current) return action.type;
   const hand = current.state.match.round.players[current.state.humanSeat].concealed;
   const byId = (id: number) => hand.find((tile) => tile.id === id);
-  const names = (ids: readonly number[]) => ids.map(byId).filter((tile): tile is Tile => Boolean(tile)).map(tileLabel).join(' · ');
   switch (action.type) {
     case 'chi':
     case 'pon':
     case 'daiminkan':
     case 'ankan':
-      return names(action.tileIds);
+      return describeClaimAction(action, hand, activeClaimTile(), tileLabel);
     case 'shouminkan': {
       const tile = byId(action.tileId);
       return tile ? `${tileLabel(tile)} · meld ${action.meldIndex + 1}` : `meld ${action.meldIndex + 1}`;
@@ -956,14 +963,11 @@ function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan')
     for (const option of legal.options) actions.push({ type: 'shouminkan', player: human, meldIndex: option.meldIndex, tileId: option.tileId });
   }
 
-  // Tile IDs can create several mechanically identical Pon/Kan options. Collapse choices that
-  // look identical to the player, but preserve meaningful alternatives (for example red-five use).
-  const uniqueByDescription = new Map<string, RoundAction>();
-  for (const action of actions) {
-    const description = actionDescription(action);
-    if (!uniqueByDescription.has(description)) uniqueByDescription.set(description, action);
-  }
-  const uniqueActions = [...uniqueByDescription.values()];
+  // Physical tile IDs can produce duplicate-looking claim options. Normalize them by the same
+  // presentation model used by the popup, while preserving red-five and distinct Chi sequences.
+  const hand = current.state.match.round.players[human].concealed;
+  const uniqueActions = buildClaimChoices(actions, hand, activeClaimTile(), tileLabel)
+    .map((choice) => choice.action);
   if (uniqueActions.length === 1) {
     submitHumanAction(uniqueActions[0]);
     return;
