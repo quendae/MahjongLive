@@ -12,6 +12,7 @@ and should be updated as the game grows.
 - [x] One face atlas plus merged static face draw path.
 - [x] WebGPU-first renderer on Chromium/Edge; WebGL2 fallback and Firefox path.
 - [x] Built-in FPS/RAF/render telemetry, TXT capture and stress-table benchmark.
+- [x] Add bottleneck diagnostics to performance capture: Loop/RAF ratio, scheduler gap, CPU/GPU frame-budget ratios, `syncActors`, reconcile/static-batch cost and shadow-refresh serial.
 - [x] Adjustable tile-corner geometry quality.
 - [x] Keep renderer/device alive when changing graphics tuning; geometry swaps are in-place.
 - [x] Finish WebGL fallback performance work, especially Edge/ANGLE.
@@ -34,9 +35,13 @@ and should be updated as the game grows.
 ## Active implementation sequence
 
 1. [x] Finish CHI/PON/KAN/RON presentation and called-from meld orientation while preserving the exact physical called tile.
-2. [ ] Audit 3D discard source, hover/lift/settle and seat orientations.
+2. [x] Audit 3D discard source, hover/lift/settle and seat orientations.
 3. [ ] Re-run 120 Hz / RAF performance work on Firefox and Edge/ANGLE with long discard rivers.
-4. [ ] Improve Riichi-stick and table-state presentation without covering the play field.
+   - 2026-09-16: automated 24-discards-per-seat / 96-tile stress telemetry now verifies static batching and records independent Three-loop Hz versus browser RAF Hz.
+   - 2026-09-16: Dev/TXT capture now classifies likely animation-loop gap, browser RAF limit, GPU-bound, CPU-submit-bound or available headroom while retaining all raw timings.
+   - 2026-09-16: the 3D animation audit found motion driven by elapsed wall-clock time: discard flights use duration/progress, hover/settle uses exponential damping from frame delta, and halo pulse uses absolute time. No frame-count-dependent interaction animation remains in the renderer loop.
+   - Final Windows Firefox and Edge/ANGLE captures at 120 Hz are still required before changing renderer scheduling; Linux/headless CI cannot reproduce the user's D3D11/ANGLE path or monitor refresh behavior.
+4. [x] Improve Riichi-stick and table-state presentation without covering the play field.
 5. [ ] Then return to rule/scoring explanations, bot calibration and replay/history work.
 
 ## Rules and scoring
@@ -74,7 +79,7 @@ Next rule work:
 - [x] Give 2D seat-oriented concealed racks, rivers around the center, source-aware tsumogiri/tedashi discard motion, clearer player badges and seat-oriented meld groups.
 - [x] Refresh cached 3D shadows during hover-lift/settle instead of leaving the contact shadow at the tile's resting position.
 - [x] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
-- [ ] Add clearer Riichi-stick/table-state presentation without covering the play field.
+- [x] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
 - [ ] Keep optional sound cues synchronized with authoritative presentation frames.
 - [ ] Add quality presets (`Performance`, `Balanced`, `High`) on top of Dev-level individual sliders.
