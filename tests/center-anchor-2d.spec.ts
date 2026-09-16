@@ -53,7 +53,7 @@ function closeEnough(a: number, b: number, tolerance = 1.25): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
-test('2D center is square, rivers touch matching corners, and all table tiles share one size', async ({ page }) => {
+test('2D center is square, rivers keep matching-corner clearance, and all table tiles share one size', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await boot2d(page);
   await populateGeometryTargets(page);
@@ -70,7 +70,11 @@ test('2D center is square, rivers touch matching corners, and all table tiles sh
       if (!element) throw new Error(`Missing ${selector}`);
       return { width: element.offsetWidth, height: element.offsetHeight };
     };
+    const table = document.querySelector<HTMLElement>('.mahjong-table');
+    if (!table) throw new Error('Missing table');
+    const expectedGap = Number.parseFloat(getComputedStyle(table).getPropertyValue('--table2d-center-river-gap'));
     return {
+      expectedGap,
       center: rect('.table-center'),
       top: rect('.player-top .discard-river'),
       right: rect('.player-right .discard-river'),
@@ -86,11 +90,12 @@ test('2D center is square, rivers touch matching corners, and all table tiles sh
     };
   });
 
+  expect(geometry.expectedGap).toBeGreaterThan(0);
   expect(closeEnough(geometry.center.width, geometry.center.height, 1.5), `${geometry.center.width}x${geometry.center.height}`).toBe(true);
-  expect(closeEnough(geometry.top.bottom, geometry.center.top), `top ${geometry.top.bottom} vs ${geometry.center.top}`).toBe(true);
-  expect(closeEnough(geometry.bottom.top, geometry.center.bottom), `bottom ${geometry.bottom.top} vs ${geometry.center.bottom}`).toBe(true);
-  expect(closeEnough(geometry.left.right, geometry.center.left), `left ${geometry.left.right} vs ${geometry.center.left}`).toBe(true);
-  expect(closeEnough(geometry.right.left, geometry.center.right), `right ${geometry.right.left} vs ${geometry.center.right}`).toBe(true);
+  expect(closeEnough(geometry.center.top - geometry.top.bottom, geometry.expectedGap), `top gap`).toBe(true);
+  expect(closeEnough(geometry.bottom.top - geometry.center.bottom, geometry.expectedGap), `bottom gap`).toBe(true);
+  expect(closeEnough(geometry.center.left - geometry.left.right, geometry.expectedGap), `left gap`).toBe(true);
+  expect(closeEnough(geometry.right.left - geometry.center.right, geometry.expectedGap), `right gap`).toBe(true);
   expect(closeEnough(geometry.top.left, geometry.center.left), `top start ${geometry.top.left} vs ${geometry.center.left}`).toBe(true);
   expect(closeEnough(geometry.bottom.left, geometry.center.left), `bottom start ${geometry.bottom.left} vs ${geometry.center.left}`).toBe(true);
   expect(closeEnough(geometry.left.top, geometry.center.top), `left start ${geometry.left.top} vs ${geometry.center.top}`).toBe(true);
@@ -103,7 +108,7 @@ test('2D center is square, rivers touch matching corners, and all table tiles sh
   }
 });
 
-test('center anchoring survives viewport resize without per-river retuning', async ({ page }) => {
+test('center anchoring and clearance survive viewport resize without per-river retuning', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await boot2d(page);
   await populateGeometryTargets(page);
@@ -111,27 +116,35 @@ test('center anchoring survives viewport resize without per-river retuning', asy
   for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 768 }, { width: 820, height: 1180 }]) {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(120);
-    const edges = await page.evaluate(() => {
+    const geometry = await page.evaluate(() => {
       const r = (selector: string) => document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      const table = document.querySelector<HTMLElement>('.mahjong-table')!;
+      const expectedGap = Number.parseFloat(getComputedStyle(table).getPropertyValue('--table2d-center-river-gap'));
       const center = r('.table-center');
       const top = r('.player-top .discard-river');
       const right = r('.player-right .discard-river');
       const bottom = r('.player-bottom .discard-river');
       const left = r('.player-left .discard-river');
       return {
+        expectedGap,
         square: [center.width, center.height],
-        topEdge: [top.bottom, center.top],
-        rightEdge: [right.left, center.right],
-        bottomEdge: [bottom.top, center.bottom],
-        leftEdge: [left.right, center.left],
-        topStart: [top.left, center.left],
-        rightStart: [right.top, center.top],
-        bottomStart: [bottom.left, center.left],
-        leftStart: [left.top, center.top],
+        gaps: [center.top - top.bottom, right.left - center.right, bottom.top - center.bottom, center.left - left.right],
+        starts: [
+          [top.left, center.left],
+          [right.top, center.top],
+          [bottom.left, center.left],
+          [left.top, center.top],
+        ],
       };
     });
-    for (const [name, pair] of Object.entries(edges)) {
-      expect(closeEnough(pair[0], pair[1], 1.5), `${name}: ${pair[0]} vs ${pair[1]} @ ${viewport.width}x${viewport.height}`).toBe(true);
+
+    expect(geometry.expectedGap).toBeGreaterThan(0);
+    expect(closeEnough(geometry.square[0], geometry.square[1], 1.5), `square @ ${viewport.width}x${viewport.height}`).toBe(true);
+    for (const gap of geometry.gaps) {
+      expect(closeEnough(gap, geometry.expectedGap, 1.5), `gap ${gap} vs ${geometry.expectedGap} @ ${viewport.width}x${viewport.height}`).toBe(true);
+    }
+    for (const pair of geometry.starts) {
+      expect(closeEnough(pair[0], pair[1], 1.5), `start ${pair[0]} vs ${pair[1]} @ ${viewport.width}x${viewport.height}`).toBe(true);
     }
   }
 });
