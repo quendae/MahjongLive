@@ -1,5 +1,3 @@
-import './score-explanation.css';
-
 import type { RoundEndResult } from '@mahjong-live/shared/rules';
 
 type ScoredHand = Extract<RoundEndResult, { type: 'tsumo' }>['score'];
