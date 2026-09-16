@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { analyzePerformanceSample } from '../client/src/performance-diagnostics';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
 
@@ -64,6 +65,49 @@ async function nextPerformanceSample(page: Page): Promise<PerformanceSample> {
   expect(sample, '3D renderer should emit a performance sample while capture is active').not.toBeNull();
   return sample as PerformanceSample;
 }
+
+test('classifies a low-cost 32 Hz Three loop against a 120 Hz browser RAF as an animation-loop gap', () => {
+  const result = analyzePerformanceSample({
+    loopHz: 32,
+    rafHz: 120,
+    renderMs: 0.60,
+    rafFrameMs: 8.33,
+    gpuMs: null,
+  });
+
+  expect(result.loopRafRatio).toBeCloseTo(32 / 120, 4);
+  expect(result.schedulerGapHz).toBeCloseTo(88, 3);
+  expect(result.frameBudgetMs).toBeCloseTo(8.33, 2);
+  expect(result.cpuBudgetRatio).toBeCloseTo(0.60 / 8.33, 3);
+  expect(result.diagnosticHint).toBe('animation-loop-gap');
+});
+
+test('classifies a low browser RAF ceiling separately from a Three-loop gap', () => {
+  const result = analyzePerformanceSample({
+    loopHz: 31,
+    rafHz: 32,
+    renderMs: 0.55,
+    rafFrameMs: 31.25,
+    gpuMs: null,
+  });
+
+  expect(result.loopRafRatio).toBeGreaterThan(0.95);
+  expect(result.diagnosticHint).toBe('browser-raf-limit');
+});
+
+test('reports headroom when the Three loop tracks 120 Hz RAF with low CPU and GPU cost', () => {
+  const result = analyzePerformanceSample({
+    loopHz: 118,
+    rafHz: 120,
+    renderMs: 1.20,
+    rafFrameMs: 8.33,
+    gpuMs: 2.10,
+  });
+
+  expect(result.loopRafRatio).toBeGreaterThan(0.95);
+  expect(result.gpuBudgetRatio).toBeCloseTo(2.10 / 8.33, 3);
+  expect(result.diagnosticHint).toBe('headroom');
+});
 
 test('performance telemetry separates Three-loop throughput from browser RAF headroom', async ({ page }) => {
   await boot3d(page);
