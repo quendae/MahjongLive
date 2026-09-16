@@ -3,6 +3,7 @@ import './2d-mobile-final.css';
 
 const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
 const UNIFIED_BASELINE_MIGRATION_KEY = 'mahjong-live:center-anchor-unified:v2';
+const MELD_ANCHOR_MIGRATION_KEY = 'mahjong-live:center-anchor-meld-offsets:v1';
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
@@ -34,7 +35,28 @@ function migrateUnifiedTileBaseline(): void {
   try { localStorage.setItem(UNIFIED_BASELINE_MIGRATION_KEY, '1'); } catch {}
 }
 
+/* Meld rows were moved from the old panel-relative layout to canonical seat corners. Existing users
+   can still have large Dev X/Y offsets saved from the former geometry, which repositions an otherwise
+   correct bottom-right meld row back over the hand panel. Reset those obsolete offsets exactly once;
+   after this migration, any new Dev tuning remains user-controlled and is not touched again. */
+function migrateMeldAnchorOffsets(): void {
+  if (localStorage.getItem(MELD_ANCHOR_MIGRATION_KEY) === '1') return;
+  let raw: any = null;
+  try { raw = JSON.parse(localStorage.getItem(DEV_UI_KEY) ?? 'null'); } catch { raw = null; }
+  if (raw && typeof raw === 'object') {
+    raw.offsets = raw.offsets && typeof raw.offsets === 'object' ? raw.offsets : {};
+    for (const id of ['topMeld', 'leftMeld', 'rightMeld', 'bottomMeld']) raw.offsets[id] = { x: 0, y: 0 };
+    const serialized = JSON.stringify(raw);
+    try {
+      localStorage.setItem(DEV_UI_KEY, serialized);
+      window.dispatchEvent(new StorageEvent('storage', { key: DEV_UI_KEY, newValue: serialized }));
+    } catch {}
+  }
+  try { localStorage.setItem(MELD_ANCHOR_MIGRATION_KEY, '1'); } catch {}
+}
+
 migrateUnifiedTileBaseline();
+migrateMeldAnchorOffsets();
 
 let scheduled = false;
 let observedCenter: HTMLElement | null = null;
