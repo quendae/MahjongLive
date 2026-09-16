@@ -65,7 +65,7 @@ test('performance telemetry separates Three-loop throughput from browser RAF hea
   await boot3d(page);
   const sample = await nextPerformanceSample(page);
 
-  expect(sample.rendererBackend).toBe('WebGL');
+  expect(sample.rendererBackend).toBe('webgl');
   expect(sample.loopHz).toBeGreaterThan(0);
   expect(sample.rafHz).toBeGreaterThan(0);
   expect(sample.loopRafRatio).toEqual(expect.any(Number));
