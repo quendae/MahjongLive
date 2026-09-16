@@ -1,5 +1,6 @@
 import type { MatchPlacement } from '../match/types';
 import type { BotDifficulty } from './difficulty';
+import { simulateBotMatch } from './simulate';
 
 export type BotSeatProfiles = readonly [BotDifficulty, BotDifficulty, BotDifficulty, BotDifficulty];
 
@@ -44,6 +45,20 @@ export type BotCalibrationSummary = {
   averageRoundsPerMatch: number;
   averageActionsPerMatch: number;
   profiles: Record<BotDifficulty, BotProfileCalibrationSummary>;
+};
+
+export type BotCalibrationRunOptions = {
+  seeds: readonly number[];
+  lineups: readonly BotSeatProfiles[];
+  /** Optional subset of the four seat rotations. Defaults to all four. */
+  rotations?: readonly number[];
+  maxRounds?: number;
+  maxActionsPerRound?: number;
+};
+
+export type BotCalibrationRunResult = {
+  records: readonly BotCalibrationMatchRecord[];
+  summary: BotCalibrationSummary;
 };
 
 type ProfileAccumulator = {
@@ -172,5 +187,46 @@ export function summarizeBotCalibration(
     averageRoundsPerMatch: matches === 0 ? 0 : totalRounds / matches,
     averageActionsPerMatch: matches === 0 ? 0 : totalActions / matches,
     profiles,
+  };
+}
+
+/** Executes deterministic profile matchups and returns raw records plus an aggregate summary. */
+export function runBotCalibration(options: BotCalibrationRunOptions): BotCalibrationRunResult {
+  const selectedRotations = new Set(
+    (options.rotations ?? [0, 1, 2, 3]).map((rotation) => ((Math.trunc(rotation) % 4) + 4) % 4),
+  );
+  const cases = buildBotCalibrationCases(options.seeds, options.lineups)
+    .filter((entry) => selectedRotations.has(entry.rotation));
+  const records: BotCalibrationMatchRecord[] = [];
+
+  for (const entry of cases) {
+    const simulation = simulateBotMatch(
+      entry.seed,
+      options.maxRounds ?? 64,
+      options.maxActionsPerRound ?? 2048,
+      entry.profiles,
+    );
+    if (!simulation.ok) {
+      throw new Error(
+        `Calibration match failed for seed ${entry.seed}, rotation ${entry.rotation}: ${simulation.message}`,
+      );
+    }
+    const result = simulation.state.result;
+    if (!result) {
+      throw new Error(`Calibration match ended without a final result for seed ${entry.seed}`);
+    }
+
+    records.push({
+      ...entry,
+      roundCount: simulation.roundCount,
+      actionCount: simulation.actionCount,
+      placements: result.placements,
+      playerStats: simulation.playerStats,
+    });
+  }
+
+  return {
+    records,
+    summary: summarizeBotCalibration(records),
   };
 }
