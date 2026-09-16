@@ -1,0 +1,34 @@
+name: Bot strength calibration
+
+on:
+  push:
+    branches: [feature/bot-strength-calibration]
+    paths:
+      - 'shared/src/engine/bot/**'
+      - 'scripts/bot-benchmark.mjs'
+      - 'package.json'
+      - '.github/workflows/bot-strength-calibration.yml'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run 24-seed × 4-rotation calibration
+        run: >-
+          pnpm bot:benchmark --
+          --seeds 20260916,20260917,20260918,20260919,20260920,20260921,20260922,20260923,20260924,20260925,20260926,20260927,20260928,20260929,20260930,20260931,20260932,20260933,20260934,20260935,20260936,20260937,20260938,20260939
+          --rotations 0,1,2,3
+          --max-rounds 64
+          --max-actions 2048
