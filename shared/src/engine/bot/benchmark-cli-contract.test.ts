@@ -42,6 +42,9 @@ describe('bot benchmark CLI contract', () => {
     });
 
     expect(cli.parseBenchmarkArgs(['--help']).help).toBe(true);
+    expect(cli.parseBenchmarkArgs(['--', '--help']).help).toBe(true);
+    expect(cli.parseBenchmarkArgs(['--', '--seeds', '44,55']).seeds).toEqual([44, 55]);
+
     const help = cli.benchmarkHelp();
     expect(help).toContain('pnpm bot:benchmark');
     expect(help).toContain('--seeds');
