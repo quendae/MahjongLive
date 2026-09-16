@@ -316,6 +316,7 @@ type TableRuntime = {
   ivoryRoughness: number;
   faceTint: string;
   textureAnisotropy: number;
+  shadowRefreshSerial: number;
 };
 
 function readFaceMode(): TileFaceMode {
@@ -1894,6 +1895,7 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
     ivoryRoughness: tuning.tiles.bodyRoughness,
     faceTint: tuning.tiles.faceTint,
     textureAnisotropy: Math.min(tuning.graphics.anisotropy, renderer.capabilities?.getMaxAnisotropy?.() ?? 1),
+    shadowRefreshSerial: 0,
   };
 
   rebuildFaceAtlas(rt);
@@ -2206,6 +2208,67 @@ function rendererBackendLabel(rt: TableRuntime): string {
   return 'webgpu-renderer';
 }
 
+function auditTransform(transform: Transform): Transform {
+  return { ...transform };
+}
+
+function auditVector(vector: any): { x: number; y: number; z: number } {
+  return { x: vector.x, y: vector.y, z: vector.z };
+}
+
+function auditSnapshot(rt: TableRuntime): Record<string, unknown> {
+  rt.scene.updateMatrixWorld(true);
+  const rect = rt.table?.getBoundingClientRect() ?? null;
+  const actors = [...rt.actors.values()].map((actor) => {
+    const visualWorldOffset = new rt.THREE.Vector3()
+      .copy(actor.visual.position)
+      .applyQuaternion(actor.group.quaternion);
+    const screenPoint = new rt.THREE.Vector3();
+    actor.body.getWorldPosition(screenPoint);
+    screenPoint.project(rt.camera);
+    const screen = rect ? {
+      x: rect.left + (screenPoint.x * .5 + .5) * rect.width,
+      y: rect.top + (-screenPoint.y * .5 + .5) * rect.height,
+    } : null;
+    return {
+      key: actor.key,
+      zone: actor.spec.zone,
+      side: actor.spec.side,
+      player: actor.spec.player,
+      selectable: actor.spec.selectable,
+      drawn: actor.spec.drawn,
+      tileId: actor.spec.tileId,
+      group: transformFromActor(actor),
+      target: auditTransform(actor.target),
+      motion: actor.motion ? {
+        start: auditTransform(actor.motion.start),
+        target: auditTransform(actor.motion.target),
+        startedAt: actor.motion.startedAt,
+        duration: actor.motion.duration,
+        arcHeight: actor.motion.arcHeight,
+      } : null,
+      visual: {
+        position: auditVector(actor.visual.position),
+        rotation: auditVector(actor.visual.rotation),
+        worldOffset: auditVector(visualWorldOffset),
+      },
+      screen,
+    };
+  });
+  return {
+    rendererBackend: rendererBackendLabel(rt),
+    hoveredKey: rt.hoveredKey,
+    pressedKey: rt.pressedKey,
+    shadowRefreshSerial: rt.shadowRefreshSerial,
+    actors,
+  };
+}
+
+function dispatchAuditSnapshot(): void {
+  if (!runtime) return;
+  window.dispatchEvent(new CustomEvent('mahjong-live:3d-audit', { detail: auditSnapshot(runtime) }));
+}
+
 function browserRafProbe(rt: TableRuntime, time: number): void {
   if (rt.disposed) return;
   if (rt.rafLastAt > 0) rt.rafIntervalTotal += time - rt.rafLastAt;
@@ -2260,6 +2323,12 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   if (rt.disposed || !enabled || !rt.table || !stage.classList.contains('is-active')) return;
 
   pollGpuTimer(rt);
+  // Hover/lift used to interpolate by a fixed amount per rendered frame. That made the same
+  // interaction much slower on throttled/30 Hz renderers and much faster at 120+ Hz. Preserve the
+  // old ~60 Hz feel with exponential, wall-clock-based damping instead.
+  const frameDeltaMs = rt.lastFrameAt > 0
+    ? Math.max(0, Math.min(250, time - rt.lastFrameAt))
+    : 1000 / 60;
   if (rt.lastFrameAt > 0) rt.frameIntervalTotal += time - rt.lastFrameAt;
   rt.lastFrameAt = time;
 
@@ -2273,6 +2342,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   const feltTop = rt.felt.position.y + rt.felt.scale.y / 2 + .008;
   const anyClaim = reactionClaimAvailable();
   let movingCount = 0;
+  let interactionMovingCount = 0;
 
   for (const actor of rt.actors.values()) {
     let transformMoved = false;
@@ -2319,19 +2389,35 @@ function frameRuntime(rt: TableRuntime, time: number): void {
     }
 
     if (visualSettling) {
+      const beforeX = actor.visual.position.x;
+      const beforeY = actor.visual.position.y;
+      const beforeZ = actor.visual.position.z;
+      const beforeTiltX = actor.visual.rotation.x;
+      const beforeTiltZ = actor.visual.rotation.z;
       const hoverY = hovered ? (pressed ? .08 : .16) : 0;
       inverseRotation.copy(actor.group.quaternion).invert();
       hoverOffset.set(0, hoverY, 0).applyQuaternion(inverseRotation);
-      actor.visual.position.lerp(hoverOffset, .22);
+      // 67/75 ms time constants reproduce the previous .22/.20 blend at 60 Hz while keeping
+      // lift and settle duration stable across 30, 60, 120 Hz and temporarily throttled RAF.
+      const hoverBlend = 1 - Math.exp(-frameDeltaMs / 67);
+      const tiltBlend = 1 - Math.exp(-frameDeltaMs / 75);
+      actor.visual.position.lerp(hoverOffset, hoverBlend);
       const targetTiltX = hovered ? -.04 : 0;
       const targetTiltZ = hovered ? signedHash(actor.key, 'hover') * .042 : 0;
-      actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * .2;
-      actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * .2;
+      actor.visual.rotation.x += (targetTiltX - actor.visual.rotation.x) * tiltBlend;
+      actor.visual.rotation.z += (targetTiltZ - actor.visual.rotation.z) * tiltBlend;
       if (!hovered && actor.visual.position.lengthSq() < .000002
         && Math.abs(actor.visual.rotation.x) < .0005 && Math.abs(actor.visual.rotation.z) < .0005) {
         actor.visual.position.set(0, 0, 0);
         actor.visual.rotation.x = 0;
         actor.visual.rotation.z = 0;
+      }
+      if (Math.abs(actor.visual.position.x - beforeX) > .000001
+        || Math.abs(actor.visual.position.y - beforeY) > .000001
+        || Math.abs(actor.visual.position.z - beforeZ) > .000001
+        || Math.abs(actor.visual.rotation.x - beforeTiltX) > .000001
+        || Math.abs(actor.visual.rotation.z - beforeTiltZ) > .000001) {
+        interactionMovingCount += 1;
       }
     }
 
@@ -2347,9 +2433,12 @@ function frameRuntime(rt: TableRuntime, time: number): void {
   }
 
   if (rt.staticRiverDirty) syncStaticRiverInstances(rt);
-  // During motion the cached shadow map must follow the moving tile. Once motion ends it freezes
-  // again, avoiding dozens/hundreds of shadow-pass draw calls on every otherwise static frame.
-  if (movingCount > 0 && rt.renderer.shadowMap?.enabled) rt.renderer.shadowMap.needsUpdate = true;
+  // During table motion *and* local hover/lift/settle motion the cached shadow map must follow
+  // the visible tile. Once both stop it freezes again, preserving the static-table fast path.
+  if ((movingCount > 0 || interactionMovingCount > 0) && rt.renderer.shadowMap?.enabled) {
+    rt.renderer.shadowMap.needsUpdate = true;
+    rt.shadowRefreshSerial += 1;
+  }
 
   const renderStarted = performance.now();
   const gpuTimerStarted = beginGpuTimer(rt);
@@ -2383,7 +2472,7 @@ function frameRuntime(rt: TableRuntime, time: number): void {
         calls: Math.round(calls * 10) / 10,
         triangles: rt.renderer.info?.render?.triangles ?? 0,
         actors: rt.actors.size + rt.stressActors.length,
-        moving: movingCount,
+        moving: movingCount + interactionMovingCount,
         instancedRivers: rt.staticRiverCount,
         batchedFaces: rt.staticFaceCount,
         faceBatches: [...rt.staticFaceBatches.values()].filter((batch) => batch.count > 0).length,
@@ -2639,6 +2728,8 @@ window.addEventListener('mahjong-live:benchmark-stage', (event) => {
   const allowed: BenchmarkStage[] = ['normal', 'empty', 'table', 'tiles-no-faces', 'no-shadows'];
   setBenchmarkStage(runtime, allowed.includes(raw) ? raw : 'normal');
 });
+
+window.addEventListener('mahjong-live:3d-audit-request', dispatchAuditSnapshot);
 
 window.addEventListener('mahjong-live:dev-stress-discards', (event) => {
   if (!runtime) return;
