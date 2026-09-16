@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
+const DEV_UI_KEY = 'mahjong-live:dev-ui-layout:v2';
 
-async function boot2d(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function boot2d(page: Page, savedDevLayout?: unknown): Promise<void> {
+  await page.addInitScript((devLayout) => {
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem('mahjong-live:table-3d:v1', '0');
@@ -15,7 +16,8 @@ async function boot2d(page: Page): Promise<void> {
       tutorialSeen: true,
       presentationSpeed: 'instant',
     }));
-  });
+    if (devLayout) localStorage.setItem('mahjong-live:dev-ui-layout:v2', JSON.stringify(devLayout));
+  }, savedDevLayout ?? null);
 
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await page.locator('.mahjong-table').waitFor({ state: 'visible' });
@@ -103,6 +105,54 @@ test('2D discard uses the source-flight animation without adding a second tile-f
   await expect(tile).toBeVisible();
   await page.waitForTimeout(120);
   await expect(tile).not.toHaveClass(/tile-fresh/);
+});
+
+test('saved legacy meld offsets are reset to the canonical bottom-right anchor', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await boot2d(page, {
+    offsets: {
+      bottomMeld: { x: -380, y: -140 },
+      topMeld: { x: 120, y: 80 },
+      leftMeld: { x: 90, y: -110 },
+      rightMeld: { x: -75, y: 130 },
+    },
+  });
+
+  await page.evaluate(() => {
+    const melds = document.querySelector<HTMLElement>('.player-bottom > .human-melds');
+    if (!melds) throw new Error('Missing human meld row');
+    melds.replaceChildren(...Array.from({ length: 4 }, () => {
+      const tile = document.createElement('div');
+      tile.className = 'tile tile-compact';
+      tile.innerHTML = '<span></span>';
+      return tile;
+    }));
+  });
+  await page.waitForTimeout(120);
+
+  const result = await page.evaluate((key) => {
+    const settings = JSON.parse(localStorage.getItem(key) ?? '{}');
+    const table = document.querySelector<HTMLElement>('.mahjong-table')!.getBoundingClientRect();
+    const meld = document.querySelector<HTMLElement>('.player-bottom > .human-melds')!.getBoundingClientRect();
+    return {
+      offsets: {
+        bottomMeld: settings.offsets?.bottomMeld,
+        topMeld: settings.offsets?.topMeld,
+        leftMeld: settings.offsets?.leftMeld,
+        rightMeld: settings.offsets?.rightMeld,
+      },
+      rightGap: table.right - meld.right,
+      bottomGap: table.bottom - meld.bottom,
+    };
+  }, DEV_UI_KEY);
+
+  for (const [id, offset] of Object.entries(result.offsets)) {
+    expect(offset, `${id} offset`).toEqual({ x: 0, y: 0 });
+  }
+  expect(result.rightGap).toBeGreaterThanOrEqual(8);
+  expect(result.rightGap).toBeLessThanOrEqual(48);
+  expect(result.bottomGap).toBeGreaterThanOrEqual(8);
+  expect(result.bottomGap).toBeLessThanOrEqual(48);
 });
 
 test('human melds belong to the player zone and stay at the table bottom-right', async ({ page }) => {
