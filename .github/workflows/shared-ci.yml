@@ -44,5 +44,6 @@ jobs:
       - run: pnpm bot:benchmark -- --help
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
+      - run: pnpm bot:benchmark -- --seeds 20260916 --rotations 0 --max-rounds 48 --max-actions 1600
       - run: pnpm client:typecheck
       - run: pnpm client:build
