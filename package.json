@@ -10,6 +10,7 @@
     "client:build": "node client/scripts/vite.mjs build",
     "client:preview": "node client/scripts/vite.mjs preview",
     "client:typecheck": "pnpm --filter @mahjong-live/shared exec tsc -p ../client/tsconfig.json",
+    "bot:benchmark": "node scripts/bot-benchmark.mjs",
     "check": "pnpm --filter @mahjong-live/shared typecheck && pnpm --filter @mahjong-live/shared test && pnpm client:typecheck && pnpm client:build"
   }
 }
