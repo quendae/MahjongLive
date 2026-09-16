@@ -119,8 +119,14 @@ function applyPresentationFeel(): void {
 
   if (normalized.includes('discard')) {
     zone?.classList.add('fx-discard');
-    const riverTiles = zone?.querySelectorAll<HTMLElement>('.discard-river .tile');
-    riverTiles?.[riverTiles.length - 1]?.classList.add('tile-fresh');
+    // 2D has a dedicated source-aware flight animation in discard-source-2d.ts. Adding tile-fresh
+    // to the landed river tile as well makes it visibly bounce a second time. Keep the historical
+    // drop-in only for 3D, where the DOM river is not the visible source-flight target.
+    const table = zone?.closest<HTMLElement>('.mahjong-table');
+    if (table?.classList.contains('table-3d-active')) {
+      const riverTiles = zone?.querySelectorAll<HTMLElement>('.discard-river .tile');
+      riverTiles?.[riverTiles.length - 1]?.classList.add('tile-fresh');
+    }
   } else if (normalized.includes('draw')) {
     zone?.classList.add('fx-draw');
   }
