@@ -9,6 +9,8 @@ on:
       - 'tests/2d-ui-qa.spec.ts'
       - 'tests/center-anchor-2d.spec.ts'
       - 'tests/2d-regression.spec.ts'
+      - 'tests/meld-presentation.spec.ts'
+      - 'tests/presentation-transitions.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
@@ -18,6 +20,8 @@ on:
       - 'tests/2d-ui-qa.spec.ts'
       - 'tests/center-anchor-2d.spec.ts'
       - 'tests/2d-regression.spec.ts'
+      - 'tests/meld-presentation.spec.ts'
+      - 'tests/presentation-transitions.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
@@ -59,7 +63,7 @@ jobs:
           cat /tmp/mahjong-preview.log
           exit 1
       - name: Audit responsive 2D and 3D layouts
-        run: pnpm exec playwright test tests/responsive-qa.spec.ts tests/2d-ui-qa.spec.ts tests/center-anchor-2d.spec.ts tests/2d-regression.spec.ts --workers=1 --reporter=line
+        run: pnpm exec playwright test tests/responsive-qa.spec.ts tests/2d-ui-qa.spec.ts tests/center-anchor-2d.spec.ts tests/2d-regression.spec.ts tests/meld-presentation.spec.ts tests/presentation-transitions.spec.ts --workers=1 --reporter=line
       - name: Upload responsive screenshots
         if: always()
         uses: actions/upload-artifact@v4

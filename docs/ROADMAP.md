@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-05
+Updated: 2026-09-16
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -23,10 +23,21 @@ and should be updated as the game grows.
 - [x] Add a separate live 2D Dev layout section for table width/height reserve, player panels, center, Dora, hand and river scaling/positioning.
 - [x] Reclaim desktop play space by keeping the move log DOM-only instead of reserving a permanent column and by removing the old 940/980px desktop table height caps.
 - [x] Add automated Chromium responsive-layout QA with screenshots for 2D and 3D across seven desktop/tablet/phone viewports.
+- [x] Canonicalize 2D river clearance around the center counter, human meld placement at the bottom-right and one source-aware discard animation without the second landing bounce.
 - [ ] Continue responsive table/camera QA on real browsers/devices, especially touch behavior and Firefox/WebKit-specific differences.
   - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports.
   - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport.
-  - 2026-09-05: Playwright matrix now passes 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D. Real-device/touch QA remains open.
+  - 2026-09-05: Playwright matrix passed 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D.
+  - 2026-09-16: focused 2D regression + responsive QA passed 29/29, including saved legacy meld-offset migration, center clearance and the single discard-flight path.
+  - 2026-09-16: call/meld/Dora/result-transition coverage expanded the browser matrix to 35/35. Real-device/touch QA remains open.
+
+## Active implementation sequence
+
+1. [x] Finish CHI/PON/KAN/RON presentation and called-from meld orientation while preserving the exact physical called tile.
+2. [ ] Audit 3D discard source, hover/lift/settle and seat orientations.
+3. [ ] Re-run 120 Hz / RAF performance work on Firefox and Edge/ANGLE with long discard rivers.
+4. [ ] Improve Riichi-stick and table-state presentation without covering the play field.
+5. [ ] Then return to rule/scoring explanations, bot calibration and replay/history work.
 
 ## Rules and scoring
 
@@ -62,9 +73,9 @@ Next rule work:
 - [x] Make user appearance Options update the 2D table live instead of being masked by the old Dev inline-preview styles.
 - [x] Give 2D seat-oriented concealed racks, rivers around the center, source-aware tsumogiri/tedashi discard motion, clearer player badges and seat-oriented meld groups.
 - [x] Refresh cached 3D shadows during hover-lift/settle instead of leaving the contact shadow at the tile's resting position.
-- [ ] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
+- [x] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
 - [ ] Add clearer Riichi-stick/table-state presentation without covering the play field.
-- [ ] Improve meld orientation based on called-from seat while keeping exact physical called tile.
+- [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
 - [ ] Keep optional sound cues synchronized with authoritative presentation frames.
 - [ ] Add quality presets (`Performance`, `Balanced`, `High`) on top of Dev-level individual sliders.
 
