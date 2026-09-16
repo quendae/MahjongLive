@@ -1,0 +1,34 @@
+/* Open melds share one seat-local ordering with the 3D renderer: the first DOM tile sits at the
+   owner's right-hand end. Reversing the 2D flex row makes that convention visible correctly after
+   each seat's existing row rotation. */
+.mahjong-table:not(.table-3d-active) .meld {
+  flex-direction: row-reverse;
+}
+
+/* The exact claimed physical tile already carries tile-meld-called + data-called-from. Rotate only
+   that tile and reserve enough inline room for its wider horizontal silhouette. */
+.mahjong-table:not(.table-3d-active) .meld .tile-meld-called {
+  z-index: 1;
+  align-self: center;
+  margin-inline: 7px;
+  transform: rotate(90deg);
+  transform-origin: center center;
+}
+
+@media (max-width: 1059px) {
+  .mahjong-table:not(.table-3d-active) .meld .tile-meld-called {
+    margin-inline: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mahjong-table:not(.table-3d-active) .meld .tile-meld-called {
+    margin-inline: 5px;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .mahjong-table:not(.table-3d-active) .meld .tile-meld-called {
+    margin-inline: 4px;
+  }
+}
