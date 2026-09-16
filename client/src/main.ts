@@ -1,5 +1,6 @@
 import './style.css';
 import './ux.css';
+import './score-explanation.css';
 
 import {
   applyHumanDecision,
@@ -39,6 +40,7 @@ import {
 import type { PresentationSpeed } from './preferences';
 import { presentationCaption } from './presentation';
 import { buildClaimChoices, describeClaimAction } from './claim-choice';
+import { scoreExplanationMarkup } from './score-explanation';
 import { tileAssetUrlForLabel } from './table-3d-faces';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
@@ -562,6 +564,7 @@ function scoreCard(score: ScoredHand): string {
       <ul class="yaku-list">${yaku}</ul>
       ${doraParts ? `<div class="dora-breakdown">${doraParts}</div>` : ''}
       <div class="payment-line"><span>Payment</span><strong>${paymentText(score)}</strong></div>
+      ${scoreExplanationMarkup(score)}
     </div>
   `;
 }
