@@ -1,0 +1,125 @@
+.scoring-details {
+  margin-top: 14px;
+  border-top: 1px solid rgba(214, 177, 92, 0.22);
+  color: var(--muted, #b9b6ad);
+}
+
+.scoring-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px 4px;
+  color: #e8d39a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.scoring-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.scoring-details summary::after {
+  content: '+';
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(214, 177, 92, 0.28);
+  border-radius: 50%;
+  color: #e8d39a;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.scoring-details[open] summary::after {
+  content: '−';
+}
+
+.scoring-details-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+
+.scoring-detail-section {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.scoring-detail-section h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 7px;
+  color: #f3ead1;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.scoring-detail-section h4 span {
+  color: #d7b65e;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.scoring-detail-row,
+.scoring-detail-math {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 0.78rem;
+}
+
+.scoring-detail-row span,
+.scoring-detail-math span {
+  min-width: 0;
+  color: rgba(236, 233, 225, 0.68);
+}
+
+.scoring-detail-row strong,
+.scoring-detail-math strong {
+  color: #f7f0dc;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scoring-detail-row:last-child strong {
+  color: #e8c969;
+}
+
+.scoring-detail-note {
+  padding: 4px 0 1px;
+  color: rgba(236, 233, 225, 0.62);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.scoring-detail-math {
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 640px) {
+  .scoring-details-body {
+    grid-template-columns: 1fr;
+  }
+
+  .scoring-detail-section {
+    padding: 9px 10px;
+  }
+}
