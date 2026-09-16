@@ -277,6 +277,16 @@ type PerformanceDetail = {
   pixelRatio?: number;
   visibility?: string;
   geometryQuality?: number;
+  loopRafRatio?: number;
+  schedulerGapHz?: number;
+  frameBudgetMs?: number;
+  cpuBudgetRatio?: number;
+  gpuBudgetRatio?: number | null;
+  diagnosticHint?: string;
+  syncActorsMs?: number;
+  reconcileMs?: number;
+  staticBatchMs?: number;
+  shadowRefreshSerial?: number;
 };
 
 type PerformanceCapture = {
@@ -363,6 +373,16 @@ function appendPerformanceSample(detail: PerformanceDetail): void {
     detail.benchmarkStage ?? '',
     String(detail.geometryQuality ?? ''),
     performanceNumber(detail.pixelRatio),
+    performanceNumber(detail.loopRafRatio, 3),
+    performanceNumber(detail.schedulerGapHz, 2),
+    performanceNumber(detail.frameBudgetMs, 3),
+    performanceNumber(detail.cpuBudgetRatio, 3),
+    performanceNumber(detail.gpuBudgetRatio, 3),
+    detail.diagnosticHint ?? '',
+    performanceNumber(detail.syncActorsMs, 3),
+    performanceNumber(detail.reconcileMs, 3),
+    performanceNumber(detail.staticBatchMs, 3),
+    String(detail.shadowRefreshSerial ?? ''),
   ].join('\t'));
   capture.samples += 1;
   updatePerformanceCaptureUi();
@@ -388,7 +408,7 @@ function startPerformanceCapture(): void {
       `graphicsSettings\tpixelRatio=${settings.graphics.pixelRatio}\tshadowQuality=${settings.graphics.shadowQuality}\tanisotropy=${settings.graphics.anisotropy}\tgeometryQuality=${settings.graphics.geometryQuality}`,
       `rendererPreference\t${localStorage.getItem(RENDERER_BACKEND_KEY) ?? (!/Firefox\//.test(navigator.userAgent) && Boolean((navigator as any).gpu) ? 'webgpu-auto' : 'webgl-auto')}\twebgpuAvailable=${Boolean((navigator as any).gpu)}`,
       '',
-      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tgeometry_quality\tpixel_ratio',
+      'elapsed_s\tiso_time\tvisibility\tthree_loop_hz\tbrowser_raf_hz\tthree_frame_ms\traf_frame_ms\tcpu_submit_ms\tgpu_ms\tgpu_timer_supported\tdraw_calls\ttriangles\ttiles\tmoving_tiles\tbatched_static_tiles\tbatched_face_tiles\tface_batches\trenderer_backend\tbenchmark_stage\tgeometry_quality\tpixel_ratio\tloop_raf_ratio\tscheduler_gap_hz\tframe_budget_ms\tcpu_budget_ratio\tgpu_budget_ratio\tdiagnostic_hint\tsync_actors_ms\treconcile_ms\tstatic_batch_ms\tshadow_refresh_serial',
     ],
   };
   document.body.classList.add('perf-capture-active');
@@ -1154,8 +1174,10 @@ window.addEventListener('mahjong-live:fps', (event) => {
   const loopHz = Number.isFinite(detail.loopHz ?? detail.fps) ? Math.round(detail.loopHz ?? detail.fps ?? 0) : 0;
   const rafHz = Number.isFinite(detail.rafHz) ? Math.round(detail.rafHz ?? 0) : 0;
   const gpuMs = Number.isFinite(detail.gpuMs) ? `${(detail.gpuMs ?? 0).toFixed(2)}ms GPU` : 'GPU n/a';
-  target.textContent = `${detail.rendererBackend ?? 'renderer'} · ${detail.benchmarkStage ?? 'normal'} · Loop ${loopHz} · RAF ${rafHz} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
-  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${detail.batchedFaces ?? 0} batched faces in ${detail.faceBatches ?? 0} face draws · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · backend ${detail.rendererBackend ?? ''} · stage ${detail.benchmarkStage ?? ''} · ${detail.visibility ?? document.visibilityState}`;
+  const diagnostic = detail.diagnosticHint ?? 'collecting';
+  const loopRaf = Number.isFinite(detail.loopRafRatio) ? (detail.loopRafRatio ?? 0).toFixed(2) : '—';
+  target.textContent = `${detail.rendererBackend ?? 'renderer'} · ${detail.benchmarkStage ?? 'normal'} · Loop ${loopHz} · RAF ${rafHz} · Loop/RAF ${loopRaf} · ${diagnostic} · ${gpuMs} · ${detail.calls ?? 0} calls · ${detail.actors ?? 0} tiles`;
+  target.title = `${(detail.frameMs ?? 0).toFixed(2)}ms Three frame · ${(detail.rafFrameMs ?? 0).toFixed(2)}ms RAF frame · ${(detail.renderMs ?? 0).toFixed(2)}ms CPU submit · ${(detail.syncActorsMs ?? 0).toFixed(2)}ms syncActors · ${(detail.reconcileMs ?? 0).toFixed(2)}ms reconcile · ${(detail.staticBatchMs ?? 0).toFixed(2)}ms static batch · shadow serial ${detail.shadowRefreshSerial ?? 0} · ${detail.triangles ?? 0} triangles · ${detail.moving ?? 0} moving · ${detail.instancedRivers ?? 0} batched static · ${detail.batchedFaces ?? 0} batched faces in ${detail.faceBatches ?? 0} face draws · ${(detail.pixelRatio ?? 1).toFixed(2)}× pixel ratio · backend ${detail.rendererBackend ?? ''} · stage ${detail.benchmarkStage ?? ''} · ${detail.visibility ?? document.visibilityState}`;
   target.classList.toggle('fps-low', loopHz > 0 && loopHz < 55);
 });
 ensureUi();
