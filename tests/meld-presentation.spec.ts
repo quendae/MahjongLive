@@ -1,0 +1,67 @@
+import { expect, test } from '@playwright/test';
+import { orderMeldTilesForPresentation } from '../client/src/meld-presentation';
+
+function tile(id: number) {
+  return { id, kind: 'suited', suit: 'man', rank: 5, isRed: false } as const;
+}
+
+function openMeld(
+  ids: readonly number[],
+  owner: 0 | 1 | 2 | 3,
+  calledFrom?: 0 | 1 | 2 | 3,
+  calledTileId?: number,
+) {
+  return {
+    owner,
+    meld: {
+      type: ids.length === 4 ? 'quad' : 'triplet',
+      tiles: ids.map(tile),
+      isOpen: true,
+      calledFrom,
+      calledTileId,
+    },
+  } as const;
+}
+
+test('called tile occupies the source-facing slot without changing its physical id', () => {
+  const owner = 1 as const;
+
+  const fromLeft = openMeld([10, 20, 30], owner, 0, 30);
+  const across = openMeld([10, 20, 30], owner, 3, 30);
+  const fromRight = openMeld([10, 20, 30], owner, 2, 30);
+
+  expect(orderMeldTilesForPresentation(fromLeft.meld, owner).map((entry) => entry.id)).toEqual([30, 10, 20]);
+  expect(orderMeldTilesForPresentation(across.meld, owner).map((entry) => entry.id)).toEqual([10, 30, 20]);
+  expect(orderMeldTilesForPresentation(fromRight.meld, owner).map((entry) => entry.id)).toEqual([10, 20, 30]);
+
+  for (const fixture of [fromLeft, across, fromRight]) {
+    const ordered = orderMeldTilesForPresentation(fixture.meld, owner);
+    const sideways = ordered.find((entry) => entry.id === fixture.meld.calledTileId);
+    expect(sideways?.id).toBe(30);
+    expect(sideways).toBe(fixture.meld.tiles[2]);
+  }
+});
+
+test('daiminkan uses the same left/across/right convention and preserves all four physical tiles', () => {
+  const owner = 2 as const;
+  const fixtures = [
+    { source: 1 as const, expected: [99, 11, 12, 13] }, // left
+    { source: 0 as const, expected: [11, 99, 12, 13] }, // across
+    { source: 3 as const, expected: [11, 12, 13, 99] }, // right
+  ];
+
+  for (const fixture of fixtures) {
+    const { meld } = openMeld([11, 12, 13, 99], owner, fixture.source, 99);
+    const ordered = orderMeldTilesForPresentation(meld, owner);
+    expect(ordered.map((entry) => entry.id)).toEqual(fixture.expected);
+    expect(new Set(ordered.map((entry) => entry.id))).toEqual(new Set([11, 12, 13, 99]));
+  }
+});
+
+test('concealed or legacy melds keep authoritative tile order', () => {
+  const tiles = [tile(41), tile(42), tile(43)];
+  const legacy = { type: 'triplet', tiles, isOpen: true } as const;
+  const ordered = orderMeldTilesForPresentation(legacy, 0);
+  expect(ordered).toEqual(tiles);
+  expect(ordered).not.toBe(tiles);
+});
