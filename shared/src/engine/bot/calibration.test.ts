@@ -8,6 +8,20 @@ type CalibrationCase = {
   rotation: number;
   profiles: BotSeatProfiles;
 };
+type PlayerStats = {
+  roundsPlayed: number;
+  wins: number;
+  dealIns: number;
+  riichiDeclarations: number;
+  calls: number;
+};
+type ProfiledMatchResult = {
+  ok: boolean;
+  roundCount: number;
+  profiles?: BotSeatProfiles;
+  playerStats?: readonly PlayerStats[];
+  message?: string;
+};
 
 type CalibrationApi = {
   buildBotCalibrationCases?: (
@@ -45,4 +59,29 @@ describe('bot calibration seat rotation', () => {
     expect(exposure.standard).toEqual([1, 1, 1, 1]);
     expect(exposure.expert).toEqual([2, 2, 2, 2]);
   });
+});
+
+describe('profile-aware bot match simulation', () => {
+  it('uses the requested seat profiles and returns per-seat calibration counters', () => {
+    const simulate = botExports.simulateBotMatch as unknown as (
+      seed: number,
+      maxRounds: number,
+      maxActionsPerRound: number,
+      profiles: BotSeatProfiles,
+    ) => ProfiledMatchResult;
+
+    const result = simulate(20260916, 48, 1600, mixedLineup);
+    expect(result.ok, result.ok ? '' : result.message).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.profiles).toEqual(mixedLineup);
+    expect(result.playerStats).toHaveLength(4);
+    for (const stats of result.playerStats ?? []) {
+      expect(stats.roundsPlayed).toBe(result.roundCount);
+      expect(stats.wins).toBeGreaterThanOrEqual(0);
+      expect(stats.dealIns).toBeGreaterThanOrEqual(0);
+      expect(stats.riichiDeclarations).toBeGreaterThanOrEqual(0);
+      expect(stats.calls).toBeGreaterThanOrEqual(0);
+    }
+  }, 45_000);
 });
