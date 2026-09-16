@@ -19,6 +19,10 @@ type PerformanceSample = {
   cpuBudgetRatio?: number;
   gpuBudgetRatio?: number | null;
   diagnosticHint?: string;
+  syncActorsMs?: number;
+  reconcileMs?: number;
+  staticBatchMs?: number;
+  shadowRefreshSerial?: number;
 };
 
 async function boot3d(page: Page): Promise<void> {
@@ -73,9 +77,12 @@ test('performance telemetry separates Three-loop throughput from browser RAF hea
   expect(sample.frameBudgetMs).toEqual(expect.any(Number));
   expect(sample.cpuBudgetRatio).toEqual(expect.any(Number));
   expect(sample.diagnosticHint).toMatch(/^(animation-loop-gap|browser-raf-limit|gpu-bound|cpu-submit-bound|headroom)$/);
+  expect(sample.syncActorsMs).toEqual(expect.any(Number));
+  expect(sample.reconcileMs).toEqual(expect.any(Number));
+  expect(sample.shadowRefreshSerial).toEqual(expect.any(Number));
 });
 
-test('24-discards-per-river stress telemetry stays batched and carries the same diagnostics', async ({ page }) => {
+test('24-discards-per-river stress telemetry stays batched and reports static rebuild cost', async ({ page }) => {
   await boot3d(page);
   await page.evaluate(() => {
     document.body.classList.add('perf-capture-active');
@@ -87,6 +94,8 @@ test('24-discards-per-river stress telemetry stays batched and carries the same 
   expect(sample.actors).toBeGreaterThanOrEqual(96);
   expect(sample.instancedRivers).toBeGreaterThanOrEqual(80);
   expect(sample.batchedFaces).toBeGreaterThanOrEqual(80);
+  expect(sample.staticBatchMs).toEqual(expect.any(Number));
+  expect(sample.staticBatchMs).toBeGreaterThanOrEqual(0);
   expect(sample.loopRafRatio).toEqual(expect.any(Number));
   expect(sample.diagnosticHint).toEqual(expect.any(String));
 });
