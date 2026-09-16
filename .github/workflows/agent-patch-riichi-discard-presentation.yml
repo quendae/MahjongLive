@@ -1,0 +1,39 @@
+name: Apply Riichi discard presentation patch
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'scripts/patch-riichi-discard-presentation.mjs'
+      - '.github/workflows/agent-patch-riichi-discard-presentation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-head-branch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply exact source patch
+        run: node scripts/patch-riichi-discard-presentation.mjs
+      - name: Validate patch
+        run: git diff --check
+      - name: Commit Riichi discard presentation
+        run: |
+          if git diff --quiet -- client/src/main.ts client/src/clarity.ts client/src/clarity.css client/src/table-3d.ts; then
+            echo 'Riichi discard presentation already integrated.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/src/main.ts client/src/clarity.ts client/src/clarity.css client/src/table-3d.ts
+          git commit -m 'feat: present riichi declaration discard sideways'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
