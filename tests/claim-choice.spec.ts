@@ -63,3 +63,17 @@ test('Chi duplicate physical copies collapse to one visible combination', () => 
   expect(choices).toHaveLength(1);
   expect(choices[0].label).toBe('3m · 4m · [5m]');
 });
+
+test('Shouminkan keeps identical tile labels separate when they upgrade different melds', () => {
+  const hand = [suited(10, 5), suited(11, 5)];
+  const actions: RoundAction[] = [
+    { type: 'shouminkan', player: 0, meldIndex: 0, tileId: 10 },
+    { type: 'shouminkan', player: 0, meldIndex: 2, tileId: 11 },
+  ];
+
+  const choices = buildClaimChoices(actions, hand, undefined, label);
+  expect(choices.map((choice) => choice.label)).toEqual([
+    '5m · meld 1',
+    '5m · meld 3',
+  ]);
+});
