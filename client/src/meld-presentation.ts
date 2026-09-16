@@ -71,17 +71,19 @@ function reconcileAllMelds(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('.player-zone[data-player] .meld').forEach(reconcileMeld);
 }
 
-const app = document.querySelector<HTMLElement>('#app');
-if (app) {
-  let scheduled = false;
-  const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      reconcileAllMelds(app);
-    });
-  };
-  new MutationObserver(schedule).observe(app, { childList: true, subtree: true });
-  reconcileAllMelds(app);
+if (typeof document !== 'undefined') {
+  const app = document.querySelector<HTMLElement>('#app');
+  if (app) {
+    let scheduled = false;
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        reconcileAllMelds(app);
+      });
+    };
+    new MutationObserver(schedule).observe(app, { childList: true, subtree: true });
+    reconcileAllMelds(app);
+  }
 }
