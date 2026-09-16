@@ -75,6 +75,12 @@ type ProfileAccumulator = {
 };
 
 const PROFILE_ORDER: readonly BotDifficulty[] = ['casual', 'standard', 'expert'];
+const PROFILE_LABEL: Record<BotDifficulty, string> = {
+  casual: 'Casual',
+  standard: 'Standard',
+  expert: 'Expert',
+};
+const numberFormat = new Intl.NumberFormat('en-US');
 
 function rotateProfiles(lineup: BotSeatProfiles, rotation: number): BotSeatProfiles {
   const offset = ((rotation % 4) + 4) % 4;
@@ -229,4 +235,33 @@ export function runBotCalibration(options: BotCalibrationRunOptions): BotCalibra
     records,
     summary: summarizeBotCalibration(records),
   };
+}
+
+/** Human-readable benchmark output; deliberately reports measurements without declaring a winner. */
+export function formatBotCalibrationReport(summary: BotCalibrationSummary): string {
+  const lines = [
+    'Mahjong Live bot calibration',
+    `Matches: ${summary.matches} | Rounds: ${summary.totalRounds} | Actions: ${summary.totalActions}`,
+    `Average match: ${summary.averageRoundsPerMatch.toFixed(2)} rounds | ${summary.averageActionsPerMatch.toFixed(2)} actions`,
+    '',
+    'Profile  Samples  Avg place  Avg points  Wins  Deal-ins  Riichi  Calls  Placements  Seats(E/S/W/N)',
+  ];
+
+  for (const profile of PROFILE_ORDER) {
+    const value = summary.profiles[profile];
+    lines.push([
+      PROFILE_LABEL[profile].padEnd(8),
+      String(value.samples).padStart(7),
+      value.averagePlacement.toFixed(2).padStart(10),
+      numberFormat.format(Math.round(value.averageFinalPoints)).padStart(10),
+      String(value.wins).padStart(6),
+      String(value.dealIns).padStart(9),
+      String(value.riichiDeclarations).padStart(7),
+      String(value.calls).padStart(6),
+      value.placementCounts.join('/').padStart(10),
+      value.seatExposure.join('/').padStart(14),
+    ].join('  '));
+  }
+
+  return lines.join('\n');
 }
