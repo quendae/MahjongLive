@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { orderMeldTilesForPresentation } from '../client/src/meld-presentation';
 
+const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
+
 function tile(id: number) {
   return { id, kind: 'suited', suit: 'man', rank: 5, isRed: false } as const;
 }
@@ -67,4 +69,61 @@ test('concealed or legacy melds keep authoritative tile order', () => {
   const ordered = orderMeldTilesForPresentation(legacy, 0);
   expect(ordered).toEqual(tiles);
   expect(ordered).not.toBe(tiles);
+});
+
+test('2D runtime moves the exact called DOM tile to the owner-right slot and turns it sideways', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('mahjong-live:table-3d:v1', '0');
+    localStorage.setItem('mahjong-live:preferences:v1', JSON.stringify({
+      preferredDifficulty: 'standard',
+      advisorEnabled: false,
+      tutorialSeen: true,
+      presentationSpeed: 'instant',
+    }));
+  });
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.locator('.mahjong-table').waitFor({ state: 'visible' });
+  await page.evaluate(() => document.querySelector<HTMLElement>('[data-ui-action="confirm-new-game"]')?.click());
+
+  await page.evaluate(() => {
+    const row = document.querySelector<HTMLElement>('.player-bottom > .human-melds');
+    const zone = row?.closest<HTMLElement>('.player-zone[data-player]');
+    if (!row || !zone) throw new Error('Missing human meld zone');
+    const owner = Number(zone.dataset.player);
+    const sourceOnRight = (owner + 1) % 4;
+    const meld = document.createElement('div');
+    meld.className = 'meld meld-triplet';
+    meld.dataset.meldIndex = '99';
+    for (const id of [10, 20, 30]) {
+      const tileElement = document.createElement('div');
+      tileElement.className = `tile tile-compact${id === 30 ? ' tile-meld-called' : ''}`;
+      tileElement.dataset.engineTileId = String(id);
+      if (id === 30) tileElement.dataset.calledFrom = String(sourceOnRight);
+      tileElement.innerHTML = '<span></span>';
+      meld.append(tileElement);
+    }
+    row.replaceChildren(meld);
+  });
+
+  await expect.poll(() => page.locator('.player-bottom .meld > .tile').evaluateAll((tiles) =>
+    tiles.map((tile) => Number((tile as HTMLElement).dataset.engineTileId))
+  )).toEqual([30, 10, 20]);
+
+  const presentation = await page.locator('.player-bottom .meld').evaluate((meld) => {
+    const called = meld.querySelector<HTMLElement>('.tile-meld-called');
+    if (!called) throw new Error('Missing called tile');
+    const meldStyle = getComputedStyle(meld);
+    const tileStyle = getComputedStyle(called);
+    return {
+      flexDirection: meldStyle.flexDirection,
+      transform: tileStyle.transform,
+      id: Number(called.dataset.engineTileId),
+    };
+  });
+
+  expect(presentation.flexDirection).toBe('row-reverse');
+  expect(presentation.transform).not.toBe('none');
+  expect(presentation.id).toBe(30);
 });
