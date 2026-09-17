@@ -94,6 +94,22 @@ export function appendSingleDriveHistory(
   return { ...history, entries: [...history.entries, ...additions] };
 }
 
+export function appendRoundAdvanceHistory(
+  history: MatchHistoryRecord,
+  state: SingleGameState,
+): MatchHistoryRecord {
+  if (state.match.round.phase.kind !== 'ended') {
+    throw new Error('Round advance history can only be recorded after the current hand has ended');
+  }
+  return {
+    ...history,
+    entries: [
+      ...history.entries,
+      { kind: 'round-advance', roundNumber: state.match.roundNumber },
+    ],
+  };
+}
+
 export function parseMatchHistory(raw: string): MatchHistoryRecord | null {
   try {
     const parsed: unknown = JSON.parse(raw);
