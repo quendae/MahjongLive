@@ -72,8 +72,8 @@ function immediateAction(
  * Difficulty wrapper around the deterministic production bot.
  *
  * Casual deliberately stays closed and ignores defense / Dora / ukeire tie-breaks. Standard keeps
- * the production shape/Dora/genbutsu heuristics and yaku-safe calls, but skips the expensive ukeire
- * tie-break. Expert is the full production bot.
+ * the production shape/Dora/genbutsu heuristics and selective yaku-safe calls, but skips Chi and
+ * the expensive ukeire tie-break. Expert is the full production bot.
  */
 export function chooseBotDecisionForDifficulty(
   state: RoundState,
@@ -90,7 +90,11 @@ export function chooseBotDecisionForDifficulty(
 
   if (state.phase.kind === 'reactions' || state.phase.kind === 'kan-reactions') {
     if (difficulty === 'casual') return { type: 'pass' };
-    return chooseBotDecision(state, player);
+    const production = chooseBotDecision(state, player);
+    if (production.type === 'action' && production.action.type === 'chi') {
+      return { type: 'pass' };
+    }
+    return production;
   }
 
   // Standard retains safe Kan judgement from the production bot. Casual skips voluntary Kans.
