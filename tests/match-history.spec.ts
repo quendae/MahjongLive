@@ -41,7 +41,12 @@ test('new game persists history separately and a legacy save still resumes witho
   await page.goto(QA_URL);
   await expect(page.locator('.setup-dialog')).toBeVisible();
   await page.locator('[data-ui-action="confirm-new-game"]').click();
-  await expect(page.locator('.seed-pill')).toBeVisible();
+
+  // 2D/3D enhancement layers may replace presentation classes after startup, so persistence is the
+  // stable contract here: both authoritative autosave and its separate history must reach storage.
+  await expect.poll(() => page.evaluate(({ saveKey, historyKey }) =>
+    localStorage.getItem(saveKey) !== null && localStorage.getItem(historyKey) !== null,
+  { saveKey: SAVE_KEY, historyKey: HISTORY_KEY })).toBe(true);
 
   const saved = await page.evaluate(({ saveKey, historyKey }) => ({
     save: localStorage.getItem(saveKey),
@@ -59,5 +64,5 @@ test('new game persists history separately and a legacy save still resumes witho
   await page.reload();
 
   await expect(page.locator('.setup-dialog')).toHaveCount(0);
-  await expect(page.locator('.seed-pill')).toContainText(String(savedState.seed));
+  await expect(page.getByText(`Seed ${savedState.seed}`, { exact: true })).toBeVisible();
 });
