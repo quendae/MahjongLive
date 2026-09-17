@@ -237,6 +237,10 @@ export function runBotCalibration(options: BotCalibrationRunOptions): BotCalibra
   };
 }
 
+function percentage(count: number, roundsPlayed: number): string {
+  return `${(roundsPlayed === 0 ? 0 : (count / roundsPlayed) * 100).toFixed(1)}%`;
+}
+
 /** Human-readable benchmark output; deliberately reports measurements without declaring a winner. */
 export function formatBotCalibrationReport(summary: BotCalibrationSummary): string {
   const lines = [
@@ -244,7 +248,7 @@ export function formatBotCalibrationReport(summary: BotCalibrationSummary): stri
     `Matches: ${summary.matches} | Rounds: ${summary.totalRounds} | Actions: ${summary.totalActions}`,
     `Average match: ${summary.averageRoundsPerMatch.toFixed(2)} rounds | ${summary.averageActionsPerMatch.toFixed(2)} actions`,
     '',
-    'Profile  Samples  Avg place  Avg points  Wins  Deal-ins  Riichi  Calls  Placements  Seats(E/S/W/N)',
+    'Profile  Samples  Avg place  Avg points  Win%  Deal-in%  Riichi%  Calls/rnd  Placements  Seats(E/S/W/N)',
   ];
 
   for (const profile of PROFILE_ORDER) {
@@ -254,10 +258,10 @@ export function formatBotCalibrationReport(summary: BotCalibrationSummary): stri
       String(value.samples).padStart(7),
       value.averagePlacement.toFixed(2).padStart(10),
       numberFormat.format(Math.round(value.averageFinalPoints)).padStart(10),
-      String(value.wins).padStart(6),
-      String(value.dealIns).padStart(9),
-      String(value.riichiDeclarations).padStart(7),
-      String(value.calls).padStart(6),
+      percentage(value.wins, value.roundsPlayed).padStart(6),
+      percentage(value.dealIns, value.roundsPlayed).padStart(9),
+      percentage(value.riichiDeclarations, value.roundsPlayed).padStart(8),
+      (value.roundsPlayed === 0 ? 0 : value.calls / value.roundsPlayed).toFixed(2).padStart(9),
       value.placementCounts.join('/').padStart(10),
       value.seatExposure.join('/').padStart(14),
     ].join('  '));

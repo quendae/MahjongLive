@@ -1,0 +1,45 @@
+name: Bot strength calibration
+
+on:
+  push:
+    branches: [feature/bot-strength-calibration]
+    paths:
+      - 'shared/src/engine/bot/difficulty.ts'
+      - 'shared/src/engine/bot/bot.ts'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: benchmark shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            seeds: 20260916,20260917,20260918,20260919,20260920,20260921
+          - shard: 2
+            seeds: 20260922,20260923,20260924,20260925,20260926,20260927
+          - shard: 3
+            seeds: 20260928,20260929,20260930,20260931,20260932,20260933
+          - shard: 4
+            seeds: 20260934,20260935,20260936,20260937,20260938,20260939
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run 6-seed × 4-rotation calibration shard
+        run: >-
+          pnpm bot:benchmark --
+          --seeds ${{ matrix.seeds }}
+          --rotations 0,1,2,3
+          --max-rounds 64
+          --max-actions 2048

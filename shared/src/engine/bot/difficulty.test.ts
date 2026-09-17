@@ -67,6 +67,34 @@ function valueHonorReactionFixture(): RoundState {
   };
 }
 
+function tanyaoChiReactionFixture(): RoundState {
+  const base = createRound(createRNG(7014));
+  const botHand = [
+    physical(m(4), 501), physical(m(5), 502),
+    physical(p(2), 503), physical(p(3), 504), physical(p(4), 505),
+    physical(p(5), 506), physical(p(6), 507), physical(p(7), 508),
+    physical(s(2), 509), physical(s(3), 510), physical(s(4), 511),
+    physical(s(6), 512), physical(s(8), 513),
+  ];
+  const discardTile = physical(m(3), 599);
+  const discard: RoundDiscard = {
+    tile: discardTile,
+    tileId: discardTile.id!,
+    tsumogiri: false,
+    wasLastLiveDraw: false,
+  };
+  const discarder: PlayerIndex = 3;
+  const players = [...base.players] as RoundState['players'][number][];
+  players[0] = { ...players[0], concealed: botHand, melds: [], discards: [] };
+  players[discarder] = { ...players[discarder], discards: [discard], discardCount: 1 };
+  return {
+    ...base,
+    players: players as unknown as RoundState['players'],
+    currentPlayer: discarder,
+    phase: { kind: 'reactions', discarder, discardIndex: 0, ronClaims: [], callClaims: [] },
+  };
+}
+
 describe('bot difficulty profiles', () => {
   it('uses ukeire only on Expert when base heuristics choose another equal-distance discard', () => {
     const state = ukeireChoiceFixture();
@@ -85,6 +113,16 @@ describe('bot difficulty profiles', () => {
     expect(standard.type).toBe('action');
     if (standard.type !== 'action') return;
     expect(standard.action.type).toBe('pon');
+  });
+
+  it('reserves yaku-safe Chi for Expert while Standard keeps the hand closed', () => {
+    const state = tanyaoChiReactionFixture();
+    expect(chooseBotDecisionForDifficulty(state, 0, 'standard')).toEqual({ type: 'pass' });
+
+    const expert = chooseBotDecisionForDifficulty(state, 0, 'expert');
+    expect(expert.type).toBe('action');
+    if (expert.type !== 'action') return;
+    expect(expert.action.type).toBe('chi');
   });
 
   it('normalizes unknown persisted values to the requested fallback', () => {
