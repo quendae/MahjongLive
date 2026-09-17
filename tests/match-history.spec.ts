@@ -14,6 +14,7 @@ import {
 const QA_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
 const SAVE_KEY = 'mahjong-live:single:v1';
 const HISTORY_KEY = 'mahjong-live:history:v1';
+const SETUP_PENDING_KEY = 'mahjong-live:setup-pending:v1';
 
 test('history viewer model exposes deterministic cursor state and step controls', () => {
   const initial = createSingleGame(0x10203040, 0, 'standard');
@@ -41,6 +42,10 @@ test('new game persists history separately and a legacy save still resumes witho
   await page.goto(QA_URL);
   await expect(page.locator('.setup-dialog')).toBeVisible();
   await page.locator('[data-ui-action="confirm-new-game"]').click();
+
+  // Confirming the required setup must win over any hidden initial presentation work. If this key
+  // remains set, reload intentionally returns to setup instead of resuming the accepted game.
+  await expect.poll(() => page.evaluate((pendingKey) => localStorage.getItem(pendingKey), SETUP_PENDING_KEY)).toBeNull();
 
   // 2D/3D enhancement layers may replace presentation classes after startup, so persistence is the
   // stable contract here: both authoritative autosave and its separate history must reach storage.
