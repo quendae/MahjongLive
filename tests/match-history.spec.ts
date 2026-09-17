@@ -41,7 +41,7 @@ test('new game persists history separately and a legacy save still resumes witho
   await page.goto(QA_URL);
   await expect(page.locator('.setup-dialog')).toBeVisible();
   await page.locator('[data-ui-action="confirm-new-game"]').click();
-  await expect(page.locator('.mahjong-table')).toBeVisible();
+  await expect(page.locator('.seed-pill')).toBeVisible();
 
   const saved = await page.evaluate(({ saveKey, historyKey }) => ({
     save: localStorage.getItem(saveKey),
@@ -50,6 +50,7 @@ test('new game persists history separately and a legacy save still resumes witho
 
   expect(saved.save).not.toBeNull();
   expect(saved.history).not.toBeNull();
+  const savedState = JSON.parse(saved.save ?? '{}');
   const history = JSON.parse(saved.history ?? '{}');
   expect(history.version).toBe(1);
   expect(history.entries.length).toBeGreaterThan(0);
@@ -58,6 +59,5 @@ test('new game persists history separately and a legacy save still resumes witho
   await page.reload();
 
   await expect(page.locator('.setup-dialog')).toHaveCount(0);
-  await expect(page.locator('.mahjong-table')).toBeVisible();
-  await expect(page.locator('.seed-pill')).toBeVisible();
+  await expect(page.locator('.seed-pill')).toContainText(String(savedState.seed));
 });
