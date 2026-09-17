@@ -18,6 +18,7 @@ on:
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
       - 'tests/score-explanation.spec.ts'
+      - 'tests/match-history.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
@@ -36,6 +37,7 @@ on:
       - 'tests/table-state-presentation.spec.ts'
       - 'tests/riichi-discard-presentation.spec.ts'
       - 'tests/score-explanation.spec.ts'
+      - 'tests/match-history.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
@@ -76,6 +78,8 @@ jobs:
           done
           cat /tmp/mahjong-preview.log
           exit 1
+      - name: Audit match history and replay foundation
+        run: pnpm exec playwright test tests/match-history.spec.ts --workers=1 --reporter=line
       - name: Audit scoring explanation
         run: pnpm exec playwright test tests/score-explanation.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
