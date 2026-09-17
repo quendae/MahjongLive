@@ -1,3 +1,5 @@
+import './match-history.css';
+
 import {
   appendRoundAdvanceHistory,
   appendSingleDriveHistory,
