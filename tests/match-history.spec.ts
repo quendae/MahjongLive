@@ -39,7 +39,18 @@ test('history viewer model exposes deterministic cursor state and step controls'
 });
 
 test('new game persists history separately and a legacy save still resumes without it', async ({ page }) => {
-  await page.goto(QA_URL);
+  // This test owns the persistence/resume contract only. Keep renderer/presentation/tutorial work
+  // out of the critical path; those behaviors have their own dedicated browser suites.
+  await page.addInitScript(() => {
+    localStorage.setItem('mahjong-live:table-3d:v1', '0');
+    localStorage.setItem('mahjong-live:preferences:v1', JSON.stringify({
+      preferredDifficulty: 'standard',
+      advisorEnabled: false,
+      tutorialSeen: true,
+      presentationSpeed: 'instant',
+    }));
+  });
+  await page.goto(QA_URL, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.setup-dialog')).toBeVisible();
   await page.locator('[data-ui-action="confirm-new-game"]').click();
 
@@ -47,8 +58,8 @@ test('new game persists history separately and a legacy save still resumes witho
   // remains set, reload intentionally returns to setup instead of resuming the accepted game.
   await expect.poll(() => page.evaluate((pendingKey) => localStorage.getItem(pendingKey), SETUP_PENDING_KEY)).toBeNull();
 
-  // 2D/3D enhancement layers may replace presentation classes after startup, so persistence is the
-  // stable contract here: both authoritative autosave and its separate history must reach storage.
+  // Persistence is the stable contract here: both authoritative autosave and its separate history
+  // must reach storage before the legacy-history removal/reload check begins.
   await expect.poll(() => page.evaluate(({ saveKey, historyKey }) =>
     localStorage.getItem(saveKey) !== null && localStorage.getItem(historyKey) !== null,
   { saveKey: SAVE_KEY, historyKey: HISTORY_KEY })).toBe(true);
@@ -66,7 +77,7 @@ test('new game persists history separately and a legacy save still resumes witho
   expect(history.entries.length).toBeGreaterThan(0);
 
   await page.evaluate((historyKey) => localStorage.removeItem(historyKey), HISTORY_KEY);
-  await page.reload();
+  await page.reload({ waitUntil: 'domcontentloaded' });
 
   await expect(page.locator('.setup-dialog')).toHaveCount(0);
   await expect(page.getByText(`Seed ${savedState.seed}`, { exact: true })).toBeVisible();
