@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import * as audio from '../client/src/audio';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
 
@@ -86,8 +87,7 @@ async function boot(page: Page): Promise<void> {
   await page.waitForTimeout(120);
 }
 
-test('authoritative RoundEvents map to deterministic presentation cues', async () => {
-  const audio = await import('../client/src/audio');
+test('authoritative RoundEvents map to deterministic presentation cues', () => {
   const map = (audio as typeof audio & {
     presentationCuesForEvents?: (events: readonly { type: string }[]) => readonly string[];
   }).presentationCuesForEvents;
