@@ -1,4 +1,5 @@
 import type { PlayerIndex, PointDeltaTuple, RoundState } from '../rules/types';
+import type { RuleProfileId } from '../rules/profile';
 
 export type MatchWind = 'east' | 'south' | 'west';
 export type MatchHand = 1 | 2 | 3 | 4;
@@ -27,6 +28,8 @@ export interface MatchResult {
 }
 
 export interface MatchState {
+  /** Missing means a legacy save and resolves to the Standard profile. */
+  ruleProfileId?: RuleProfileId;
   status: MatchStatus;
   initialDealer: PlayerIndex;
   wind: MatchWind;
@@ -38,6 +41,7 @@ export interface MatchState {
 }
 
 export interface MatchOptions {
+  ruleProfileId?: RuleProfileId;
   initialDealer?: PlayerIndex;
   startingPoints?: number | PointDeltaTuple;
   targetPoints?: number;
