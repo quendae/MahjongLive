@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
@@ -167,6 +168,18 @@ async function capture(page: Page, testInfo: TestInfo, profile: Profile, mode: '
   await page.screenshot({ path, fullPage: true });
   await testInfo.attach(`${profile.name}-${mode}`, { path, contentType: 'image/png' });
 }
+
+// Cross-browser/touch coverage is a product gate, not an ad-hoc local command. Keep the workflow
+// contract executable so Firefox/WebKit/touch cannot silently disappear from CI later.
+test('responsive QA workflow includes Firefox, WebKit and real touch gates', async () => {
+  const workflow = readFileSync('.github/workflows/responsive-qa.yml', 'utf8');
+  expect(workflow).toContain('tests/cross-browser-touch.spec.ts');
+  expect(workflow).toContain('firefox');
+  expect(workflow).toContain('webkit');
+  expect(workflow).toMatch(/--browser=firefox/);
+  expect(workflow).toMatch(/--browser=webkit/);
+  expect(workflow).toMatch(/@touch/);
+});
 
 // Software-rendered WebGL on hosted CI varies substantially between runners, especially for the
 // first 2560x1440 3D page. Keep the visual assertions unchanged but allow enough budget for a slow
