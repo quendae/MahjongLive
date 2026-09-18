@@ -1,0 +1,222 @@
+name: One-shot table polish
+
+on:
+  push:
+    branches:
+      - feature/visual-table-replay
+    paths:
+      - '.table-polish-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/visual-table-replay
+      - name: Apply table polish fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected source block not found in {path}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 2D side-seat discard: travel upright, rotate only into the destination river orientation.
+          p = Path('client/src/discard-source-2d.ts')
+          text = p.read_text(encoding='utf-8')
+          old = "  const angle = sideAngle(latest.side);\n"
+          new = "  const endAngle = sideAngle(latest.side);\n  const startAngle = latest.side === 'left' || latest.side === 'right' ? 0 : endAngle;\n"
+          if old not in text:
+              raise SystemExit('2D discard angle block not found')
+          text = text.replace(old, new, 1)
+          old_start = 'rotate(${angle}deg) scale(${scaleX}, ${scaleY})'
+          old_end = 'rotate(${angle}deg) scale(1)'
+          if old_start not in text or old_end not in text:
+              raise SystemExit('2D discard keyframe rotations not found')
+          text = text.replace(old_start, 'rotate(${startAngle}deg) scale(${scaleX}, ${scaleY})', 1)
+          text = text.replace(old_end, 'rotate(${endAngle}deg) scale(1)', 1)
+          p.write_text(text, encoding='utf-8')
+
+          # Keep the 3D Dora tray in the stable stage instead of the app subtree that is replaced each action.
+          p = Path('client/src/clarity.ts')
+          text = p.read_text(encoding='utf-8')
+          start = text.index('function ensureDoraTray(table: HTMLElement): void {')
+          end = text.index('\nfunction seatSide(', start)
+          replacement = '''function ensureDoraTray(table: HTMLElement): void {
+            const source = table.querySelector<HTMLElement>('.table-center .dora-row');
+            if (!source) return;
+            const stage = document.querySelector<HTMLElement>('#table-3d-stage');
+            const tableTray = table.querySelector<HTMLElement>('.table-dora-tray');
+            const stageTray = stage?.querySelector<HTMLElement>('.table-dora-tray') ?? null;
+
+            // 2D renders the authoritative Dora row inside the physical centre counter.
+            if (!table.classList.contains('table-3d-active')) {
+              source.classList.remove('clarity-source-hidden');
+              source.classList.add('center-dora-integrated');
+              tableTray?.remove();
+              stageTray?.remove();
+              return;
+            }
+
+            // #app is replaced on every authoritative game render. Mount the 3D Dora HUD in the
+            // stable renderer stage so discards cannot destroy/re-create it and cause a visible blink.
+            source.classList.remove('center-dora-integrated');
+            source.classList.add('clarity-source-hidden');
+            tableTray?.remove();
+            if (!stage) return;
+
+            const signature = [...source.querySelectorAll<HTMLElement>('.tile')]
+              .map((tile) => tile.getAttribute('aria-label') ?? '')
+              .join('|');
+            let currentTray = stageTray;
+            if (currentTray?.dataset.signature === signature) return;
+
+            if (!currentTray) {
+              currentTray = document.createElement('div');
+              currentTray.className = 'table-dora-tray';
+              currentTray.setAttribute('aria-label', 'Dora indicators');
+              stage.appendChild(currentTray);
+            }
+            currentTray.dataset.signature = signature;
+            currentTray.replaceChildren();
+
+            const title = document.createElement('span');
+            title.className = 'dora-tray-title';
+            title.textContent = 'DORA';
+            currentTray.appendChild(title);
+
+            const tiles = document.createElement('div');
+            tiles.className = 'dora-tray-tiles';
+            for (const tile of source.querySelectorAll<HTMLElement>('.tile')) {
+              tiles.appendChild(tile.cloneNode(true));
+            }
+            currentTray.appendChild(tiles);
+          }
+          '''
+          text = text[:start] + replacement + text[end:]
+          p.write_text(text, encoding='utf-8')
+
+          # 3D defaults: larger readable center; preserve the stable Dora tray when the renderer canvas is rebuilt.
+          p = Path('client/src/table-3d.ts')
+          text = p.read_text(encoding='utf-8')
+          old_defaults = '''    centerScale: .92,
+              centerOffsetX: 0,
+              centerOffsetY: -10,
+              centerWidth: 309,
+              centerHeight: 265,'''
+          new_defaults = '''    centerScale: 1.02,
+              centerOffsetX: 0,
+              centerOffsetY: -10,
+              centerWidth: 340,
+              centerHeight: 300,'''
+          if old_defaults not in text:
+              raise SystemExit('table-3d center defaults block not found')
+          text = text.replace(old_defaults, new_defaults, 1)
+          migration_anchor = "  if (parsed.tiles.faceTint.toLowerCase() === '#ffffff') parsed.tiles.faceTint = '#fbfbfb';\n"
+          migration = migration_anchor + "  if (Math.abs(parsed.ui.centerScale - .92) < .0001) parsed.ui.centerScale = 1.02;\n  if (Math.abs(parsed.ui.centerWidth - 309) < .0001) parsed.ui.centerWidth = 340;\n  if (Math.abs(parsed.ui.centerHeight - 265) < .0001) parsed.ui.centerHeight = 300;\n"
+          if migration_anchor not in text:
+              raise SystemExit('table-3d migration anchor not found')
+          text = text.replace(migration_anchor, migration, 1)
+          canvas_old = "  renderer.domElement.setAttribute('aria-hidden', 'true');\n  stage.replaceChildren(renderer.domElement);\n"
+          canvas_new = "  renderer.domElement.setAttribute('aria-hidden', 'true');\n  const persistentDoraTray = stage.querySelector<HTMLElement>('.table-dora-tray');\n  stage.replaceChildren(renderer.domElement);\n  if (persistentDoraTray) stage.appendChild(persistentDoraTray);\n"
+          if canvas_old not in text:
+              raise SystemExit('table-3d canvas mount block not found')
+          text = text.replace(canvas_old, canvas_new, 1)
+          p.write_text(text, encoding='utf-8')
+
+          # Keep Dev's persisted defaults aligned and migrate only the exact previous defaults.
+          p = Path('client/src/dev-tuning.ts')
+          text = p.read_text(encoding='utf-8')
+          if old_defaults not in text:
+              raise SystemExit('dev-tuning center defaults block not found')
+          text = text.replace(old_defaults, new_defaults, 1)
+          anchor = "if (Math.abs(settings.graphics.pixelRatio - 1.35) < .0001) settings.graphics.pixelRatio = 1.0;\n"
+          migrated = anchor + "if (Math.abs(settings.ui.centerScale - .92) < .0001) settings.ui.centerScale = 1.02;\nif (Math.abs(settings.ui.centerWidth - 309) < .0001) settings.ui.centerWidth = 340;\nif (Math.abs(settings.ui.centerHeight - 265) < .0001) settings.ui.centerHeight = 300;\n"
+          if anchor not in text:
+              raise SystemExit('dev-tuning migration anchor not found')
+          text = text.replace(anchor, migrated, 1)
+          p.write_text(text, encoding='utf-8')
+
+          # 3D CSS: Dora now lives in #table-3d-stage; enlarge/readabilize center on desktop.
+          p = Path('client/src/table-3d.css')
+          text = p.read_text(encoding='utf-8')
+          for old, new in [
+              ('.table-3d-active .table-dora-tray', '#table-3d-stage.is-active .table-dora-tray'),
+              ('.table-3d-active .dora-tray-title', '#table-3d-stage.is-active .dora-tray-title'),
+              ('.table-3d-active .dora-tray-tiles', '#table-3d-stage.is-active .dora-tray-tiles'),
+          ]:
+              text = text.replace(old, new)
+          text = text.replace('width: min(var(--dev-center-width, 242px), calc(100% - 48px));', 'width: min(var(--dev-center-width, 340px), calc(100% - 48px));', 1)
+          text = text.replace('height: min(var(--dev-center-height, 242px), calc(100% - 48px));', 'height: min(var(--dev-center-height, 300px), calc(100% - 48px));', 1)
+          text = text.replace('  font-size: 36px;\n  line-height: 1;\n', '  font-size: 42px;\n  line-height: 1;\n', 1)
+          marker = '@media (max-width: 1050px) {'
+          desktop_rules = '''@media (min-width: 1060px) {
+            .table-3d-active .table-state-panel {
+              width: min(100%, 236px);
+              gap: 5px;
+            }
+            .table-3d-active .table-state-item {
+              min-height: 34px;
+              padding: 4px 5px;
+            }
+            .table-3d-active .table-state-item > strong { font-size: 12px; }
+            .table-3d-active .table-state-dealer strong { font-size: 11px; }
+            .table-3d-active .table-state-dealer span,
+            .table-3d-active .table-state-item small { font-size: 7px; }
+          }
+
+          '''
+          if marker not in text:
+              raise SystemExit('table-3d CSS media anchor not found')
+          text = text.replace(marker, desktop_rules + marker, 1)
+          p.write_text(text, encoding='utf-8')
+
+          # 2D desktop center: modestly larger physical counter plus clearer labels/numbers.
+          p = Path('client/src/center-anchor-2d.css')
+          text = p.read_text(encoding='utf-8')
+          old_size = "  width: 292px !important;\n  height: 292px !important;\n"
+          new_size = "  width: 320px !important;\n  height: 320px !important;\n"
+          if old_size not in text:
+              raise SystemExit('2D center desktop size not found')
+          text = text.replace(old_size, new_size, 1)
+          marker = '@media (min-width: 761px) and (max-width: 1059px) {'
+          desktop_rules = '''@media (min-width: 1060px) {
+            .mahjong-table:not(.table-3d-active) .round-title { font-size: 42px; }
+            .mahjong-table:not(.table-3d-active) .table-state-panel {
+              width: min(100%, 232px);
+              gap: 5px;
+            }
+            .mahjong-table:not(.table-3d-active) .table-state-item {
+              min-height: 34px;
+              padding: 4px 5px;
+            }
+            .mahjong-table:not(.table-3d-active) .table-state-item > strong { font-size: 12px; }
+            .mahjong-table:not(.table-3d-active) .table-state-dealer strong { font-size: 11px; }
+            .mahjong-table:not(.table-3d-active) .table-state-dealer span,
+            .mahjong-table:not(.table-3d-active) .table-state-item small { font-size: 7px; }
+          }
+
+          '''
+          if marker not in text:
+              raise SystemExit('2D center tablet media anchor not found')
+          text = text.replace(marker, desktop_rules + marker, 1)
+          p.write_text(text, encoding='utf-8')
+
+          Path('.table-polish-trigger').unlink(missing_ok=True)
+          Path('.github/workflows/one-shot-table-polish.yml').unlink(missing_ok=True)
+      - name: Commit source fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: stabilize table presentation polish'
+          git push origin HEAD:feature/visual-table-replay
