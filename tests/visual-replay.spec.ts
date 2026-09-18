@@ -64,6 +64,11 @@ async function bootSavedMatch(page: Page, use3d: boolean) {
   return fixture;
 }
 
+async function replayStep(page: Page): Promise<number> {
+  const text = await page.locator('.visual-replay-status strong').first().textContent();
+  return Number(text ?? 'NaN');
+}
+
 async function audit3d(page: Page): Promise<AuditSnapshot> {
   const snapshot = await page.evaluate(() => new Promise<any | null>((resolve) => {
     const timeout = window.setTimeout(() => resolve(null), 900);
@@ -99,10 +104,23 @@ test('visual replay renders the selected history cursor on the live 2D table wit
   await page.locator('[data-visual-replay-open]').click();
   await expect(page.locator('[data-visual-replay-panel]')).toBeVisible();
   await expect(page.locator('[data-history-action="play"]')).toBeVisible();
+  await expect(page.locator('[data-visual-replay-round-cursor]')).toHaveCount(1);
   await page.locator('[data-history-action="start"]').click();
 
   await expect(page.locator('[data-visual-replay-table] .discard-river .tile')).toHaveCount(0);
   await expect(page.locator('[data-visual-replay-table] [data-tile-id]')).toHaveCount(0);
+  expect(await replayStep(page)).toBe(0);
+  expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBe(originalSave);
+
+  const play = page.locator('[data-history-action="play"]');
+  await play.click();
+  await expect(play).toHaveText('Pause');
+  await expect.poll(() => replayStep(page)).toBeGreaterThan(0);
+  await play.click();
+  await expect(play).toHaveText('Play');
+  const pausedStep = await replayStep(page);
+  await page.waitForTimeout(700);
+  expect(await replayStep(page)).toBe(pausedStep);
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBe(originalSave);
 
   await page.locator('[data-visual-replay-close]').click();
