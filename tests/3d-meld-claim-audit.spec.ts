@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
 const CALLED_ID = 9901;
+// Keep both physical called-tile migration and compact multi-meld spacing under the same 3D audit gate.
 
 type Transform = {
   x: number;
