@@ -95,6 +95,53 @@ async function waitForRiverActors(page: Page, count: number): Promise<AuditSnaps
   return latest;
 }
 
+async function logReplayCloseStability(page: Page): Promise<void> {
+  const diagnostics = await page.evaluate(async () => {
+    const close = document.querySelector<HTMLElement>('[data-visual-replay-close]');
+    const panel = document.querySelector<HTMLElement>('[data-visual-replay-panel]');
+    if (!close || !panel) return null;
+
+    const frames: Array<Record<string, number>> = [];
+    for (let index = 0; index < 8; index += 1) {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      const closeRect = close.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      frames.push({
+        closeX: closeRect.x,
+        closeY: closeRect.y,
+        closeWidth: closeRect.width,
+        closeHeight: closeRect.height,
+        panelX: panelRect.x,
+        panelY: panelRect.y,
+        panelWidth: panelRect.width,
+        panelHeight: panelRect.height,
+      });
+    }
+
+    const animations = document.getAnimations().map((animation) => {
+      const target = (animation.effect as KeyframeEffect | null)?.target;
+      return {
+        playState: animation.playState,
+        currentTime: animation.currentTime,
+        target: target instanceof HTMLElement ? `${target.tagName}.${target.className}` : null,
+      };
+    });
+
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      body: {
+        width: document.body.getBoundingClientRect().width,
+        height: document.body.getBoundingClientRect().height,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+      },
+      frames,
+      animations,
+    };
+  });
+  console.log(`3D replay close stability: ${JSON.stringify(diagnostics)}`);
+}
+
 test('visual replay renders the selected history cursor on the live 2D table without mutating autosave', async ({ page }) => {
   const fixture = await bootSavedMatch(page, false);
   const originalSave = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
@@ -140,6 +187,7 @@ test('3D renderer follows the same visual replay cursor as the 2D table', async 
   await page.locator('[data-history-action="start"]').click();
   await waitForRiverActors(page, 0);
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBe(originalSave);
+  await logReplayCloseStability(page);
 
   await page.locator('[data-visual-replay-close]').click();
   await waitForRiverActors(page, fixture.liveDiscards);
