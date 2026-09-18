@@ -181,14 +181,17 @@ function renderCenter(panel: HTMLElement, state: SingleGameState): void {
   if (indicator) indicator.textContent = round.phase.kind === 'ended' ? 'Hand complete' : active === state.humanSeat ? 'You to act' : 'Replay';
 }
 
-export function renderReplayTable(template: HTMLElement, state: SingleGameState): HTMLElement {
-  const panel = template.cloneNode(true) as HTMLElement;
+export function syncReplayTable(panel: HTMLElement, state: SingleGameState): void {
   panel.setAttribute('data-visual-replay-table', '');
   panel.querySelectorAll('[data-tile-id]').forEach((element) => element.removeAttribute('data-tile-id'));
   panel.querySelectorAll('.action-dock').forEach((element) => element.remove());
   panel.querySelectorAll('.call-bubble').forEach((element) => element.remove());
-
   ([0, 1, 2, 3] as const).forEach((player) => renderPlayerZone(panel, state, player));
   renderCenter(panel, state);
+}
+
+export function renderReplayTable(template: HTMLElement, state: SingleGameState): HTMLElement {
+  const panel = template.cloneNode(true) as HTMLElement;
+  syncReplayTable(panel, state);
   return panel;
 }
