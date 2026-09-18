@@ -105,6 +105,12 @@ test('visual replay renders the selected history cursor on the live 2D table wit
   await expect(page.locator('[data-visual-replay-panel]')).toBeVisible();
   await expect(page.locator('[data-history-action="play"]')).toBeVisible();
   await expect(page.locator('[data-visual-replay-round-cursor]')).toHaveCount(1);
+  const speed = page.locator('[data-visual-replay-speed]');
+  await expect(speed).toBeVisible();
+  await expect(speed).toHaveValue('1');
+  await expect(speed.locator('option')).toHaveCount(4);
+  await speed.selectOption('4');
+  await expect(speed).toHaveValue('4');
   await page.locator('[data-history-action="start"]').click();
 
   await expect(page.locator('[data-visual-replay-table] .discard-river .tile')).toHaveCount(0);
@@ -115,7 +121,8 @@ test('visual replay renders the selected history cursor on the live 2D table wit
   const play = page.locator('[data-history-action="play"]');
   await play.click();
   await expect(play).toHaveText('Pause');
-  await expect.poll(() => replayStep(page)).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  expect(await replayStep(page)).toBeGreaterThanOrEqual(2);
   await play.click();
   await expect(play).toHaveText('Play');
   const pausedStep = await replayStep(page);
