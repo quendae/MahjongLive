@@ -22,6 +22,7 @@ on:
       - 'tests/match-history.spec.ts'
       - 'tests/visual-replay.spec.ts'
       - 'tests/contextual-teaching.spec.ts'
+      - 'tests/ui-scale-accessibility.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
@@ -44,6 +45,7 @@ on:
       - 'tests/match-history.spec.ts'
       - 'tests/visual-replay.spec.ts'
       - 'tests/contextual-teaching.spec.ts'
+      - 'tests/ui-scale-accessibility.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
@@ -94,6 +96,8 @@ jobs:
         run: pnpm exec playwright test tests/contextual-teaching.spec.ts --workers=1 --reporter=line
       - name: Audit presentation audio sync
         run: pnpm exec playwright test tests/audio-presentation-sync.spec.ts --workers=1 --reporter=line
+      - name: Audit UI scale and keyboard accessibility
+        run: pnpm exec playwright test tests/ui-scale-accessibility.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
         run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
