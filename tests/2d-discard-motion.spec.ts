@@ -116,6 +116,12 @@ test('2D side-seat discards turn into the river orientation during flight instea
       const player = zone?.querySelector<HTMLElement>('.player-name')?.textContent?.trim();
       if (!app || !river || !player) throw new Error(`Missing ${seat} seat fixture`);
 
+      // Keep each synthetic seat case independent. Production logs are newest-first, while this
+      // fixture appends into #app; leaving the prior QA entry around would make latestDiscard()
+      // keep selecting the previous seat even though the new tile/log pair is valid.
+      app.querySelectorAll<HTMLElement>('.log-entry[data-side-flight-qa="true"]')
+        .forEach((entry) => entry.remove());
+
       const label = `qa-${seat}-flight`;
       const tile = document.createElement('div');
       tile.className = 'tile tile-compact';
@@ -126,6 +132,7 @@ test('2D side-seat discards turn into the river orientation during flight instea
 
       const log = document.createElement('div');
       log.className = 'log-entry';
+      log.dataset.sideFlightQa = 'true';
       log.textContent = `${player} discarded ${label}.`;
       app.append(log);
     }, side);
