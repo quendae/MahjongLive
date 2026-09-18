@@ -5,6 +5,11 @@ import {
 } from '../bot/difficulty';
 import type { BotDifficulty } from '../bot/difficulty';
 import { advanceMatch, createMatch } from '../match/match';
+import {
+  DEFAULT_RULE_PROFILE_ID,
+  normalizeRuleProfileId,
+} from '../rules/profile';
+import type { RuleProfileId } from '../rules/profile';
 import { applyAction, getLegalActions } from '../rules/round';
 import type {
   ApplyActionResult,
@@ -50,17 +55,38 @@ export function singleBotDifficulty(state: SingleGameState): BotDifficulty {
   return normalizeBotDifficulty(state.botDifficulty, DEFAULT_BOT_DIFFICULTY);
 }
 
+/** Missing rule profile means a legacy save created before rule-profile plumbing. */
+export function normalizeSingleGameState(state: SingleGameState): SingleGameState {
+  const ruleProfileId = normalizeRuleProfileId(
+    state.match.ruleProfileId ?? state.match.round.ruleProfileId,
+  );
+  const botDifficulty = singleBotDifficulty(state);
+  const round = state.match.round.ruleProfileId === ruleProfileId
+    ? state.match.round
+    : { ...state.match.round, ruleProfileId };
+  const match = state.match.ruleProfileId === ruleProfileId && round === state.match.round
+    ? state.match
+    : { ...state.match, ruleProfileId, round };
+  if (state.botDifficulty === botDifficulty && match === state.match) return state;
+  return { ...state, botDifficulty, match };
+}
+
 export function createSingleGame(
   seed: number,
   humanSeat: PlayerIndex = 0,
   botDifficulty: BotDifficulty = DEFAULT_BOT_DIFFICULTY,
+  ruleProfileId: RuleProfileId = DEFAULT_RULE_PROFILE_ID,
 ): SingleGameState {
   const normalizedSeed = Math.trunc(seed) >>> 0;
+  const normalizedRuleProfileId = normalizeRuleProfileId(ruleProfileId);
   return {
     seed: normalizedSeed,
     humanSeat,
     botDifficulty: normalizeBotDifficulty(botDifficulty),
-    match: createMatch(createRNG(deriveSingleRoundSeed(normalizedSeed, 1))),
+    match: createMatch(
+      createRNG(deriveSingleRoundSeed(normalizedSeed, 1)),
+      { ruleProfileId: normalizedRuleProfileId },
+    ),
   };
 }
 
@@ -209,13 +235,10 @@ export function driveSingleGame(
   state: SingleGameState,
   safetyCap = DEFAULT_SAFETY_CAP,
 ): SingleDriveResult {
-  // Migrate old serialized saves in-memory without changing their deterministic round state.
-  let working: SingleGameState = state.botDifficulty === undefined
-    ? { ...state, botDifficulty: singleBotDifficulty(state) }
-    : state;
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
   const frames: SinglePresentationFrame[] = [];
+  let working = normalizeSingleGameState(state);
 
   for (let step = 0; step < safetyCap; step++) {
     const prompt = humanTurnPrompt(working);
@@ -291,33 +314,32 @@ export function applyHumanDecision(
   decision: HumanDecision,
   safetyCap = DEFAULT_SAFETY_CAP,
 ): SingleDriveResult {
-  const prompt = humanTurnPrompt(state);
+  const normalizedState = normalizeSingleGameState(state);
+  const prompt = humanTurnPrompt(normalizedState);
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
   const frames: SinglePresentationFrame[] = [];
   if (!prompt || (prompt.kind !== 'turn' && prompt.kind !== 'reaction')) {
-    return failure(state, 'ILLEGAL_HUMAN_ACTION', 'The game is not waiting for a human decision', events, trace, frames);
+    return failure(normalizedState, 'ILLEGAL_HUMAN_ACTION', 'The game is not waiting for a human decision', events, trace, frames);
   }
 
-  let working = state.botDifficulty === undefined
-    ? { ...state, botDifficulty: singleBotDifficulty(state) }
-    : state;
+  let working = normalizedState;
   if (decision.type === 'pass') {
     if (prompt.kind !== 'reaction') {
-      return failure(state, 'INVALID_HUMAN_PASS', 'Pass is only valid during a reaction prompt', events, trace, frames);
+      return failure(normalizedState, 'INVALID_HUMAN_PASS', 'Pass is only valid during a reaction prompt', events, trace, frames);
     }
   } else {
     const action = decision.action;
-    if (action.type === 'resolve-reactions' || action.player !== state.humanSeat) {
-      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Action does not belong to the human seat', events, trace, frames);
+    if (action.type === 'resolve-reactions' || action.player !== normalizedState.humanSeat) {
+      return failure(normalizedState, 'ILLEGAL_HUMAN_ACTION', 'Action does not belong to the human seat', events, trace, frames);
     }
     if (prompt.kind === 'reaction' && !isHumanReactionAction(action)) {
-      return failure(state, 'ILLEGAL_HUMAN_ACTION', 'Only Ron/Chi/Pon/Daiminkan or pass are valid reactions', events, trace, frames);
+      return failure(normalizedState, 'ILLEGAL_HUMAN_ACTION', 'Only Ron/Chi/Pon/Daiminkan or pass are valid reactions', events, trace, frames);
     }
     const committed = commitAction(working, action, 'human', events, trace, frames);
     if (!committed.ok) {
       return failure(
-        state,
+        normalizedState,
         'ILLEGAL_HUMAN_ACTION',
         `${committed.result.error.code}: ${committed.result.error.message}`,
         events,
@@ -352,19 +374,17 @@ export function continueSingleGame(
   state: SingleGameState,
   safetyCap = DEFAULT_SAFETY_CAP,
 ): SingleDriveResult {
+  const normalizedState = normalizeSingleGameState(state);
   const events: RoundEvent[] = [];
   const trace: SingleActionTrace[] = [];
   const frames: SinglePresentationFrame[] = [];
-  if (state.match.status === 'ended') {
-    return success(state, { kind: 'match-ended', result: state.match.result! }, events, trace, frames);
+  if (normalizedState.match.status === 'ended') {
+    return success(normalizedState, { kind: 'match-ended', result: normalizedState.match.result! }, events, trace, frames);
   }
-  if (state.match.round.phase.kind !== 'ended') {
-    return failure(state, 'ROUND_NOT_ENDED', 'The current hand is still in progress', events, trace, frames);
+  if (normalizedState.match.round.phase.kind !== 'ended') {
+    return failure(normalizedState, 'ROUND_NOT_ENDED', 'The current hand is still in progress', events, trace, frames);
   }
 
-  const normalizedState = state.botDifficulty === undefined
-    ? { ...state, botDifficulty: singleBotDifficulty(state) }
-    : state;
   const nextRoundNumber = normalizedState.match.roundNumber + 1;
   const advanced = advanceMatch(
     normalizedState.match,
