@@ -62,7 +62,8 @@ Current product rule decision:
 
 Next rule work:
 
-- [ ] Continue edge-case audit using deterministic full-match simulation and regression seeds.
+- [x] Continue edge-case audit using deterministic full-match simulation and regression seeds.
+  - 2026-09-18: `pnpm rules:audit` now replays six pinned full Hanchan seeds through the production engine and checks cross-round point/riichi-stick conservation, dealer/wind/hand/honba continuity, terminal placements and deterministic replay coverage. The CI sweep covered 58 rounds with 13 Tsumo, 41 Ron, 4 exhaustive draws, 15 dealer repeats, 43 dealer advances, 61 Riichi declarations, 102 calls and 6 Kans.
 - [x] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
 - [ ] Add rule-profile plumbing before introducing optional table/rules variants.
 - [ ] Keep save-state compatibility tests whenever engine state changes.
