@@ -6,6 +6,7 @@ const CROSS_BROWSER_PROFILES = [
   { name: 'phone-portrait', width: 390, height: 844 },
   { name: 'phone-landscape', width: 844, height: 390 },
 ] as const;
+type BootMode = '2d' | '3d' | '2d-fallback';
 
 async function prepareStorage(page: Page, mode: '2d' | '3d'): Promise<void> {
   await page.addInitScript(({ mode }) => {
@@ -21,6 +22,18 @@ async function prepareStorage(page: Page, mode: '2d' | '3d'): Promise<void> {
       presentationSpeed: 'instant',
     }));
   }, { mode });
+}
+
+async function webglAvailable(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const webgl2 = document.createElement('canvas');
+    const webgl = document.createElement('canvas');
+    try {
+      return Boolean(webgl2.getContext('webgl2') || webgl.getContext('webgl'));
+    } catch {
+      return false;
+    }
+  });
 }
 
 async function collect3dStartupDiagnostics(page: Page, messages: string[]): Promise<Record<string, unknown>> {
@@ -57,7 +70,7 @@ async function collect3dStartupDiagnostics(page: Page, messages: string[]): Prom
   return { ...pageState, console: messages };
 }
 
-async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<void> {
+async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<BootMode> {
   const startupMessages: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'warning' || message.type() === 'error') {
@@ -77,17 +90,33 @@ async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<void>
   await page.locator('.mahjong-table').waitFor({ state: 'visible' });
 
   if (mode === '3d') {
+    const supportsWebGl = await webglAvailable(page);
+    if (!supportsWebGl) {
+      const fallback = page.locator('.table-3d-fallback-note');
+      const button = page.locator('.table-3d-toggle');
+      await expect(fallback).toBeVisible({ timeout: 5_000 });
+      await expect(fallback).toContainText('3D renderer unavailable');
+      await expect(page.locator('.mahjong-table')).not.toHaveClass(/table-3d-active/);
+      await expect(page.locator('#table-3d-stage')).not.toHaveClass(/is-active/);
+      await expect(button).toHaveClass(/is-error/);
+      await expect(button).not.toHaveClass(/is-loading/);
+      await expect(button).toContainText('2D · 3D unavailable');
+      return '2d-fallback';
+    }
+
     try {
       await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
       await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
     } catch (error) {
       const diagnostics = await collect3dStartupDiagnostics(page, startupMessages);
-      throw new Error(`3D renderer did not activate: ${JSON.stringify(diagnostics)}\n${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`3D renderer did not activate despite WebGL support: ${JSON.stringify(diagnostics)}\n${error instanceof Error ? error.message : String(error)}`);
     }
     await page.waitForTimeout(450);
-  } else {
-    await expect(page.locator('.mahjong-table')).not.toHaveClass(/table-3d-active/);
+    return '3d';
   }
+
+  await expect(page.locator('.mahjong-table')).not.toHaveClass(/table-3d-active/);
+  return '2d';
 }
 
 async function expectLayoutInsideViewport(page: Page, mode: '2d' | '3d'): Promise<void> {
@@ -140,8 +169,11 @@ for (const profile of CROSS_BROWSER_PROFILES) {
     test(`@cross-browser ${profile.name} ${mode} keeps the table usable`, async ({ page, browserName }) => {
       expect(['firefox', 'webkit']).toContain(browserName);
       await page.setViewportSize({ width: profile.width, height: profile.height });
-      await boot(page, mode);
-      await expectLayoutInsideViewport(page, mode);
+      const actualMode = await boot(page, mode);
+      if (mode === '3d' && actualMode === '2d-fallback') {
+        expect(await webglAvailable(page)).toBe(false);
+      }
+      await expectLayoutInsideViewport(page, actualMode === '3d' ? '3d' : '2d');
     });
   }
 }
