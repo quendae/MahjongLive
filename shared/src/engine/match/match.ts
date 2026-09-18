@@ -1,3 +1,5 @@
+import { normalizeRuleProfileId, resolveRuleProfile } from '../rules/profile';
+import type { RuleProfile } from '../rules/profile';
 import { createRound } from '../rules/round';
 import type { PlayerIndex, PointDeltaTuple, RoundEndResult } from '../rules/types';
 import type { RNG } from '../wall/prng';
@@ -70,11 +72,26 @@ function finishMatch(state: MatchState, reason: MatchEndReason): MatchState {
   return { ...state, status: 'ended', result };
 }
 
+function normalizeMatchProfile(state: MatchState): { state: MatchState; profile: RuleProfile } {
+  const ruleProfileId = normalizeRuleProfileId(state.ruleProfileId ?? state.round.ruleProfileId);
+  const round = state.round.ruleProfileId === ruleProfileId
+    ? state.round
+    : { ...state.round, ruleProfileId };
+  return {
+    profile: resolveRuleProfile(ruleProfileId),
+    state: state.ruleProfileId === ruleProfileId && round === state.round
+      ? state
+      : { ...state, ruleProfileId, round },
+  };
+}
+
 export function createMatch(rng: RNG, options: MatchOptions = {}): MatchState {
   const initialDealer = options.initialDealer ?? 0;
   const targetPoints = Math.max(1, Math.trunc(options.targetPoints ?? DEFAULT_TARGET_POINTS));
   const points = initialPoints(options);
+  const ruleProfileId = normalizeRuleProfileId(options.ruleProfileId);
   return {
+    ruleProfileId,
     status: 'playing',
     initialDealer,
     wind: 'east',
@@ -82,6 +99,7 @@ export function createMatch(rng: RNG, options: MatchOptions = {}): MatchState {
     targetPoints,
     roundNumber: 1,
     round: createRound(rng, {
+      ruleProfileId,
       dealer: initialDealer,
       roundWind: 'east',
       honba: 0,
@@ -112,8 +130,8 @@ function dealerYameReason(result: RoundEndResult): MatchEndReason {
   return result.type === 'exhaustive-draw' ? 'tenpai-yame' : 'agari-yame';
 }
 
-function shouldDealerAutoStop(state: MatchState, repeats: boolean): boolean {
-  if (!repeats) return false;
+function shouldDealerAutoStop(state: MatchState, repeats: boolean, profile: RuleProfile): boolean {
+  if (!profile.dealerYame || !repeats) return false;
   if (!(state.wind === 'south' && state.hand === 4) && state.wind !== 'west') return false;
   const leader = topPlayer(state);
   return leader.player === state.round.dealer && leader.points >= state.targetPoints;
@@ -129,57 +147,63 @@ function nextHonba(result: RoundEndResult, repeats: boolean, currentHonba: numbe
 }
 
 export function advanceMatch(state: MatchState, rng: RNG): MatchAdvanceResult {
-  if (state.status === 'ended') {
+  const normalized = normalizeMatchProfile(state);
+  const working = normalized.state;
+  const profile = normalized.profile;
+
+  if (working.status === 'ended') {
     return { ok: false, error: 'MATCH_ALREADY_ENDED', message: 'The hanchan has already ended' };
   }
-  if (state.round.phase.kind !== 'ended') {
+  if (working.round.phase.kind !== 'ended') {
     return { ok: false, error: 'ROUND_NOT_ENDED', message: 'Cannot advance before the current round ends' };
   }
 
-  const result = state.round.phase.result;
-  const points = currentPoints(state);
+  const result = working.round.phase.result;
+  const points = currentPoints(working);
 
-  // Tenhou-style tobi: negative ends the match, exactly zero continues.
-  if (points.some((pointsForPlayer) => pointsForPlayer < 0)) {
-    return { ok: true, state: finishMatch(state, 'bankruptcy'), startedNextRound: false };
+  if (profile.bankruptcyBelowZero && points.some((pointsForPlayer) => pointsForPlayer < 0)) {
+    return { ok: true, state: finishMatch(working, 'bankruptcy'), startedNextRound: false };
   }
 
-  const repeats = dealerRepeats(result, state.round.dealer);
-  if (shouldDealerAutoStop(state, repeats)) {
+  const repeats = dealerRepeats(result, working.round.dealer);
+  if (shouldDealerAutoStop(working, repeats, profile)) {
     return {
       ok: true,
-      state: finishMatch(state, dealerYameReason(result)),
+      state: finishMatch(working, dealerYameReason(result)),
       startedNextRound: false,
     };
   }
 
   if (!repeats) {
-    if (state.wind === 'south' && state.hand === 4 && hasTargetLeader(state)) {
-      return { ok: true, state: finishMatch(state, 'all-last'), startedNextRound: false };
-    }
-    if (state.wind === 'west') {
-      if (hasTargetLeader(state)) {
-        return { ok: true, state: finishMatch(state, 'sudden-death'), startedNextRound: false };
+    if (working.wind === 'south' && working.hand === 4) {
+      if (hasTargetLeader(working) || !profile.westRoundExtension) {
+        return { ok: true, state: finishMatch(working, 'all-last'), startedNextRound: false };
       }
-      if (state.hand === 4) {
-        return { ok: true, state: finishMatch(state, 'west-limit'), startedNextRound: false };
+    }
+    if (working.wind === 'west') {
+      if (hasTargetLeader(working)) {
+        return { ok: true, state: finishMatch(working, 'sudden-death'), startedNextRound: false };
+      }
+      if (working.hand === 4) {
+        return { ok: true, state: finishMatch(working, 'west-limit'), startedNextRound: false };
       }
     }
   }
 
   const nextPosition = repeats
-    ? { wind: state.wind, hand: state.hand }
-    : nextHandPosition(state.wind, state.hand);
+    ? { wind: working.wind, hand: working.hand }
+    : nextHandPosition(working.wind, working.hand);
   const nextDealer = repeats
-    ? state.round.dealer
-    : (((state.round.dealer + 1) % 4) as PlayerIndex);
-  const honba = nextHonba(result, repeats, state.round.honba);
+    ? working.round.dealer
+    : (((working.round.dealer + 1) % 4) as PlayerIndex);
+  const honba = nextHonba(result, repeats, working.round.honba);
 
   const round = createRound(rng, {
+    ruleProfileId: profile.id,
     dealer: nextDealer,
     roundWind: nextPosition.wind,
     honba,
-    riichiSticks: state.round.riichiSticks,
+    riichiSticks: working.round.riichiSticks,
     startingPoints: points,
   });
 
@@ -187,10 +211,11 @@ export function advanceMatch(state: MatchState, rng: RNG): MatchAdvanceResult {
     ok: true,
     startedNextRound: true,
     state: {
-      ...state,
+      ...working,
+      ruleProfileId: profile.id,
       wind: nextPosition.wind,
       hand: nextPosition.hand,
-      roundNumber: state.roundNumber + 1,
+      roundNumber: working.roundNumber + 1,
       round,
     },
   };
