@@ -10,7 +10,9 @@ import { renderReplayTable, syncReplayTable } from './visual-replay-table';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
 const HISTORY_KEY = 'mahjong-live:history:v1';
-const PLAYBACK_DELAY_MS = 520;
+const PLAYBACK_BASE_DELAY_MS = 520;
+const PLAYBACK_RATES = [0.5, 1, 2, 4] as const;
+type PlaybackRate = typeof PLAYBACK_RATES[number];
 
 interface SavedMatchIdentity {
   seed?: unknown;
@@ -26,6 +28,7 @@ interface ActiveReplay {
   controls: HTMLElement;
   playing: boolean;
   timer: number | null;
+  playbackRate: PlaybackRate;
 }
 
 let active: ActiveReplay | null = null;
@@ -85,6 +88,9 @@ function controlsMarkup(replay: ActiveReplay): string {
       R${round.roundNumber}
     </button>
   `).join('');
+  const speedOptions = PLAYBACK_RATES.map((rate) => `
+    <option value="${rate}"${rate === replay.playbackRate ? ' selected' : ''}>${rate}×</option>
+  `).join('');
   return `
     <div class="visual-replay-copy">
       <div><strong>Visual replay</strong><span>Read-only · live game preserved</span></div>
@@ -101,6 +107,10 @@ function controlsMarkup(replay: ActiveReplay): string {
       <button class="primary-button" data-history-action="play">${replay.playing ? 'Pause' : 'Play'}</button>
       <button class="secondary-button" data-history-action="next"${!view.canNext ? ' disabled' : ''}>▶</button>
       <button class="secondary-button" data-history-action="end"${view.cursor === view.totalSteps ? ' disabled' : ''}>End</button>
+      <label class="visual-replay-speed">
+        <span>Speed</span>
+        <select data-visual-replay-speed aria-label="Replay speed">${speedOptions}</select>
+      </label>
     </div>
     <div class="visual-replay-actions">
       <button class="secondary-button" data-visual-replay-export>Export JSON</button>
@@ -122,11 +132,16 @@ function renderActiveReplay(): void {
   active.controls.innerHTML = controlsMarkup(active);
 }
 
+function clearPlaybackTimer(): void {
+  if (!active || active.timer === null) return;
+  window.clearTimeout(active.timer);
+  active.timer = null;
+}
+
 function stopPlayback(): void {
   if (!active) return;
   active.playing = false;
-  if (active.timer !== null) window.clearTimeout(active.timer);
-  active.timer = null;
+  clearPlaybackTimer();
 }
 
 function schedulePlayback(): void {
@@ -136,12 +151,14 @@ function schedulePlayback(): void {
     renderActiveReplay();
     return;
   }
+  const delay = PLAYBACK_BASE_DELAY_MS / active.playbackRate;
   active.timer = window.setTimeout(() => {
     if (!active || !active.playing) return;
+    active.timer = null;
     active.cursor = Math.min(active.history.entries.length, active.cursor + 1);
     renderActiveReplay();
     schedulePlayback();
-  }, PLAYBACK_DELAY_MS);
+  }, delay);
 }
 
 function togglePlayback(): void {
@@ -155,6 +172,18 @@ function togglePlayback(): void {
   active.playing = true;
   renderActiveReplay();
   schedulePlayback();
+}
+
+function setPlaybackRate(value: string): void {
+  if (!active) return;
+  const parsed = Number(value);
+  const rate = PLAYBACK_RATES.find((candidate) => candidate === parsed);
+  if (rate === undefined || rate === active.playbackRate) return;
+  active.playbackRate = rate;
+  const wasPlaying = active.playing;
+  clearPlaybackTimer();
+  renderActiveReplay();
+  if (wasPlaying) schedulePlayback();
 }
 
 function openReplay(): void {
@@ -181,6 +210,7 @@ function openReplay(): void {
     controls,
     playing: false,
     timer: null,
+    playbackRate: 1,
   };
   document.body.classList.add('visual-replay-active');
   renderActiveReplay();
@@ -259,9 +289,16 @@ function handleDocumentClick(event: MouseEvent): void {
   }
 }
 
+function handleDocumentChange(event: Event): void {
+  const target = event.target instanceof HTMLSelectElement ? event.target : null;
+  if (!target || !target.matches('[data-visual-replay-speed]')) return;
+  setPlaybackRate(target.value);
+}
+
 const app = document.querySelector('#app');
 if (app) {
   new MutationObserver(syncReplayButton).observe(app, { childList: true, subtree: true });
 }
 document.addEventListener('click', handleDocumentClick, true);
+document.addEventListener('change', handleDocumentChange, true);
 syncReplayButton();
