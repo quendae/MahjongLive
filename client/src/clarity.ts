@@ -92,7 +92,7 @@ function ensureDoraTray(table: HTMLElement): void {
     source.classList.remove('clarity-source-hidden');
     source.classList.add('center-dora-integrated');
     tableTray?.remove();
-    stageTray?.remove();
+    if (!stage?.classList.contains('is-active')) stageTray?.remove();
     return;
   }
 
