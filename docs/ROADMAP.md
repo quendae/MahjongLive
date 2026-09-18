@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-17
+Updated: 2026-09-18
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -47,6 +47,7 @@ and should be updated as the game grows.
    - 2026-09-16: deterministic bot calibration now rotates Casual / Standard / Expert / Expert across seats and records placement, points, wins, deal-ins, Riichi, calls and match-length statistics.
    - 2026-09-17: a fixed 96-Hanchan calibration pass separated Standard from Expert while keeping Casual clearly weaker; Standard now declines Chi while retaining Riichi, defense, Pon and safe Kan behavior.
    - 2026-09-17: single-player history now uses a separate versioned append-only record with exact accepted actions and explicit round advances, deterministic step replay and JSON export without changing the autosave format.
+   - 2026-09-18: deterministic history can now drive the normal 2D or 3D table in a read-only visual replay with Start/step/Play-Pause/End seeking and round jumps; closing replay restores the exact detached live table without mutating autosave.
 
 ## Rules and scoring
 
@@ -74,7 +75,8 @@ Next rule work:
 - [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
 - [x] Use calibration statistics to tune bot strength and defense/offense behavior.
 - [x] Match history and replay viewer/export from deterministic action history.
-- [ ] Play saved replays directly through the normal 2D/3D table presentation with pause, speed and seek controls.
+- [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
+- [ ] Add user-selectable visual-replay playback speed controls.
 - [ ] More accessibility/touch/keyboard QA and UI scaling presets.
 
 ## Presentation and game feel
