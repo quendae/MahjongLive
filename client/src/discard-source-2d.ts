@@ -170,7 +170,8 @@ function animateFlight(latest: LatestDiscard): void {
   const dy = start.y - end.y;
   const scaleX = Math.max(.55, Math.min(1.65, source.width / Math.max(1, destination.width)));
   const scaleY = Math.max(.55, Math.min(1.65, source.height / Math.max(1, destination.height)));
-  const angle = sideAngle(latest.side);
+  const endAngle = sideAngle(latest.side);
+  const startAngle = latest.side === 'left' || latest.side === 'right' ? 0 : endAngle;
 
   const ghost = latest.tile.cloneNode(true) as HTMLElement;
   ghost.classList.remove('tile-latest-discard', 'tile-discard-source-latest', 'tile-discard-tsumogiri', 'tile-discard-tedashi');
@@ -187,11 +188,11 @@ function animateFlight(latest: LatestDiscard): void {
   latest.tile.classList.add('discard-flight-target');
   const animation = ghost.animate([
     {
-      transform: `translate(${dx}px, ${dy}px) rotate(${angle}deg) scale(${scaleX}, ${scaleY})`,
+      transform: `translate(${dx}px, ${dy}px) rotate(${startAngle}deg) scale(${scaleX}, ${scaleY})`,
       opacity: .38,
     },
     {
-      transform: `translate(0px, 0px) rotate(${angle}deg) scale(1)`,
+      transform: `translate(0px, 0px) rotate(${endAngle}deg) scale(1)`,
       opacity: 1,
     },
   ], {

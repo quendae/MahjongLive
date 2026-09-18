@@ -133,11 +133,11 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     doraScale: 1.29,
     doraX: 24,
     doraY: 24,
-    centerScale: .92,
+    centerScale: 1.02,
     centerOffsetX: 0,
     centerOffsetY: -10,
-    centerWidth: 309,
-    centerHeight: 265,
+    centerWidth: 340,
+    centerHeight: 300,
     reactionScale: 1,
     gameLogWidth: 290,
     tileLabelScale: 1,
@@ -431,6 +431,9 @@ function readDevTuning(): DevTuning {
   if (Math.abs(parsed.tiles.faceScale - 1.1) < .0001) parsed.tiles.faceScale = .87;
   if (parsed.tiles.bodyColor.toLowerCase() === '#ffffff') parsed.tiles.bodyColor = '#fbfbfb';
   if (parsed.tiles.faceTint.toLowerCase() === '#ffffff') parsed.tiles.faceTint = '#fbfbfb';
+  if (Math.abs(parsed.ui.centerScale - .92) < .0001) parsed.ui.centerScale = 1.02;
+  if (Math.abs(parsed.ui.centerWidth - 309) < .0001) parsed.ui.centerWidth = 340;
+  if (Math.abs(parsed.ui.centerHeight - 265) < .0001) parsed.ui.centerHeight = 300;
   devTuningCache = parsed;
   return parsed;
 }
@@ -1703,7 +1706,9 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'table-3d-canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
+  const persistentDoraTray = stage.querySelector<HTMLElement>('.table-dora-tray');
   stage.replaceChildren(renderer.domElement);
+  if (persistentDoraTray) stage.appendChild(persistentDoraTray);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(tuning.sceneColor);

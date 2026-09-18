@@ -126,7 +126,7 @@
   font-size: 6px;
 }
 
-.table-3d-active .table-dora-tray {
+#table-3d-stage.is-active .table-dora-tray {
   z-index: 15;
   left: 24px;
   right: auto;
@@ -141,25 +141,25 @@
   backdrop-filter: none;
 }
 
-.table-3d-active .dora-tray-title {
+#table-3d-stage.is-active .dora-tray-title {
   font-size: 11px;
   letter-spacing: .18em;
 }
 
-.table-3d-active .dora-tray-tiles {
+#table-3d-stage.is-active .dora-tray-tiles {
   gap: 5px;
 }
 
-.table-3d-active .table-dora-tray .tile {
+#table-3d-stage.is-active .table-dora-tray .tile {
   width: 42px;
   height: 56px;
   border-radius: 7px;
 }
 
-.table-3d-active .table-dora-tray .tile-rank { font-size: 21px; }
-.table-3d-active .table-dora-tray .tile-suit { font-size: 12px; }
-.table-3d-active .table-dora-tray .tile-honor { font-size: 27px; }
-.table-3d-active .table-dora-tray .tile-learning-label {
+#table-3d-stage.is-active .table-dora-tray .tile-rank { font-size: 21px; }
+#table-3d-stage.is-active .table-dora-tray .tile-suit { font-size: 12px; }
+#table-3d-stage.is-active .table-dora-tray .tile-honor { font-size: 27px; }
+#table-3d-stage.is-active .table-dora-tray .tile-learning-label {
   right: 3px;
   top: 3px;
   min-width: 25px;
@@ -172,8 +172,8 @@
   z-index: 13;
   left: calc(var(--table-3d-world-center-x, 50%) + var(--dev-center-offset-x, 0px));
   top: calc(var(--table-3d-world-center-y, 50%) + var(--dev-center-offset-y, 0px));
-  width: min(var(--dev-center-width, 242px), calc(100% - 48px));
-  height: min(var(--dev-center-height, 242px), calc(100% - 48px));
+  width: min(var(--dev-center-width, 340px), calc(100% - 48px));
+  height: min(var(--dev-center-height, 300px), calc(100% - 48px));
   min-height: 0;
   transform: translate(-50%, -50%) scale(var(--dev-center-scale, 1));
   transform-origin: center;
@@ -193,7 +193,7 @@
 .table-3d-active .round-title {
   position: relative;
   z-index: 2;
-  font-size: 36px;
+  font-size: 42px;
   line-height: 1;
 }
 
@@ -299,6 +299,21 @@
   50% { opacity: 1; }
 }
 
+@media (min-width: 1060px) {
+  .table-3d-active .table-state-panel {
+    width: min(100%, 236px);
+    gap: 5px;
+  }
+  .table-3d-active .table-state-item {
+    min-height: 34px;
+    padding: 4px 5px;
+  }
+  .table-3d-active .table-state-item > strong { font-size: 12px; }
+  .table-3d-active .table-state-dealer strong { font-size: 11px; }
+  .table-3d-active .table-state-dealer span,
+  .table-3d-active .table-state-item small { font-size: 7px; }
+}
+
 @media (max-width: 1050px) {
   .game-layout:has(.mahjong-table.table-3d-active) {
     grid-template-columns: minmax(0, 1fr);
@@ -346,18 +361,18 @@
   .table-3d-active .counter-score b { font-size: 11px; }
   .table-3d-active .counter-score strong { font-size: 9px; }
 
-  .table-3d-active .table-dora-tray {
+  #table-3d-stage.is-active .table-dora-tray {
     left: 14px;
     top: 14px;
     min-height: 50px;
     padding: 6px 8px;
   }
 
-  .table-3d-active .dora-tray-title { font-size: 9px; }
-  .table-3d-active .table-dora-tray .tile { width: 34px; height: 45px; }
-  .table-3d-active .table-dora-tray .tile-rank { font-size: 17px; }
-  .table-3d-active .table-dora-tray .tile-suit { font-size: 10px; }
-  .table-3d-active .table-dora-tray .tile-honor { font-size: 22px; }
+  #table-3d-stage.is-active .dora-tray-title { font-size: 9px; }
+  #table-3d-stage.is-active .table-dora-tray .tile { width: 34px; height: 45px; }
+  #table-3d-stage.is-active .table-dora-tray .tile-rank { font-size: 17px; }
+  #table-3d-stage.is-active .table-dora-tray .tile-suit { font-size: 10px; }
+  #table-3d-stage.is-active .table-dora-tray .tile-honor { font-size: 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -380,7 +395,7 @@
 .table-3d-active .player-left { left: var(--dev-player-inset-sides, 10px); }
 .table-3d-active .player-right { right: var(--dev-player-inset-sides, 10px); }
 
-.table-3d-active .table-dora-tray {
+#table-3d-stage.is-active .table-dora-tray {
   left: var(--dev-dora-x, 24px);
   top: var(--dev-dora-y, 24px);
   scale: var(--dev-dora-scale, 1);
