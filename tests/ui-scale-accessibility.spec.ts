@@ -25,7 +25,7 @@ async function boot2d(page: Page): Promise<void> {
 
 async function chooseScale(page: Page, scale: 'compact' | 'normal' | 'large' | 'extra-large'): Promise<void> {
   await page.locator('.appearance-toggle').click();
-  await page.locator(`[data-ui-scale="${scale}"]`).click();
+  await page.locator(`button[data-ui-scale="${scale}"]`).click();
   await page.locator('.appearance-done').click();
 }
 
@@ -37,12 +37,12 @@ test('Options exposes persistent Compact, Normal, Large and Extra large UI scale
   const before = await optionsButton.evaluate((element) => element.getBoundingClientRect().height);
   await optionsButton.click();
 
-  const presets = page.locator('[data-ui-scale]');
+  const presets = page.locator('button[data-ui-scale]');
   await expect(presets).toHaveCount(4);
-  await expect(page.locator('[data-ui-scale="normal"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('button[data-ui-scale="normal"]')).toHaveAttribute('aria-pressed', 'true');
 
-  await page.locator('[data-ui-scale="large"]').click();
-  await expect(page.locator('[data-ui-scale="large"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('button[data-ui-scale="large"]').click();
+  await expect(page.locator('button[data-ui-scale="large"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.appearance-done').click();
 
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), UI_SCALE_KEY)).toBe('large');
