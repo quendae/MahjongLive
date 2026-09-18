@@ -46,8 +46,8 @@ async function bootSavedMatch(page: Page, use3d: boolean) {
       tutorialSeen: true,
       presentationSpeed: 'instant',
     }));
+    localStorage.setItem('mahjong-live:table-3d:v1', use3d ? '1' : '0');
     if (use3d) {
-      localStorage.setItem('mahjong-live:table-3d:v1', '1');
       localStorage.setItem('mahjong-live:renderer-backend:v1', 'webgl');
       localStorage.setItem('mahjong-live:tile-face-mode:v1', 'beginner');
     }
@@ -93,6 +93,7 @@ async function waitForRiverActors(page: Page, count: number): Promise<AuditSnaps
 test('visual replay renders the selected history cursor on the live 2D table without mutating autosave', async ({ page }) => {
   const fixture = await bootSavedMatch(page, false);
   const originalSave = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
+  await expect(page.locator('.mahjong-table')).not.toHaveClass(/table-3d-active/);
   expect(await page.locator('.discard-river .tile').count()).toBe(fixture.liveDiscards);
 
   await page.locator('[data-visual-replay-open]').click();
