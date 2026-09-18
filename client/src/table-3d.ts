@@ -677,12 +677,11 @@ function baseTransform(spec: TileSpec): Transform {
   } else {
     const gap = tuning.tiles.meldGap;
     const meldIndex = Math.max(0, spec.meldIndex ?? 0);
-    const tileIndex = Math.max(0, spec.meldTileIndex ?? spec.index);
-    // Keep each legal 3/4-tile meld as one group. The previous flat 8-column stream wrapped the
-    // ninth tile onto a second row, which could throw a perfectly legal third meld into the table.
-    const groupGap = tuning.tiles.meldRowGap;
-    const groupStride = Math.max(1.18, gap * 4 + groupGap);
-    const linear = meldIndex * groupStride + tileIndex * gap;
+    // Use the authoritative flat index so a triplet consumes three slots and a Kan four.
+    // meldRowGap is the desired centre-to-centre spacing at a group boundary; subtract the
+    // normal tile gap here so existing Dev values remain intuitive and useful.
+    const groupBoundaryGap = Math.max(0, tuning.tiles.meldRowGap - gap);
+    const linear = spec.index * gap + meldIndex * groupBoundaryGap;
     transform.scale = .80 * tuning.tiles.meldScale;
     if (spec.side === 'bottom') {
       transform.x = 5.67 - linear;
