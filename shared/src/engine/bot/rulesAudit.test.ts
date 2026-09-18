@@ -6,13 +6,21 @@ import {
 } from './rulesAudit';
 import { simulateBotMatch } from './simulate';
 
+type AuditRuntime = {
+  process?: {
+    env?: Record<string, string | undefined>;
+  };
+};
+
+const env = (globalThis as unknown as AuditRuntime).process?.env ?? {};
+
 function parseSeedOverride(): readonly number[] | undefined {
-  const raw = process.env.RULE_AUDIT_SEEDS?.trim();
+  const raw = env.RULE_AUDIT_SEEDS?.trim();
   if (!raw) return undefined;
   const seeds = raw
     .split(',')
-    .map((value) => Number.parseInt(value.trim(), 10))
-    .filter((value) => Number.isFinite(value));
+    .map((value: string) => Number.parseInt(value.trim(), 10))
+    .filter((value: number) => Number.isFinite(value));
   return seeds.length > 0 ? seeds : undefined;
 }
 
@@ -58,12 +66,12 @@ describe('deterministic full-match rules audit', () => {
   });
 });
 
-const runSweep = process.env.RULE_AUDIT_RUN === '1' ? it : it.skip;
+const runSweep = env.RULE_AUDIT_RUN === '1' ? it : it.skip;
 
 runSweep('runs deterministic regression seeds with edge-case coverage', () => {
   const seeds = parseSeedOverride() ?? RULE_REGRESSION_SEEDS;
-  const maxRounds = positiveInteger(process.env.RULE_AUDIT_MAX_ROUNDS, 64);
-  const maxActionsPerRound = positiveInteger(process.env.RULE_AUDIT_MAX_ACTIONS, 2048);
+  const maxRounds = positiveInteger(env.RULE_AUDIT_MAX_ROUNDS, 64);
+  const maxActionsPerRound = positiveInteger(env.RULE_AUDIT_MAX_ACTIONS, 2048);
   const audit = runDeterministicRulesAudit({ seeds, maxRounds, maxActionsPerRound });
 
   console.log(`RULE_AUDIT ${JSON.stringify(audit)}`);
