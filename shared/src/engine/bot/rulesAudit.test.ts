@@ -8,6 +8,7 @@ type TracedRound = {
 
 describe('deterministic full-match rules audit', () => {
   it('captures every completed round with a conserved point ledger', () => {
+    // This seed already completes in the calibration suite; only the new trace contract is under test.
     const result = simulateBotMatch(20260916, 48, 1600);
     expect(result.ok, result.ok ? '' : result.message).toBe(true);
     if (!result.ok) return;
