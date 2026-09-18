@@ -1,4 +1,5 @@
 export * from './types';
+export * from './profile';
 export * from './winning';
 export * from './waits';
 export * from './kan';
