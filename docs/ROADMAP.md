@@ -65,8 +65,10 @@ Next rule work:
 - [x] Continue edge-case audit using deterministic full-match simulation and regression seeds.
   - 2026-09-18: `pnpm rules:audit` now replays six pinned full Hanchan seeds through the production engine and checks cross-round point/riichi-stick conservation, dealer/wind/hand/honba continuity, terminal placements and deterministic replay coverage. The CI sweep covered 58 rounds with 13 Tsumo, 41 Ron, 4 exhaustive draws, 15 dealer repeats, 43 dealer advances, 61 Riichi declarations, 102 calls and 6 Kans.
 - [x] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
-- [ ] Add rule-profile plumbing before introducing optional table/rules variants.
-- [ ] Keep save-state compatibility tests whenever engine state changes.
+- [x] Add rule-profile plumbing before introducing optional table/rules variants.
+  - 2026-09-18: the engine now persists a stable `ruleProfileId` through match and round state and resolves it centrally to a single production `standard` profile. Standard explicitly owns the current Kan-Dora timing, Nagashi Mangan, bankruptcy, dealer-yame and West-round-extension decisions; no alternative profile or rules UI is exposed yet. The six-seed full-match audit remained byte-for-byte deterministic at the result/coverage level after the plumbing change.
+- [x] Keep save-state compatibility tests whenever engine state changes.
+  - 2026-09-18: legacy single-player JSON without `ruleProfileId` is migrated in memory to `standard` at resume time, with a regression test proving the resumed match state and next prompt are identical to an explicitly profiled save. Existing JSON round-trip/resume tests remain green; this compatibility check remains a required policy for future engine-state schema changes.
 
 ## Single-player
 
