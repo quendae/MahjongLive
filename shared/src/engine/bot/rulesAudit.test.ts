@@ -1,36 +1,86 @@
 import { describe, expect, it } from 'vitest';
-import * as botExports from './index';
+import {
+  RULE_REGRESSION_SEEDS,
+  auditBotMatchSimulation,
+  runDeterministicRulesAudit,
+} from './rulesAudit';
 import { simulateBotMatch } from './simulate';
 
-type RulesAuditApi = {
-  RULE_REGRESSION_SEEDS?: readonly number[];
-  auditBotMatchSimulation?: (seed: number, simulation: ReturnType<typeof simulateBotMatch>) => unknown;
-  runDeterministicRulesAudit?: (options?: {
-    seeds?: readonly number[];
-    maxRounds?: number;
-    maxActionsPerRound?: number;
-  }) => unknown;
-};
+function parseSeedOverride(): readonly number[] | undefined {
+  const raw = process.env.RULE_AUDIT_SEEDS?.trim();
+  if (!raw) return undefined;
+  const seeds = raw
+    .split(',')
+    .map((value) => Number.parseInt(value.trim(), 10))
+    .filter((value) => Number.isFinite(value));
+  return seeds.length > 0 ? seeds : undefined;
+}
 
-const auditApi = botExports as unknown as RulesAuditApi;
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 describe('deterministic full-match rules audit', () => {
-  it('captures every completed round with a conserved point ledger', () => {
-    const result = simulateBotMatch(20260916, 48, 1600);
+  it('captures and audits every completed round while rejecting broken transition continuity', () => {
+    const seed = 20260916;
+    const result = simulateBotMatch(seed, 48, 1600);
     expect(result.ok, result.ok ? '' : result.message).toBe(true);
     if (!result.ok) return;
 
     expect(result.rounds).toHaveLength(result.roundCount);
-    for (const round of result.rounds) {
-      const playerPoints = round.endPoints.reduce((sum, value) => sum + value, 0);
-      expect(playerPoints + round.endRiichiSticks * 1000).toBe(100_000);
-    }
+    const record = auditBotMatchSimulation(seed, result);
+    expect(record.roundCount).toBe(result.roundCount);
+    expect(record.finalPoints.reduce((sum, value) => sum + value, 0)).toBe(100_000);
+
+    expect(result.rounds.length).toBeGreaterThan(1);
+    const next = result.rounds[1];
+    const tamperedStart = [
+      next.startPoints[0] + 1000,
+      next.startPoints[1] - 1000,
+      next.startPoints[2],
+      next.startPoints[3],
+    ] as const;
+    const tampered = {
+      ...result,
+      rounds: [
+        result.rounds[0],
+        { ...next, startPoints: tamperedStart },
+        ...result.rounds.slice(2),
+      ],
+    };
+    expect(() => auditBotMatchSimulation(seed, tampered)).toThrow(/points changed between rounds/);
   }, 45_000);
 
-  it('exports a stable seed list plus reusable match and sweep auditors', () => {
-    expect(auditApi.RULE_REGRESSION_SEEDS, 'regression seed list should be exported').toBeDefined();
-    expect(auditApi.RULE_REGRESSION_SEEDS?.length ?? 0).toBeGreaterThan(0);
-    expect(auditApi.auditBotMatchSimulation, 'match invariant auditor should be exported').toBeTypeOf('function');
-    expect(auditApi.runDeterministicRulesAudit, 'seed sweep auditor should be exported').toBeTypeOf('function');
+  it('exports a stable non-empty regression seed list', () => {
+    expect(RULE_REGRESSION_SEEDS.length).toBeGreaterThan(0);
+    expect(new Set(RULE_REGRESSION_SEEDS).size).toBe(RULE_REGRESSION_SEEDS.length);
   });
 });
+
+const runSweep = process.env.RULE_AUDIT_RUN === '1' ? it : it.skip;
+
+runSweep('runs deterministic regression seeds with edge-case coverage', () => {
+  const seeds = parseSeedOverride() ?? RULE_REGRESSION_SEEDS;
+  const maxRounds = positiveInteger(process.env.RULE_AUDIT_MAX_ROUNDS, 64);
+  const maxActionsPerRound = positiveInteger(process.env.RULE_AUDIT_MAX_ACTIONS, 2048);
+  const audit = runDeterministicRulesAudit({ seeds, maxRounds, maxActionsPerRound });
+
+  console.log(`RULE_AUDIT ${JSON.stringify(audit)}`);
+  expect(audit.records).toHaveLength(seeds.length);
+  expect(audit.coverage.tsumo).toBeGreaterThan(0);
+  expect(audit.coverage.ron).toBeGreaterThan(0);
+  expect(audit.coverage.exhaustiveDraw).toBeGreaterThan(0);
+  expect(audit.coverage.dealerRepeats).toBeGreaterThan(0);
+  expect(audit.coverage.dealerAdvances).toBeGreaterThan(0);
+  expect(audit.coverage.riichiDeclarations).toBeGreaterThan(0);
+  expect(audit.coverage.calls).toBeGreaterThan(0);
+  expect(audit.coverage.kans).toBeGreaterThan(0);
+
+  const repeated = runDeterministicRulesAudit({
+    seeds: [seeds[0]],
+    maxRounds,
+    maxActionsPerRound,
+  });
+  expect(repeated.records[0]).toEqual(audit.records.find((record) => record.seed === seeds[0]));
+}, 240_000);
