@@ -20,6 +20,7 @@ on:
       - 'tests/score-explanation.spec.ts'
       - 'tests/match-history.spec.ts'
       - 'tests/visual-replay.spec.ts'
+      - 'tests/contextual-teaching.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
@@ -40,6 +41,7 @@ on:
       - 'tests/score-explanation.spec.ts'
       - 'tests/match-history.spec.ts'
       - 'tests/visual-replay.spec.ts'
+      - 'tests/contextual-teaching.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
@@ -86,6 +88,8 @@ jobs:
         run: pnpm exec playwright test tests/match-history.spec.ts --workers=1 --reporter=line
       - name: Audit scoring explanation
         run: pnpm exec playwright test tests/score-explanation.spec.ts --workers=1 --reporter=line
+      - name: Audit contextual teaching
+        run: pnpm exec playwright test tests/contextual-teaching.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
         run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
