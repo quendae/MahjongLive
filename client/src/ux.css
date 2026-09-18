@@ -51,7 +51,7 @@
   border-radius: 50%;
   color: #2d2a1d;
   background: #f0cf72;
-  box-shadow: 0 3px 10px rgba(0,0,0,.34);
+  box-shadow: 0 1px 3px rgba(0,0,0,.14);
   font-size: 10px;
   font-weight: 900;
 }
@@ -186,10 +186,15 @@
 }
 
 @media (max-width: 1440px) {
-  .app-header { grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
-  .header-status { display: none; }
+  .app-header { grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; }
+  .save-pill { display: none; }
   .header-actions { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
   .header-control { min-height: 31px; }
+}
+
+@media (max-width: 1050px) {
+  .app-header { grid-template-columns: auto minmax(0, 1fr); }
+  .header-status { display: none; }
 }
 
 @media (max-width: 680px) {
