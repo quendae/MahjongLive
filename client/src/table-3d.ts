@@ -2602,6 +2602,7 @@ async function reconcile(): Promise<void> {
         return;
       }
       console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
+      loadError = true;
       fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
       updateModeButton();
       return;
