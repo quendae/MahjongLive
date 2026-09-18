@@ -21,32 +21,13 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
           path = Path('client/src/clarity.ts')
           text = path.read_text(encoding='utf-8')
-          old = """  if (!table.classList.contains('table-3d-active')) {
-    source.classList.remove('clarity-source-hidden');
-    source.classList.add('center-dora-integrated');
-    tableTray?.remove();
-    stageTray?.remove();
-    return;
-  }
-"""
-          new = """  if (!table.classList.contains('table-3d-active')) {
-    source.classList.remove('clarity-source-hidden');
-    source.classList.add('center-dora-integrated');
-    tableTray?.remove();
-    // The authoritative #app rerender creates a fresh table before table-3d.ts can re-attach
-    // table-3d-active. While the stable 3D stage is still active, that is only a transient frame —
-    // keep its Dora tray mounted instead of flashing it out and recreating it one observer later.
-    if (!stage?.classList.contains('is-active')) stageTray?.remove();
-    return;
-  }
-"""
-          if old not in text:
-              raise SystemExit('Expected Dora 2D/3D branch not found')
+          old = '    stageTray?.remove();'
+          new = "    if (!stage?.classList.contains('is-active')) stageTray?.remove();"
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one Dora tray removal, found {text.count(old)}')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
           Path('.dora-race-trigger').unlink(missing_ok=True)
           Path('.github/workflows/one-shot-dora-race.yml').unlink(missing_ok=True)
       - name: Commit source fix
