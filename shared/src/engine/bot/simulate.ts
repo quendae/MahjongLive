@@ -1,13 +1,36 @@
 import { advanceMatch, createMatch } from '../match/match';
 import type { MatchState } from '../match/types';
 import { applyAction, createRound } from '../rules/round';
-import type { PlayerIndex, RoundAction, RoundState } from '../rules/types';
+import type {
+  PlayerIndex,
+  PointDeltaTuple,
+  RoundAction,
+  RoundEndResult,
+  RoundState,
+} from '../rules/types';
 import { createRNG } from '../wall/prng';
 import type { BotSeatProfiles } from './calibration';
 import { chooseBotDecisionForDifficulty } from './difficulty';
 
 const PLAYERS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const ALL_EXPERT: BotSeatProfiles = ['expert', 'expert', 'expert', 'expert'];
+
+export type BotActionCounts = Partial<Record<RoundAction['type'], number>>;
+
+export type BotRoundTrace = {
+  roundNumber: number;
+  wind: MatchState['wind'];
+  hand: MatchState['hand'];
+  dealer: PlayerIndex;
+  honba: number;
+  startRiichiSticks: number;
+  endRiichiSticks: number;
+  startPoints: PointDeltaTuple;
+  endPoints: PointDeltaTuple;
+  result: RoundEndResult;
+  actionCount: number;
+  actionCounts: BotActionCounts;
+};
 
 export type BotPlayerSimulationStats = {
   roundsPlayed: number;
@@ -29,11 +52,13 @@ export type BotRoundSimulation =
       ok: true;
       state: RoundState;
       actionCount: number;
+      actionCounts: BotActionCounts;
     }
   | {
       ok: false;
       state: RoundState;
       actionCount: number;
+      actionCounts: BotActionCounts;
       message: string;
     };
 
@@ -45,6 +70,7 @@ export type BotMatchSimulation =
       actionCount: number;
       profiles: BotSeatProfiles;
       playerStats: BotPlayerStatsTuple;
+      rounds: readonly BotRoundTrace[];
     }
   | {
       ok: false;
@@ -53,6 +79,7 @@ export type BotMatchSimulation =
       actionCount: number;
       profiles: BotSeatProfiles;
       playerStats: BotPlayerStatsTuple;
+      rounds: readonly BotRoundTrace[];
       message: string;
     };
 
@@ -96,6 +123,19 @@ function isReactionAction(action: RoundAction): boolean {
   return action.type === 'ron' || action.type === 'chi' || action.type === 'pon' || action.type === 'daiminkan';
 }
 
+function countAction(counts: BotActionCounts, type: RoundAction['type']): void {
+  counts[type] = (counts[type] ?? 0) + 1;
+}
+
+function roundPoints(state: RoundState): PointDeltaTuple {
+  return [
+    state.players[0].points,
+    state.players[1].points,
+    state.players[2].points,
+    state.players[3].points,
+  ];
+}
+
 function mix32(value: number): number {
   let x = value >>> 0;
   x ^= x >>> 16;
@@ -118,9 +158,10 @@ export function simulateBotRoundState(
 ): BotRoundSimulation {
   let state = initialState;
   let actionCount = 0;
+  const actionCounts: BotActionCounts = {};
 
   while (actionCount < maxActions) {
-    if (state.phase.kind === 'ended') return { ok: true, state, actionCount };
+    if (state.phase.kind === 'ended') return { ok: true, state, actionCount, actionCounts };
 
     if (state.phase.kind === 'reactions' || state.phase.kind === 'kan-reactions') {
       for (const player of PLAYERS) {
@@ -131,6 +172,7 @@ export function simulateBotRoundState(
             ok: false,
             state,
             actionCount,
+            actionCounts,
             message: `Bot ${player} returned ${decision.action.type} during reactions`,
           };
         }
@@ -141,9 +183,11 @@ export function simulateBotRoundState(
             ok: false,
             state,
             actionCount,
+            actionCounts,
             message: `Rejected bot reaction ${decision.action.type}: ${claimed.error.code}`,
           };
         }
+        countAction(actionCounts, decision.action.type);
         state = claimed.state;
       }
 
@@ -154,9 +198,11 @@ export function simulateBotRoundState(
           ok: false,
           state,
           actionCount,
+          actionCounts,
           message: `Reaction resolution failed: ${resolved.error.code}`,
         };
       }
+      countAction(actionCounts, 'resolve-reactions');
       state = resolved.state;
       continue;
     }
@@ -168,6 +214,7 @@ export function simulateBotRoundState(
         ok: false,
         state,
         actionCount,
+        actionCounts,
         message: `Bot ${actor} passed during own ${state.phase.kind}`,
       };
     }
@@ -178,9 +225,11 @@ export function simulateBotRoundState(
         ok: false,
         state,
         actionCount,
+        actionCounts,
         message: `Rejected bot ${decision.action.type}: ${applied.error.code}`,
       };
     }
+    countAction(actionCounts, decision.action.type);
     state = applied.state;
   }
 
@@ -188,6 +237,7 @@ export function simulateBotRoundState(
     ok: false,
     state,
     actionCount,
+    actionCounts,
     message: `Bot simulation exceeded ${maxActions} actions`,
   };
 }
@@ -213,8 +263,16 @@ export function simulateBotMatch(
   let actionCount = 0;
   let roundCount = 0;
   const playerStats = emptyPlayerStats();
+  const rounds: BotRoundTrace[] = [];
 
   while (roundCount < maxRounds) {
+    const startRoundNumber = match.roundNumber;
+    const startWind = match.wind;
+    const startHand = match.hand;
+    const startDealer = match.round.dealer;
+    const startHonba = match.round.honba;
+    const startRiichiSticks = match.round.riichiSticks;
+    const startPoints = roundPoints(match.round);
     const simulated = simulateBotRoundState(match.round, maxActionsPerRound, profiles);
     actionCount += simulated.actionCount;
     roundCount += 1;
@@ -228,9 +286,38 @@ export function simulateBotMatch(
         actionCount,
         profiles,
         playerStats,
+        rounds,
         message: `Round ${roundCount} failed: ${simulated.message}`,
       };
     }
+
+    if (simulated.state.phase.kind !== 'ended') {
+      return {
+        ok: false,
+        state: match,
+        roundCount,
+        actionCount,
+        profiles,
+        playerStats,
+        rounds,
+        message: `Round ${roundCount} simulation returned without an ended result`,
+      };
+    }
+
+    rounds.push({
+      roundNumber: startRoundNumber,
+      wind: startWind,
+      hand: startHand,
+      dealer: startDealer,
+      honba: startHonba,
+      startRiichiSticks,
+      endRiichiSticks: simulated.state.riichiSticks,
+      startPoints,
+      endPoints: roundPoints(simulated.state),
+      result: simulated.state.phase.result,
+      actionCount: simulated.actionCount,
+      actionCounts: { ...simulated.actionCounts },
+    });
 
     accumulateRoundStats(playerStats, simulated.state);
 
@@ -247,12 +334,13 @@ export function simulateBotMatch(
         actionCount,
         profiles,
         playerStats,
+        rounds,
         message: `Match advance after round ${roundCount} failed: ${advanced.error}`,
       };
     }
     match = advanced.state;
     if (match.status === 'ended') {
-      return { ok: true, state: match, roundCount, actionCount, profiles, playerStats };
+      return { ok: true, state: match, roundCount, actionCount, profiles, playerStats, rounds };
     }
   }
 
@@ -263,6 +351,7 @@ export function simulateBotMatch(
     actionCount,
     profiles,
     playerStats,
+    rounds,
     message: `Bot match exceeded ${maxRounds} rounds`,
   };
 }
