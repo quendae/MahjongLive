@@ -44,14 +44,17 @@ function callItems(actions: ReadonlySet<string>): string[] {
   if (actions.has('chi')) items.push('Chi — make a sequence with the discard from the player to your left.');
   if (actions.has('pon')) items.push('Pon — make a triplet with a matching discard from any opponent.');
   if (actions.has('daiminkan')) items.push('Kan — complete four matching tiles; a new Dora indicator appears when the Kan completes.');
-  if (actions.has('pass')) items.push('Pass — decline the currently offered reactions and continue the hand.');
+  if (actions.has('pass')) items.push('Pass — decline the currently offered reactions and continue the hand. Passing a legal Ron can create Furiten.');
   return items;
 }
 
 function turnItems(actions: ReadonlySet<string>): string[] {
   const items: string[] = [];
   if (actions.has('riichi')) {
-    items.push('Riichi — declare a ready closed hand, place a 1,000-point stick, then choose one of the highlighted legal declaration discards.');
+    const selecting = app.querySelector<HTMLElement>('.action-dock [data-ui-action="riichi"]')?.textContent?.includes('Cancel') === true;
+    items.push(selecting
+      ? 'Riichi selection is active — choose one of the highlighted legal declaration discards, or cancel to return to normal discard selection.'
+      : 'Riichi — declare a ready closed hand, place a 1,000-point stick, then choose one of the highlighted legal declaration discards.');
   }
   if (actions.has('ankan')) {
     items.push('Closed Kan — use four matching tiles from your hand; after the Kan completes, a new Dora indicator is revealed and you draw from Rinshan.');
@@ -100,7 +103,7 @@ function teachingModel(): TeachingModel | null {
       topic: 'calls',
       kicker: 'Why?',
       title: 'Choose only from the reactions that are legal now',
-      copy: 'These choices come from the latest public discard and your own hand. Passing is always safe when you do not want to open or change the hand.',
+      copy: 'These choices come from the latest public discard and your own hand. Passing declines the offered reactions; if Ron is legal, passing it can affect Furiten state.',
       items: callItems(actions),
       placement: 'table',
     };
@@ -208,8 +211,8 @@ function placeTeaching(model: TeachingModel): void {
     if (buttons) dock.insertBefore(teaching, buttons);
     else dock.prepend(teaching);
   } else if (resultTarget) {
-    const details = resultTarget.querySelector('.score-card details, .scoring-details');
-    if (details) details.insertAdjacentElement('afterend', teaching);
+    const continueButton = resultTarget.querySelector('[data-ui-action="continue"]');
+    if (continueButton) resultTarget.insertBefore(teaching, continueButton);
     else resultTarget.appendChild(teaching);
   } else {
     target.appendChild(teaching);
