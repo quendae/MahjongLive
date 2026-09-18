@@ -11,6 +11,7 @@ on:
       - 'tests/2d-regression.spec.ts'
       - 'tests/meld-presentation.spec.ts'
       - 'tests/presentation-transitions.spec.ts'
+      - 'tests/audio-presentation-sync.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
       - 'tests/performance-diagnostics.spec.ts'
@@ -32,6 +33,7 @@ on:
       - 'tests/2d-regression.spec.ts'
       - 'tests/meld-presentation.spec.ts'
       - 'tests/presentation-transitions.spec.ts'
+      - 'tests/audio-presentation-sync.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
       - 'tests/performance-diagnostics.spec.ts'
@@ -90,6 +92,8 @@ jobs:
         run: pnpm exec playwright test tests/score-explanation.spec.ts --workers=1 --reporter=line
       - name: Audit contextual teaching
         run: pnpm exec playwright test tests/contextual-teaching.spec.ts --workers=1 --reporter=line
+      - name: Audit presentation audio sync
+        run: pnpm exec playwright test tests/audio-presentation-sync.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
         run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
