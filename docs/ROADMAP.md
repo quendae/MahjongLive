@@ -48,6 +48,7 @@ and should be updated as the game grows.
    - 2026-09-17: a fixed 96-Hanchan calibration pass separated Standard from Expert while keeping Casual clearly weaker; Standard now declines Chi while retaining Riichi, defense, Pon and safe Kan behavior.
    - 2026-09-17: single-player history now uses a separate versioned append-only record with exact accepted actions and explicit round advances, deterministic step replay and JSON export without changing the autosave format.
    - 2026-09-18: deterministic history can now drive the normal 2D or 3D table in a read-only visual replay with Start/step/Play-Pause/End seeking and round jumps; closing replay restores the exact detached live table without mutating autosave.
+   - 2026-09-18: visual replay now offers user-selectable 0.5× / 1× / 2× / 4× playback speeds while keeping seek, pause and live-state isolation unchanged.
 
 ## Rules and scoring
 
@@ -76,7 +77,7 @@ Next rule work:
 - [x] Use calibration statistics to tune bot strength and defense/offense behavior.
 - [x] Match history and replay viewer/export from deterministic action history.
 - [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
-- [ ] Add user-selectable visual-replay playback speed controls.
+- [x] Add user-selectable visual-replay playback speed controls.
 - [ ] More accessibility/touch/keyboard QA and UI scaling presets.
 
 ## Presentation and game feel
