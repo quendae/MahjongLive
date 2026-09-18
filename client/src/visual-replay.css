@@ -79,6 +79,10 @@ body.visual-replay-active #app .app-header .header-actions > * {
   gap: 6px;
 }
 
+.visual-replay-controls {
+  flex-wrap: wrap;
+}
+
 .visual-replay-rounds {
   grid-column: 1 / -1;
   overflow-x: auto;
@@ -111,6 +115,32 @@ body.visual-replay-active #app .app-header .header-actions > * {
   cursor: default;
 }
 
+.visual-replay-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.visual-replay-speed select {
+  min-width: 64px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 9px;
+  color: #e6ece8;
+  background: rgba(255,255,255,.065);
+  font: inherit;
+  cursor: pointer;
+}
+
+.visual-replay-speed select:focus-visible {
+  outline: 2px solid #f3cf76;
+  outline-offset: 2px;
+}
+
 @media (max-width: 820px) {
   .visual-replay-panel {
     width: calc(100vw - 18px);
@@ -122,4 +152,9 @@ body.visual-replay-active #app .app-header .header-actions > * {
   .visual-replay-controls { order: 3; justify-content: center; }
   .visual-replay-actions { order: 4; justify-content: flex-end; }
   .visual-replay-controls button { flex: 1; min-width: 0; }
+  .visual-replay-speed {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
 }
