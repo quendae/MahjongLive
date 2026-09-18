@@ -23,7 +23,49 @@ async function prepareStorage(page: Page, mode: '2d' | '3d'): Promise<void> {
   }, { mode });
 }
 
+async function collect3dStartupDiagnostics(page: Page, messages: string[]): Promise<Record<string, unknown>> {
+  const pageState = await page.evaluate(() => {
+    const webglCanvas = document.createElement('canvas');
+    const webgl2Canvas = document.createElement('canvas');
+    let webgl = false;
+    let webgl2 = false;
+    let webglError = '';
+    let webgl2Error = '';
+    try { webgl = Boolean(webglCanvas.getContext('webgl')); } catch (error) { webglError = String(error); }
+    try { webgl2 = Boolean(webgl2Canvas.getContext('webgl2')); } catch (error) { webgl2Error = String(error); }
+    const button = document.querySelector<HTMLElement>('.table-3d-toggle');
+    const fallback = document.querySelector<HTMLElement>('.table-3d-fallback-note');
+    const table = document.querySelector<HTMLElement>('.mahjong-table');
+    const stage = document.querySelector<HTMLElement>('#table-3d-stage');
+    return {
+      userAgent: navigator.userAgent,
+      webgl,
+      webgl2,
+      webglError,
+      webgl2Error,
+      modeStorage: localStorage.getItem('mahjong-live:table-3d:v1'),
+      backendStorage: localStorage.getItem('mahjong-live:renderer-backend:v1'),
+      webgpuFallback: sessionStorage.getItem('mahjong-live:webgpu-fallback'),
+      tableClass: table?.className ?? null,
+      stageClass: stage?.className ?? null,
+      modeButtonClass: button?.className ?? null,
+      modeButtonText: button?.textContent?.trim() ?? null,
+      modeButtonTitle: button?.title ?? null,
+      fallbackText: fallback?.textContent?.trim() ?? null,
+    };
+  });
+  return { ...pageState, console: messages };
+}
+
 async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<void> {
+  const startupMessages: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning' || message.type() === 'error') {
+      startupMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on('pageerror', (error) => startupMessages.push(`pageerror: ${error.message}`));
+
   await prepareStorage(page, mode);
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
 
@@ -35,8 +77,13 @@ async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<void>
   await page.locator('.mahjong-table').waitFor({ state: 'visible' });
 
   if (mode === '3d') {
-    await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
-    await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
+    try {
+      await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
+      await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
+    } catch (error) {
+      const diagnostics = await collect3dStartupDiagnostics(page, startupMessages);
+      throw new Error(`3D renderer did not activate: ${JSON.stringify(diagnostics)}\n${error instanceof Error ? error.message : String(error)}`);
+    }
     await page.waitForTimeout(450);
   } else {
     await expect(page.locator('.mahjong-table')).not.toHaveClass(/table-3d-active/);
