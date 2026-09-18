@@ -1,0 +1,41 @@
+name: Firefox 3D diagnostic
+
+on:
+  push:
+    branches:
+      - feature/visual-table-replay
+    paths:
+      - '.firefox-3d-diagnostic-trigger'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: true
+      MAHJONG_QA_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm add -Dw @playwright/test@1.55.0 --lockfile=false
+      - run: pnpm exec playwright install --with-deps firefox
+      - run: pnpm client:build
+      - name: Start preview
+        run: |
+          nohup pnpm client:preview > /tmp/mahjong-preview.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 0.5
+          done
+          cat /tmp/mahjong-preview.log
+          exit 1
+      - name: Diagnose Firefox 3D startup
+        run: pnpm exec playwright test tests/cross-browser-touch.spec.ts --browser=firefox --grep "laptop 3d" --workers=1 --reporter=line
