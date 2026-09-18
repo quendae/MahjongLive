@@ -41,6 +41,14 @@ import type { PresentationSpeed } from './preferences';
 import { presentationCaption } from './presentation';
 import { buildClaimChoices, describeClaimAction } from './claim-choice';
 import { scoreExplanationMarkup } from './score-explanation';
+import {
+  beginMatchHistory,
+  bindMatchHistoryUi,
+  matchHistoryOverlayMarkup,
+  matchHistoryResultButtonMarkup,
+  restoreMatchHistory,
+  trackMatchHistory,
+} from './match-history-runtime';
 import { tileAssetUrlForLabel } from './table-3d-faces';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
@@ -640,7 +648,10 @@ function resultOverlay(): string {
           <div class="dialog-eyebrow">Hanchan complete</div>
           <h2>Match result</h2>
           ${matchResultMarkup(current.prompt.result)}
-          <button class="primary-button" data-ui-action="new-game">New game</button>
+          <div class="setup-actions">
+            ${matchHistoryResultButtonMarkup()}
+            <button class="primary-button" data-ui-action="new-game">New game</button>
+          </div>
         </div>
       </div>
     `;
@@ -812,6 +823,7 @@ function render(): void {
       ${transientMessage ? `<div class="toast">${transientMessage}</div>` : ''}
       ${choiceOverlay()}
       ${resultOverlay()}
+      ${matchHistoryOverlayMarkup()}
       ${setupOverlay()}
       ${tutorialOverlay()}
     </div>
@@ -905,11 +917,13 @@ function startNewGame(
   logEntries = [];
   riichiMode = false;
   choiceState = null;
-  const result = driveSingleGame(createSingleGame(seed, 0, difficulty));
+  const initialState = createSingleGame(seed, 0, difficulty);
+  const result = driveSingleGame(initialState);
   if (!result.ok) {
     transientMessage = result.message;
     return;
   }
+  beginMatchHistory(initialState, result);
   processResult(result);
 }
 
@@ -924,6 +938,7 @@ function restoreGame(): boolean {
     const state = JSON.parse(raw) as SingleGameState;
     const result = driveSingleGame(state);
     if (!result.ok) return false;
+    restoreMatchHistory(state, result);
     current = result;
     preferences = {
       ...preferences,
@@ -943,12 +958,16 @@ function restoreGame(): boolean {
 
 function submitHumanAction(action: RoundAction): void {
   if (!current || presentationLocked) return;
-  processResult(applyHumanDecision(current.state, { type: 'action', action }));
+  const result = applyHumanDecision(current.state, { type: 'action', action });
+  if (result.ok) trackMatchHistory(result);
+  processResult(result);
 }
 
 function submitPass(): void {
   if (!current || presentationLocked) return;
-  processResult(applyHumanDecision(current.state, { type: 'pass' }));
+  const result = applyHumanDecision(current.state, { type: 'pass' });
+  if (result.ok) trackMatchHistory(result);
+  processResult(result);
 }
 
 function openOptions(type: 'chi' | 'pon' | 'daiminkan' | 'ankan' | 'shouminkan'): void {
@@ -1036,9 +1055,13 @@ function handleUiAction(action: string): void {
       choiceState = null;
       render();
       break;
-    case 'continue':
-      processResult(continueSingleGame(current.state));
+    case 'continue': {
+      const beforeAdvance = current.state;
+      const result = continueSingleGame(beforeAdvance);
+      if (result.ok) trackMatchHistory(result, beforeAdvance);
+      processResult(result);
       break;
+    }
     case 'restart-seed':
       if (confirm('Restart this seed from East 1?')) {
         startNewGame(current.state.seed, singleBotDifficulty(current.state));
@@ -1147,6 +1170,8 @@ function bindInteractions(): void {
   app.querySelector<HTMLInputElement>('[data-setup-advisor]')?.addEventListener('change', (event) => {
     pendingAdvisor = (event.currentTarget as HTMLInputElement).checked;
   });
+
+  bindMatchHistoryUi(app, render);
 }
 
 const restored = restoreGame();

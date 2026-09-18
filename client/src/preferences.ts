@@ -1,6 +1,7 @@
 import type { BotDifficulty } from '@mahjong-live/shared/single';
 
 const PREFERENCES_KEY = 'mahjong-live:preferences:v1';
+const SETUP_PENDING_KEY = 'mahjong-live:setup-pending:v1';
 
 export type PresentationSpeed = 'slow' | 'normal' | 'fast' | 'instant';
 
@@ -61,5 +62,9 @@ export function presentationSpeedLabel(speed: PresentationSpeed): string {
 }
 
 export function presentationDelayMs(speed: PresentationSpeed): number {
+  // The first-run setup creates a provisional game underneath its modal so the table can render.
+  // Do not animate that hidden game: presentationLocked would otherwise make the required
+  // "Start Hanchan" click inert until the provisional timeline finishes.
+  if (typeof localStorage !== 'undefined' && localStorage.getItem(SETUP_PENDING_KEY) === '1') return 0;
   return speed === 'slow' ? 650 : speed === 'normal' ? 360 : speed === 'fast' ? 150 : 0;
 }

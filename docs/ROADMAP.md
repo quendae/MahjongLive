@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-16
+Updated: 2026-09-17
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -42,9 +42,11 @@ and should be updated as the game grows.
    - 2026-09-16: the 3D animation audit found motion driven by elapsed wall-clock time: discard flights use duration/progress, hover/settle uses exponential damping from frame delta, and halo pulse uses absolute time. No frame-count-dependent interaction animation remains in the renderer loop.
    - Final Windows Firefox and Edge/ANGLE captures at 120 Hz are still required before changing renderer scheduling; Linux/headless CI cannot reproduce the user's D3D11/ANGLE path or monitor refresh behavior.
 4. [x] Improve Riichi-stick and table-state presentation without covering the play field.
-5. [ ] Continue bot-strength tuning and replay/history work after the completed scoring-explanation and calibration-harness sprints.
+5. [x] Complete the first bot-strength tuning pass and deterministic match history/replay foundation.
    - 2026-09-16: winning-hand results now expose expandable Yaku/Han, Dora, Fu, limit and payment explanations.
    - 2026-09-16: deterministic bot calibration now rotates Casual / Standard / Expert / Expert across seats and records placement, points, wins, deal-ins, Riichi, calls and match-length statistics.
+   - 2026-09-17: a fixed 96-Hanchan calibration pass separated Standard from Expert while keeping Casual clearly weaker; Standard now declines Chi while retaining Riichi, defense, Pon and safe Kan behavior.
+   - 2026-09-17: single-player history now uses a separate versioned append-only record with exact accepted actions and explicit round advances, deterministic step replay and JSON export without changing the autosave format.
 
 ## Rules and scoring
 
@@ -70,8 +72,9 @@ Next rule work:
 - [x] Autosave/resume and seeded deterministic games.
 - [x] Add deterministic bot calibration statistics with seat rotations and a reproducible `pnpm bot:benchmark` report.
 - [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
-- [ ] Use calibration statistics to tune bot strength and defense/offense behavior.
-- [ ] Match history and replay viewer/export from deterministic action history.
+- [x] Use calibration statistics to tune bot strength and defense/offense behavior.
+- [x] Match history and replay viewer/export from deterministic action history.
+- [ ] Play saved replays directly through the normal 2D/3D table presentation with pause, speed and seek controls.
 - [ ] More accessibility/touch/keyboard QA and UI scaling presets.
 
 ## Presentation and game feel
