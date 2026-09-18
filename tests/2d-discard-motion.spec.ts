@@ -30,6 +30,11 @@ function angleFromMatrix(transform: string): number | null {
   return Math.atan2(values[1], values[0]);
 }
 
+function rotationDegrees(transform: string): number | null {
+  const match = /rotate\((-?[\d.]+)deg\)/.exec(transform);
+  return match ? Number(match[1]) : null;
+}
+
 test('2D Riichi declaration is already sideways in the fresh river DOM and stays stable when another discard appears', async ({ page }) => {
   await boot2d(page);
 
@@ -98,4 +103,43 @@ test('2D discard flight has no upward hop and the settled latest discard remains
   await expect(ghost).toHaveCount(0, { timeout: 1_500 });
   const settledTransform = await page.locator('[data-motion-regression="true"]').evaluate((tile) => getComputedStyle(tile).transform);
   expect(settledTransform).toBe('none');
+});
+
+test('2D side-seat discards turn into the river orientation during flight instead of facing the side player for the whole flight', async ({ page }) => {
+  await boot2d(page);
+
+  for (const side of ['left', 'right'] as const) {
+    await page.evaluate((seat) => {
+      const app = document.querySelector<HTMLElement>('#app');
+      const zone = document.querySelector<HTMLElement>(`.player-${seat}`);
+      const river = zone?.querySelector<HTMLElement>('.discard-river');
+      const player = zone?.querySelector<HTMLElement>('.player-name')?.textContent?.trim();
+      if (!app || !river || !player) throw new Error(`Missing ${seat} seat fixture`);
+
+      const label = `qa-${seat}-flight`;
+      const tile = document.createElement('div');
+      tile.className = 'tile tile-compact';
+      tile.dataset.engineTileId = seat === 'left' ? '990301' : '990302';
+      tile.setAttribute('aria-label', label);
+      tile.innerHTML = '<span></span>';
+      river.append(tile);
+
+      const log = document.createElement('div');
+      log.className = 'log-entry';
+      log.textContent = `${player} discarded ${label}.`;
+      app.append(log);
+    }, side);
+
+    const ghost = page.locator('.discard-flight-ghost');
+    await expect(ghost).toBeVisible({ timeout: 2_000 });
+    const frames = await ghost.evaluate((element) => {
+      const animation = element.getAnimations()[0];
+      const effect = animation?.effect as KeyframeEffect | null;
+      return effect?.getKeyframes().map((frame) => String(frame.transform ?? '')) ?? [];
+    });
+    expect(frames).toHaveLength(2);
+    expect(rotationDegrees(frames[0])).toBeCloseTo(0, 3);
+    expect(rotationDegrees(frames[1])).toBeCloseTo(side === 'left' ? 90 : -90, 3);
+    await expect(ghost).toHaveCount(0, { timeout: 1_500 });
+  }
 });
