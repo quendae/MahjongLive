@@ -185,22 +185,14 @@ function animateFlight(latest: LatestDiscard): void {
   document.body.append(ghost);
 
   latest.tile.classList.add('discard-flight-target');
-  const lift = latest.tsumogiri ? 24 : 34;
   const animation = ghost.animate([
     {
       transform: `translate(${dx}px, ${dy}px) rotate(${angle}deg) scale(${scaleX}, ${scaleY})`,
       opacity: .38,
-      offset: 0,
-    },
-    {
-      transform: `translate(${dx * .52}px, ${dy * .52 - lift}px) rotate(${angle}deg) scale(1.06)`,
-      opacity: 1,
-      offset: .58,
     },
     {
       transform: `translate(0px, 0px) rotate(${angle}deg) scale(1)`,
       opacity: 1,
-      offset: 1,
     },
   ], {
     duration: latest.tsumogiri ? 320 : 390,
