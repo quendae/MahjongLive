@@ -50,9 +50,11 @@ test('Options exposes persistent Compact, Normal, Large and Extra large UI scale
   const after = await optionsButton.evaluate((element) => element.getBoundingClientRect().height);
   expect(after).toBeGreaterThan(before);
 
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.locator('.mahjong-table').waitFor({ state: 'visible' });
-  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.uiScale)).toBe('large');
+  const reopened = await page.context().newPage();
+  await reopened.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await reopened.locator('.mahjong-table').waitFor({ state: 'visible' });
+  await expect.poll(() => reopened.evaluate(() => document.documentElement.dataset.uiScale)).toBe('large');
+  await reopened.close();
 });
 
 test('Escape closes Options and restores focus to the Options button', async ({ page }) => {
