@@ -6,7 +6,7 @@ import {
 } from '@mahjong-live/shared/single';
 import type { MatchHistoryRecord } from '@mahjong-live/shared/single';
 import { buildMatchHistoryView } from './match-history-view';
-import { renderReplayTable } from './visual-replay-table';
+import { renderReplayTable, syncReplayTable } from './visual-replay-table';
 
 const SAVE_KEY = 'mahjong-live:single:v1';
 const HISTORY_KEY = 'mahjong-live:history:v1';
@@ -112,10 +112,13 @@ function controlsMarkup(replay: ActiveReplay): string {
 function renderActiveReplay(): void {
   if (!active) return;
   const reconstructed = replayMatchHistory(active.history, active.cursor);
-  const nextTable = renderReplayTable(active.livePanel, reconstructed.state);
-  if (active.replayTable?.isConnected) active.replayTable.replaceWith(nextTable);
-  else active.marker.after(nextTable);
-  active.replayTable = nextTable;
+  if (active.replayTable?.isConnected) {
+    syncReplayTable(active.replayTable, reconstructed.state);
+  } else {
+    const replayTable = renderReplayTable(active.livePanel, reconstructed.state);
+    active.marker.after(replayTable);
+    active.replayTable = replayTable;
+  }
   active.controls.innerHTML = controlsMarkup(active);
 }
 
