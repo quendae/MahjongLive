@@ -79,7 +79,8 @@ Next rule work:
 - [x] Match history and replay viewer/export from deterministic action history.
 - [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
 - [x] Add user-selectable visual-replay playback speed controls.
-- [ ] More accessibility/touch/keyboard QA and UI scaling presets.
+- [x] More accessibility/touch/keyboard QA and UI scaling presets.
+  - 2026-09-18: Options now exposes persistent Compact / Normal / Large / Extra large interface-only scaling (90% / 100% / 115% / 130%) for user-facing controls, dialogs and guidance while leaving table, tile, river, meld, Dora and 3D geometry untouched. Chromium QA verifies persistence, Escape/focus restoration, responsive no-overflow behavior at 1366×768, 390×844 and 844×390, and the existing 2D/3D regression matrix remains green. Real-device/touch and Firefox/WebKit coverage remains tracked separately above.
 
 ## Presentation and game feel
 
