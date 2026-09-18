@@ -1,0 +1,46 @@
+name: One-shot WebGL fallback state fix
+
+on:
+  push:
+    branches:
+      - feature/visual-table-replay
+    paths:
+      - '.webgl-fallback-fix-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/visual-table-replay
+      - name: Mark failed WebGL startup as an error state
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('client/src/table-3d.ts')
+          text = path.read_text(encoding='utf-8')
+          old = """      console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
+      fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
+      updateModeButton();
+"""
+          new = """      console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
+      loadError = true;
+      fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
+      updateModeButton();
+"""
+          if old not in text:
+              raise SystemExit('Expected WebGL fallback block not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          Path('.webgl-fallback-fix-trigger').unlink(missing_ok=True)
+          Path('.github/workflows/one-shot-webgl-fallback-fix.yml').unlink(missing_ok=True)
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: expose failed WebGL startup as unavailable'
+          git push origin HEAD:feature/visual-table-replay
