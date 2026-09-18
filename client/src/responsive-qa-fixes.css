@@ -61,6 +61,28 @@
   }
 }
 
+/* Laptop widths have enough room to keep Autosave/Seed visible, but the growing action cluster must
+   live in a shrinkable grid track. Otherwise its max-content width pushes the document wider than the
+   viewport before the tablet breakpoint takes over. */
+@media (min-width: 1060px) and (max-width: 1439px) {
+  .app-header {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(150px, 1fr) auto minmax(0, 3fr) !important;
+    gap: 12px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .app-header .header-actions {
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap !important;
+    overflow: visible;
+  }
+}
+
 /* Narrow portrait: leave an explicit visual gap between the top badge and its rotated concealed
    rack and keep all four rivers outside the compact center counter. The top river can grow to three
    rows early in a hand, so it needs more clearance than the other three seats. */
