@@ -95,53 +95,6 @@ async function waitForRiverActors(page: Page, count: number): Promise<AuditSnaps
   return latest;
 }
 
-async function logReplayCloseStability(page: Page): Promise<void> {
-  const diagnostics = await page.evaluate(async () => {
-    const close = document.querySelector<HTMLElement>('[data-visual-replay-close]');
-    const panel = document.querySelector<HTMLElement>('[data-visual-replay-panel]');
-    if (!close || !panel) return null;
-
-    const frames: Array<Record<string, number>> = [];
-    for (let index = 0; index < 8; index += 1) {
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-      const closeRect = close.getBoundingClientRect();
-      const panelRect = panel.getBoundingClientRect();
-      frames.push({
-        closeX: closeRect.x,
-        closeY: closeRect.y,
-        closeWidth: closeRect.width,
-        closeHeight: closeRect.height,
-        panelX: panelRect.x,
-        panelY: panelRect.y,
-        panelWidth: panelRect.width,
-        panelHeight: panelRect.height,
-      });
-    }
-
-    const animations = document.getAnimations().map((animation) => {
-      const target = (animation.effect as KeyframeEffect | null)?.target;
-      return {
-        playState: animation.playState,
-        currentTime: animation.currentTime,
-        target: target instanceof HTMLElement ? `${target.tagName}.${target.className}` : null,
-      };
-    });
-
-    return {
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      body: {
-        width: document.body.getBoundingClientRect().width,
-        height: document.body.getBoundingClientRect().height,
-        scrollWidth: document.documentElement.scrollWidth,
-        scrollHeight: document.documentElement.scrollHeight,
-      },
-      frames,
-      animations,
-    };
-  });
-  console.log(`3D replay close stability: ${JSON.stringify(diagnostics)}`);
-}
-
 test('visual replay renders the selected history cursor on the live 2D table without mutating autosave', async ({ page }) => {
   const fixture = await bootSavedMatch(page, false);
   const originalSave = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
@@ -177,19 +130,33 @@ test('visual replay renders the selected history cursor on the live 2D table wit
 });
 
 test('3D renderer follows the same visual replay cursor as the 2D table', async ({ page }) => {
+  const startedAt = Date.now();
+  const mark = (label: string) => console.log(`3D replay timing +${Date.now() - startedAt}ms ${label}`);
+
   const fixture = await bootSavedMatch(page, true);
+  mark('bootSavedMatch');
   await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
+  mark('table active');
   await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
+  mark('stage active');
   await waitForRiverActors(page, fixture.liveDiscards);
+  mark('live river actors');
   const originalSave = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
+  mark('autosave captured');
 
   await page.locator('[data-visual-replay-open]').click();
+  mark('replay opened');
   await page.locator('[data-history-action="start"]').click();
+  mark('replay start clicked');
   await waitForRiverActors(page, 0);
+  mark('replay river actors');
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBe(originalSave);
-  await logReplayCloseStability(page);
+  mark('replay autosave verified');
 
   await page.locator('[data-visual-replay-close]').click();
+  mark('replay closed');
   await waitForRiverActors(page, fixture.liveDiscards);
+  mark('live river restored');
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBe(originalSave);
+  mark('final autosave verified');
 });
