@@ -168,7 +168,10 @@ async function capture(page: Page, testInfo: TestInfo, profile: Profile, mode: '
   await testInfo.attach(`${profile.name}-${mode}`, { path, contentType: 'image/png' });
 }
 
-test.setTimeout(60_000);
+// Software-rendered WebGL on hosted CI varies substantially between runners, especially for the
+// first 2560x1440 3D page. Keep the visual assertions unchanged but allow enough budget for a slow
+// renderer to reach the same deterministic audit and screenshot.
+test.setTimeout(90_000);
 
 for (const profile of PROFILES) {
   for (const mode of ['2d', '3d'] as const) {
