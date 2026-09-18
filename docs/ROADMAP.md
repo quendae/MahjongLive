@@ -73,7 +73,8 @@ Next rule work:
 - [x] Public-information discard advisor.
 - [x] Autosave/resume and seeded deterministic games.
 - [x] Add deterministic bot calibration statistics with seat rotations and a reproducible `pnpm bot:benchmark` report.
-- [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
+- [x] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
+  - 2026-09-18: contextual `Hint` / `Why?` guidance now explains human Tenpai waits, Furiten/Ron, currently legal calls, Riichi/Kan choices and the existing Yaku/Dora/Fu/payment breakdown using only the human hand and public table state; browser QA explicitly verifies that concealed opponent content is never copied into the guidance.
 - [x] Use calibration statistics to tune bot strength and defense/offense behavior.
 - [x] Match history and replay viewer/export from deterministic action history.
 - [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
@@ -91,7 +92,8 @@ Next rule work:
 - [x] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
 - [ ] Keep optional sound cues synchronized with authoritative presentation frames.
-- [ ] Add quality presets (`Performance`, `Balanced`, `High`) on top of Dev-level individual sliders.
+- [x] Add user-facing 3D quality presets on top of Dev-level individual sliders.
+  - 2026-09-18: Options exposes Maximum / High / Balanced / Low profiles while Dev retains individual graphics tuning.
 
 ## Multiplayer — future expansion
 
