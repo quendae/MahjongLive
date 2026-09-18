@@ -91,7 +91,8 @@ Next rule work:
 - [x] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
 - [x] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
-- [ ] Keep optional sound cues synchronized with authoritative presentation frames.
+- [x] Keep optional sound cues synchronized with authoritative presentation frames.
+  - 2026-09-18: live table audio now derives semantic draw/discard/Riichi/call/Dora/win cues from authoritative presentation `RoundEvent` types instead of caption text or Dora DOM changes. Only event types cross the browser sync event, Riichi suppresses a duplicate discard clack, a win is exclusive, and Kan completion can intentionally pair call + Dora cues.
 - [x] Add user-facing 3D quality presets on top of Dev-level individual sliders.
   - 2026-09-18: Options exposes Maximum / High / Balanced / Low profiles while Dev retains individual graphics tuning.
 
