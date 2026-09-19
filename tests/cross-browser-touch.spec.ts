@@ -120,6 +120,15 @@ async function boot(page: Page, mode: '2d' | '3d', touch = false): Promise<BootM
 }
 
 async function expectLayoutInsideViewport(page: Page, mode: '2d' | '3d'): Promise<void> {
+  // Game boot and the presentation enhancers can replace the table DOM in adjacent frames.
+  // Wait for the final Dora target before taking a geometry snapshot so a busy cross-browser
+  // runner does not audit the transient pre-enhancement node. The geometry assertions below
+  // still verify the same final visibility and viewport constraints.
+  const doraTarget = mode === '3d'
+    ? page.locator('#table-3d-stage .table-dora-tray')
+    : page.locator('.table-center .dora-row.center-dora-integrated');
+  await expect(doraTarget).toBeVisible({ timeout: 5_000 });
+
   const audit = await page.evaluate((tableMode) => {
     const table = document.querySelector<HTMLElement>('.mahjong-table');
     const center = document.querySelector<HTMLElement>('.table-center');
