@@ -1,3 +1,4 @@
+/* 2D discard presentation; flight orientation is owned by discard-source-2d.ts. */
 .discard-flight-ghost {
   position: fixed !important;
   z-index: 120;

@@ -1,19 +1,25 @@
 import './game-feel.css';
 
-import { playDoraCue, playPresentationCaption, playTileSelect, playUiTap, setSoundEnabled, unlockAudio } from './audio';
+import { playPresentationEventTypes, playTileSelect, playUiTap, setSoundEnabled, unlockAudio } from './audio';
 
 const SOUND_KEY = 'mahjong-live:sound-enabled:v1';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
 let soundEnabled = localStorage.getItem(SOUND_KEY) !== '0';
-let lastPresentationSignature = '';
 let lastDoraCount = -1;
 let scheduled = false;
 
 setSoundEnabled(soundEnabled);
 document.addEventListener('pointerdown', unlockAudio, { passive: true });
 
+window.addEventListener('mahjong-live:presentation-frame', (event) => {
+  const detail = (event as CustomEvent<{ eventTypes?: unknown }>).detail;
+  const eventTypes = Array.isArray(detail?.eventTypes)
+    ? detail.eventTypes.filter((type): type is string => typeof type === 'string')
+    : [];
+  playPresentationEventTypes(eventTypes);
+});
 
 function bindFeelSounds(): void {
   app.querySelectorAll<HTMLElement>('.tile-clickable:not([data-feel-sound])').forEach((element) => {
@@ -79,39 +85,16 @@ function applyActiveTurn(): void {
   playerZoneForName(match[1])?.classList.add('is-active-turn');
 }
 
-function presentationSignature(caption: string): string {
-  const zoneState = [...app.querySelectorAll<HTMLElement>('.player-zone')]
-    .map((zone) => {
-      const player = zone.dataset.player ?? '?';
-      const concealed = zone.querySelectorAll('.opponent-hand .tile, .human-hand .tile').length;
-      const discards = zone.querySelectorAll('.discard-river .tile').length;
-      const melds = zone.querySelectorAll('.meld .tile').length;
-      return `${player}:${concealed}:${discards}:${melds}`;
-    })
-    .join('|');
-  return `${caption}|${zoneState}|d${app.querySelectorAll('.dora-row .tile').length}`;
-}
-
 function applyPresentationFeel(): void {
   const caption = app.querySelector('.presentation-pulse span')?.textContent?.trim() ?? '';
   const doraCount = app.querySelectorAll('.dora-row .tile').length;
 
   if (lastDoraCount >= 0 && doraCount > lastDoraCount) {
     app.querySelector('.table-center')?.classList.add('fx-dora');
-    window.setTimeout(playDoraCue, 80);
   }
   lastDoraCount = doraCount;
 
-  if (!caption) {
-    lastPresentationSignature = '';
-    return;
-  }
-
-  const signature = presentationSignature(caption);
-  if (signature !== lastPresentationSignature) {
-    playPresentationCaption(caption);
-    lastPresentationSignature = signature;
-  }
+  if (!caption) return;
 
   const actor = /^(You|Bot \d+)/.exec(caption)?.[1];
   const zone = actor ? playerZoneForName(actor) : null;

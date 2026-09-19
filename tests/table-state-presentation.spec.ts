@@ -76,3 +76,60 @@ test('counter refreshes numeric table state and marks a declared-riichi seat wit
   await expect(bottomScore).toHaveClass(/is-riichi/);
   await expect(bottomScore.locator('.counter-riichi-stick')).toBeVisible();
 });
+
+test('3D Dora HUD stays mounted through a discard rerender instead of blinking out with the table DOM', async ({ page }) => {
+  await boot(page, true);
+  await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
+  await expect(page.locator('#table-3d-stage')).toHaveClass(/is-active/, { timeout: 15_000 });
+
+  const tray = page.locator('.table-dora-tray');
+  await expect(tray).toBeVisible();
+  await tray.evaluate((element) => { element.dataset.persistenceProbe = 'stable-dora'; });
+
+  const acted = await page.evaluate(() => {
+    const tile = document.querySelector<HTMLElement>('.human-hand [data-tile-id]');
+    if (!tile) return false;
+    tile.click();
+    return true;
+  });
+  expect(acted, 'new game should stop at a human discard prompt').toBe(true);
+
+  await page.waitForTimeout(180);
+  await expect(page.locator('.table-dora-tray')).toBeVisible();
+  await expect(page.locator('.table-dora-tray[data-persistence-probe="stable-dora"]')).toHaveCount(1);
+});
+
+for (const threeD of [false, true]) {
+  test(`${threeD ? '3D' : '2D'} desktop center counter uses readable geometry and text`, async ({ page }) => {
+    await boot(page, threeD);
+    if (threeD) {
+      await expect(page.locator('.mahjong-table')).toHaveClass(/table-3d-active/, { timeout: 15_000 });
+    }
+
+    const metrics = await page.locator('.table-center').evaluate((center) => {
+      const rect = center.getBoundingClientRect();
+      const title = center.querySelector<HTMLElement>('.round-title');
+      const value = center.querySelector<HTMLElement>('.table-state-item > strong');
+      const label = center.querySelector<HTMLElement>('.table-state-item > small');
+      return {
+        width: rect.width,
+        height: rect.height,
+        titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
+        valuePx: value ? parseFloat(getComputedStyle(value).fontSize) : 0,
+        labelPx: label ? parseFloat(getComputedStyle(label).fontSize) : 0,
+      };
+    });
+
+    if (threeD) {
+      expect(metrics.width).toBeGreaterThanOrEqual(330);
+      expect(metrics.height).toBeGreaterThanOrEqual(280);
+      expect(metrics.titlePx).toBeGreaterThanOrEqual(40);
+    } else {
+      expect(metrics.width).toBeGreaterThanOrEqual(316);
+      expect(metrics.height).toBeGreaterThanOrEqual(316);
+      expect(metrics.titlePx).toBeGreaterThanOrEqual(42);
+    }
+    expect(metrics.valuePx).toBeGreaterThanOrEqual(11);
+    expect(metrics.labelPx).toBeGreaterThanOrEqual(7);
+  });
+}

@@ -133,11 +133,11 @@ const DEFAULT_DEV_TUNING: DevTuning = {
     doraScale: 1.29,
     doraX: 24,
     doraY: 24,
-    centerScale: .92,
+    centerScale: 1.02,
     centerOffsetX: 0,
     centerOffsetY: -10,
-    centerWidth: 309,
-    centerHeight: 265,
+    centerWidth: 340,
+    centerHeight: 300,
     reactionScale: 1,
     gameLogWidth: 290,
     tileLabelScale: 1,
@@ -431,6 +431,9 @@ function readDevTuning(): DevTuning {
   if (Math.abs(parsed.tiles.faceScale - 1.1) < .0001) parsed.tiles.faceScale = .87;
   if (parsed.tiles.bodyColor.toLowerCase() === '#ffffff') parsed.tiles.bodyColor = '#fbfbfb';
   if (parsed.tiles.faceTint.toLowerCase() === '#ffffff') parsed.tiles.faceTint = '#fbfbfb';
+  if (Math.abs(parsed.ui.centerScale - .92) < .0001) parsed.ui.centerScale = 1.02;
+  if (Math.abs(parsed.ui.centerWidth - 309) < .0001) parsed.ui.centerWidth = 340;
+  if (Math.abs(parsed.ui.centerHeight - 265) < .0001) parsed.ui.centerHeight = 300;
   devTuningCache = parsed;
   return parsed;
 }
@@ -677,12 +680,11 @@ function baseTransform(spec: TileSpec): Transform {
   } else {
     const gap = tuning.tiles.meldGap;
     const meldIndex = Math.max(0, spec.meldIndex ?? 0);
-    const tileIndex = Math.max(0, spec.meldTileIndex ?? spec.index);
-    // Keep each legal 3/4-tile meld as one group. The previous flat 8-column stream wrapped the
-    // ninth tile onto a second row, which could throw a perfectly legal third meld into the table.
-    const groupGap = tuning.tiles.meldRowGap;
-    const groupStride = Math.max(1.18, gap * 4 + groupGap);
-    const linear = meldIndex * groupStride + tileIndex * gap;
+    // Use the authoritative flat index so a triplet consumes three slots and a Kan four.
+    // meldRowGap is the desired centre-to-centre spacing at a group boundary; subtract the
+    // normal tile gap here so existing Dev values remain intuitive and useful.
+    const groupBoundaryGap = Math.max(0, tuning.tiles.meldRowGap - gap);
+    const linear = spec.index * gap + meldIndex * groupBoundaryGap;
     transform.scale = .80 * tuning.tiles.meldScale;
     if (spec.side === 'bottom') {
       transform.x = 5.67 - linear;
@@ -1704,7 +1706,9 @@ async function createRuntime(THREE: any): Promise<TableRuntime> {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'table-3d-canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
+  const persistentDoraTray = stage.querySelector<HTMLElement>('.table-dora-tray');
   stage.replaceChildren(renderer.domElement);
+  if (persistentDoraTray) stage.appendChild(persistentDoraTray);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(tuning.sceneColor);
@@ -2598,6 +2602,7 @@ async function reconcile(): Promise<void> {
         return;
       }
       console.warn('Mahjong Live 3D renderer unavailable; keeping 2D table.', error);
+      loadError = true;
       fallbackNote(table, `3D renderer unavailable — ${detail || 'unknown renderer error'}. Using the fully playable 2D table.`);
       updateModeButton();
       return;

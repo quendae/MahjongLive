@@ -2,6 +2,7 @@ import type { ScoredHand } from '../scoring/score';
 import type { Tile, Wind } from '../tiles/types';
 import type { Wall } from '../wall/wall';
 import type { WinningMeld } from '../yaku/context';
+import type { RuleProfileId } from './profile';
 
 export type PlayerIndex = 0 | 1 | 2 | 3;
 
@@ -69,7 +70,7 @@ export type RoundPhase =
       wasLastLiveDraw: boolean;
       /** The current draw came from the dead wall after a completed Kan. */
       isRinshan?: boolean;
-      /** Tenhou-style delayed Dora from a Daiminkan/Shouminkan, revealed on discard/chained Kan. */
+      /** Delayed Kan-Dora profile support: reveal on discard/chained Kan. */
       pendingKanDora?: boolean;
     }
   | {
@@ -91,6 +92,8 @@ export type RoundPhase =
   | { kind: 'ended'; result: RoundEndResult };
 
 export interface RoundState {
+  /** Missing means a legacy save/fixture and resolves to the Standard profile. */
+  ruleProfileId?: RuleProfileId;
   wall: Wall;
   players: readonly [RoundPlayerState, RoundPlayerState, RoundPlayerState, RoundPlayerState];
   dealer: PlayerIndex;
@@ -103,6 +106,7 @@ export interface RoundState {
 }
 
 export interface RoundOptions {
+  ruleProfileId?: RuleProfileId;
   dealer?: PlayerIndex;
   roundWind?: Wind;
   honba?: number;

@@ -1,6 +1,7 @@
 import { tileTypeKey } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
 import { drawRinshan, revealKanDora } from '../wall/wall';
+import { resolveRuleProfile } from './profile';
 import { winningTileTypeKeys } from './waits';
 import type {
   CallClaim,
@@ -66,6 +67,22 @@ export function flushPendingKanDora(
       phase: { ...state.phase, pendingKanDora: false },
     },
     events: [{ type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length }],
+  };
+}
+
+function completeKanDora(state: RoundState): {
+  state: RoundState;
+  events: readonly RoundEvent[];
+  pendingKanDora: boolean;
+} {
+  if (resolveRuleProfile(state.ruleProfileId).kanDoraTiming !== 'immediate') {
+    return { state, events: [], pendingKanDora: true };
+  }
+  const wall = revealKanDora(state.wall);
+  return {
+    state: { ...state, wall },
+    events: [{ type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length }],
+    pendingKanDora: false,
   };
 }
 
@@ -215,21 +232,20 @@ export function executeAnkan(
     melds: [...player.melds, meld],
   });
   players = clearAllIppatsu(players);
-  const wall = revealKanDora(working.wall);
   working = {
     ...working,
-    wall,
     players,
     callsMade: working.callsMade + 1,
   };
-  const rinshan = rinshanState(working, playerIndex, false);
+  const dora = completeKanDora(working);
+  const rinshan = rinshanState(dora.state, playerIndex, dora.pendingKanDora);
   return {
     state: rinshan.state,
     events: [
       ...flushed.events,
       { type: 'KanDeclared', player: playerIndex, kind: 'ankan' },
       { type: 'KanCompleted', player: playerIndex, kind: 'ankan', meld },
-      { type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length },
+      ...dora.events,
       rinshan.event,
     ],
   };
@@ -293,19 +309,18 @@ export function completeShouminkan(
   melds[phase.meldIndex] = meld;
   let players = replacePlayer(state.players, phase.declarer, { ...player, melds });
   players = clearAllIppatsu(players);
-  let working: RoundState = {
+  const working: RoundState = {
     ...state,
     players,
     callsMade: state.callsMade + 1,
   };
-  const wall = revealKanDora(working.wall);
-  working = { ...working, wall };
-  const rinshan = rinshanState(working, phase.declarer, false);
+  const dora = completeKanDora(working);
+  const rinshan = rinshanState(dora.state, phase.declarer, dora.pendingKanDora);
   return {
     state: rinshan.state,
     events: [
       { type: 'KanCompleted', player: phase.declarer, kind: 'shouminkan', meld },
-      { type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length },
+      ...dora.events,
       rinshan.event,
     ],
   };
@@ -342,21 +357,20 @@ export function executeDaiminkan(
     melds: [...caller.melds, meld],
   });
   players = clearAllIppatsu(players);
-  let working: RoundState = {
+  const working: RoundState = {
     ...state,
     players,
     callsMade: state.callsMade + 1,
     currentPlayer: claim.player,
   };
-  const wall = revealKanDora(working.wall);
-  working = { ...working, wall };
-  const rinshan = rinshanState(working, claim.player, false);
+  const dora = completeKanDora(working);
+  const rinshan = rinshanState(dora.state, claim.player, dora.pendingKanDora);
   return {
     state: rinshan.state,
     events: [
       { type: 'CallMade', player: claim.player, kind: 'daiminkan', meld },
       { type: 'KanCompleted', player: claim.player, kind: 'daiminkan', meld },
-      { type: 'DoraIndicatorRevealed', count: wall.doraIndicators.length },
+      ...dora.events,
       rinshan.event,
     ],
   };

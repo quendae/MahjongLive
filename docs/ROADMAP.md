@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-17
+Updated: 2026-09-19
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -25,12 +25,13 @@ and should be updated as the game grows.
 - [x] Reclaim desktop play space by keeping the move log DOM-only instead of reserving a permanent column and by removing the old 940/980px desktop table height caps.
 - [x] Add automated Chromium responsive-layout QA with screenshots for 2D and 3D across seven desktop/tablet/phone viewports.
 - [x] Canonicalize 2D river clearance around the center counter, human meld placement at the bottom-right and one source-aware discard animation without the second landing bounce.
-- [ ] Continue responsive table/camera QA on real browsers/devices, especially touch behavior and Firefox/WebKit-specific differences.
+- [ ] Continue responsive table/camera QA on real browsers/devices, especially real GPU/touch behavior and Firefox/WebKit-specific differences not reproducible in hosted CI.
   - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports.
   - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport.
   - 2026-09-05: Playwright matrix passed 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D.
   - 2026-09-16: focused 2D regression + responsive QA passed 29/29, including saved legacy meld-offset migration, center clearance and the single discard-flight path.
   - 2026-09-16: call/meld/Dora/result-transition coverage expanded the browser matrix to 35/35. Real-device/touch QA remains open.
+  - 2026-09-19: hosted cross-browser QA is now gated in CI: the existing Chromium presentation/responsive bundle passed 49/49, Firefox cross-browser layouts 6/6, WebKit cross-browser layouts 6/6 and a Chromium mobile test using real Playwright `tap()` interactions 1/1. Hosted Ubuntu Firefox exposes no WebGL (`AllowWebgl2:false`), so its 3D requests verify the production 2D fallback rather than real GPU rendering; physical-device and real-GPU spot checks remain open.
 
 ## Active implementation sequence
 
@@ -47,6 +48,8 @@ and should be updated as the game grows.
    - 2026-09-16: deterministic bot calibration now rotates Casual / Standard / Expert / Expert across seats and records placement, points, wins, deal-ins, Riichi, calls and match-length statistics.
    - 2026-09-17: a fixed 96-Hanchan calibration pass separated Standard from Expert while keeping Casual clearly weaker; Standard now declines Chi while retaining Riichi, defense, Pon and safe Kan behavior.
    - 2026-09-17: single-player history now uses a separate versioned append-only record with exact accepted actions and explicit round advances, deterministic step replay and JSON export without changing the autosave format.
+   - 2026-09-18: deterministic history can now drive the normal 2D or 3D table in a read-only visual replay with Start/step/Play-Pause/End seeking and round jumps; closing replay restores the exact detached live table without mutating autosave.
+   - 2026-09-18: visual replay now offers user-selectable 0.5× / 1× / 2× / 4× playback speeds while keeping seek, pause and live-state isolation unchanged.
 
 ## Rules and scoring
 
@@ -60,10 +63,13 @@ Current product rule decision:
 
 Next rule work:
 
-- [ ] Continue edge-case audit using deterministic full-match simulation and regression seeds.
+- [x] Continue edge-case audit using deterministic full-match simulation and regression seeds.
+  - 2026-09-18: `pnpm rules:audit` now replays six pinned full Hanchan seeds through the production engine and checks cross-round point/riichi-stick conservation, dealer/wind/hand/honba continuity, terminal placements and deterministic replay coverage. The CI sweep covered 58 rounds with 13 Tsumo, 41 Ron, 4 exhaustive draws, 15 dealer repeats, 43 dealer advances, 61 Riichi declarations, 102 calls and 6 Kans.
 - [x] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
-- [ ] Add rule-profile plumbing before introducing optional table/rules variants.
-- [ ] Keep save-state compatibility tests whenever engine state changes.
+- [x] Add rule-profile plumbing before introducing optional table/rules variants.
+  - 2026-09-18: the engine now persists a stable `ruleProfileId` through match and round state and resolves it centrally to a single production `standard` profile. Standard explicitly owns the current Kan-Dora timing, Nagashi Mangan, bankruptcy, dealer-yame and West-round-extension decisions; no alternative profile or rules UI is exposed yet. The six-seed full-match audit remained byte-for-byte deterministic at the result/coverage level after the plumbing change.
+- [x] Keep save-state compatibility tests whenever engine state changes.
+  - 2026-09-18: legacy single-player JSON without `ruleProfileId` is migrated in memory to `standard` at resume time, with a regression test proving the resumed match state and next prompt are identical to an explicitly profiled save. Existing JSON round-trip/resume tests remain green; this compatibility check remains a required policy for future engine-state schema changes.
 
 ## Single-player
 
@@ -71,11 +77,15 @@ Next rule work:
 - [x] Public-information discard advisor.
 - [x] Autosave/resume and seeded deterministic games.
 - [x] Add deterministic bot calibration statistics with seat rotations and a reproducible `pnpm bot:benchmark` report.
-- [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
+- [x] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
+  - 2026-09-18: contextual `Hint` / `Why?` guidance now explains human Tenpai waits, Furiten/Ron, currently legal calls, Riichi/Kan choices and the existing Yaku/Dora/Fu/payment breakdown using only the human hand and public table state; browser QA explicitly verifies that concealed opponent content is never copied into the guidance.
 - [x] Use calibration statistics to tune bot strength and defense/offense behavior.
 - [x] Match history and replay viewer/export from deterministic action history.
-- [ ] Play saved replays directly through the normal 2D/3D table presentation with pause, speed and seek controls.
-- [ ] More accessibility/touch/keyboard QA and UI scaling presets.
+- [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
+- [x] Add user-selectable visual-replay playback speed controls.
+- [x] More accessibility/touch/keyboard QA and UI scaling presets.
+  - 2026-09-18: Options now exposes persistent Compact / Normal / Large / Extra large interface-only scaling (90% / 100% / 115% / 130%) for user-facing controls, dialogs and guidance while leaving table, tile, river, meld, Dora and 3D geometry untouched. Chromium QA verifies persistence, Escape/focus restoration, responsive no-overflow behavior at 1366×768, 390×844 and 844×390, and the existing 2D/3D regression matrix remains green.
+  - 2026-09-19: automated browser coverage now additionally includes Firefox and WebKit responsive checks plus a true touch-emulation path using `tap()` for game setup, Options, UI-scale selection and a human discard. Remaining accessibility/device QA is limited to physical-device and real-GPU/browser spot checks.
 
 ## Presentation and game feel
 
@@ -87,8 +97,10 @@ Next rule work:
 - [x] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
 - [x] Add clearer Riichi-stick/table-state presentation without covering the play field.
 - [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
-- [ ] Keep optional sound cues synchronized with authoritative presentation frames.
-- [ ] Add quality presets (`Performance`, `Balanced`, `High`) on top of Dev-level individual sliders.
+- [x] Keep optional sound cues synchronized with authoritative presentation frames.
+  - 2026-09-18: live table audio now derives semantic draw/discard/Riichi/call/Dora/win cues from authoritative presentation `RoundEvent` types instead of caption text or Dora DOM changes. Only event types cross the browser sync event, Riichi suppresses a duplicate discard clack, a win is exclusive, and Kan completion can intentionally pair call + Dora cues.
+- [x] Add user-facing 3D quality presets on top of Dev-level individual sliders.
+  - 2026-09-18: Options exposes Maximum / High / Balanced / Low profiles while Dev retains individual graphics tuning.
 
 ## Multiplayer — future expansion
 

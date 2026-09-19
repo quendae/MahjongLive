@@ -24,11 +24,28 @@ function eventOf<T extends RoundEvent['type']>(
   return frame.events.find((event): event is Extract<RoundEvent, { type: T }> => event.type === type);
 }
 
+/**
+ * main.ts asks for the caption immediately before synchronously rendering the same authoritative
+ * frame. Queue only the event *types* so the audio layer runs after that render without ever putting
+ * hidden tile payloads (for example an opponent draw) onto a global browser event.
+ */
+function schedulePresentationFrame(frame: SinglePresentationFrame): void {
+  if (typeof window === 'undefined' || frame.events.length === 0) return;
+  const eventTypes = frame.events.map((event) => event.type);
+  queueMicrotask(() => {
+    window.dispatchEvent(new CustomEvent('mahjong-live:presentation-frame', {
+      detail: { eventTypes },
+    }));
+  });
+}
+
 /** Short presentation caption. Bot draw tile identity is intentionally never read. */
 export function presentationCaption(
   frame: SinglePresentationFrame,
   humanSeat: PlayerIndex,
 ): string {
+  schedulePresentationFrame(frame);
+
   const { action } = frame.trace;
   if (action.type === 'resolve-reactions') {
     const won = eventOf(frame, 'HandWon');

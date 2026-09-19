@@ -15,6 +15,7 @@ import {
   legalDaiminkanOptions,
   legalShouminkanOptions,
 } from './kan';
+import { normalizeRuleProfileId, resolveRuleProfile } from './profile';
 import { completesHandOnTile, isRonFuriten, winningTileTypeKeys } from './waits';
 import { resolveWinningHands } from './winning';
 import type {
@@ -123,6 +124,7 @@ export function createRound(rng: RNG, options: RoundOptions = {}): RoundState {
   }
 
   return {
+    ruleProfileId: normalizeRuleProfileId(options.ruleProfileId),
     wall,
     players: playerTuple(players),
     dealer,
@@ -257,7 +259,6 @@ function settleTsumo(
 ): RoundState['players'] {
   const points = state.players.map((player) => player.points);
   const payment = score.payments;
-
   if (payment.type === 'tsumo-dealer') {
     for (const player of PLAYERS) {
       if (player !== winner) points[player] -= payment.fromEach;
@@ -655,12 +656,15 @@ function settleExhaustive(state: RoundState): { result: RoundEndResult; players:
   const tenpaiPlayers = PLAYERS.filter((player) =>
     winningTileTypeKeys(state.players[player].concealed, state.players[player].melds).size > 0,
   );
-  const nagashiPlayers = PLAYERS.filter((player) => detectNagashiMangan(
-    state.players[player].discards.map((discard) => ({
-      tile: discard.tile,
-      wasCalled: discard.calledBy !== undefined,
-    })),
-  ) !== null);
+  const profile = resolveRuleProfile(state.ruleProfileId);
+  const nagashiPlayers = profile.nagashiMangan
+    ? PLAYERS.filter((player) => detectNagashiMangan(
+      state.players[player].discards.map((discard) => ({
+        tile: discard.tile,
+        wasCalled: discard.calledBy !== undefined,
+      })),
+    ) !== null)
+    : [];
 
   if (nagashiPlayers.length > 0) {
     const nagashiPayments = nagashiDeltas(state, nagashiPlayers);

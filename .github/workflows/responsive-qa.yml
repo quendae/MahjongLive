@@ -6,11 +6,14 @@ on:
     paths:
       - 'client/**'
       - 'tests/responsive-qa.spec.ts'
+      - 'tests/cross-browser-touch.spec.ts'
       - 'tests/2d-ui-qa.spec.ts'
       - 'tests/center-anchor-2d.spec.ts'
       - 'tests/2d-regression.spec.ts'
+      - 'tests/2d-discard-motion.spec.ts'
       - 'tests/meld-presentation.spec.ts'
       - 'tests/presentation-transitions.spec.ts'
+      - 'tests/audio-presentation-sync.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
       - 'tests/performance-diagnostics.spec.ts'
@@ -19,17 +22,23 @@ on:
       - 'tests/riichi-discard-presentation.spec.ts'
       - 'tests/score-explanation.spec.ts'
       - 'tests/match-history.spec.ts'
+      - 'tests/visual-replay.spec.ts'
+      - 'tests/contextual-teaching.spec.ts'
+      - 'tests/ui-scale-accessibility.spec.ts'
       - '.github/workflows/responsive-qa.yml'
   push:
     branches: [master]
     paths:
       - 'client/**'
       - 'tests/responsive-qa.spec.ts'
+      - 'tests/cross-browser-touch.spec.ts'
       - 'tests/2d-ui-qa.spec.ts'
       - 'tests/center-anchor-2d.spec.ts'
       - 'tests/2d-regression.spec.ts'
+      - 'tests/2d-discard-motion.spec.ts'
       - 'tests/meld-presentation.spec.ts'
       - 'tests/presentation-transitions.spec.ts'
+      - 'tests/audio-presentation-sync.spec.ts'
       - 'tests/3d-runtime-audit.spec.ts'
       - 'tests/3d-meld-claim-audit.spec.ts'
       - 'tests/performance-diagnostics.spec.ts'
@@ -38,12 +47,15 @@ on:
       - 'tests/riichi-discard-presentation.spec.ts'
       - 'tests/score-explanation.spec.ts'
       - 'tests/match-history.spec.ts'
+      - 'tests/visual-replay.spec.ts'
+      - 'tests/contextual-teaching.spec.ts'
+      - 'tests/ui-scale-accessibility.spec.ts'
       - '.github/workflows/responsive-qa.yml'
 
 jobs:
   browser-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       CI: true
       MAHJONG_QA_URL: http://127.0.0.1:4173
@@ -60,8 +72,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install browser QA runner
         run: pnpm add -Dw @playwright/test@1.55.0 --lockfile=false
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Chromium Firefox and WebKit
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: Typecheck client
         run: pnpm client:typecheck
       - name: Build client
@@ -78,10 +90,18 @@ jobs:
           done
           cat /tmp/mahjong-preview.log
           exit 1
+      - name: Audit visual table replay
+        run: pnpm exec playwright test tests/visual-replay.spec.ts --workers=1 --reporter=line
       - name: Audit match history and replay foundation
         run: pnpm exec playwright test tests/match-history.spec.ts --workers=1 --reporter=line
       - name: Audit scoring explanation
         run: pnpm exec playwright test tests/score-explanation.spec.ts --workers=1 --reporter=line
+      - name: Audit contextual teaching
+        run: pnpm exec playwright test tests/contextual-teaching.spec.ts --workers=1 --reporter=line
+      - name: Audit presentation audio sync
+        run: pnpm exec playwright test tests/audio-presentation-sync.spec.ts --workers=1 --reporter=line
+      - name: Audit UI scale and keyboard accessibility
+        run: pnpm exec playwright test tests/ui-scale-accessibility.spec.ts --workers=1 --reporter=line
       - name: Audit performance diagnostics
         run: pnpm exec playwright test tests/performance-diagnostics.spec.ts --workers=1 --reporter=line
       - name: Audit Riichi discard marker
@@ -89,7 +109,13 @@ jobs:
       - name: Audit 3D discard, hover, seats and meld claims
         run: pnpm exec playwright test tests/3d-runtime-audit.spec.ts tests/3d-meld-claim-audit.spec.ts --workers=1 --reporter=line
       - name: Audit table state, claim choices and responsive 2D/3D layouts
-        run: pnpm exec playwright test tests/table-state-presentation.spec.ts tests/claim-choice.spec.ts tests/responsive-qa.spec.ts tests/2d-ui-qa.spec.ts tests/center-anchor-2d.spec.ts tests/2d-regression.spec.ts tests/meld-presentation.spec.ts tests/presentation-transitions.spec.ts --workers=1 --reporter=line
+        run: pnpm exec playwright test tests/table-state-presentation.spec.ts tests/claim-choice.spec.ts tests/responsive-qa.spec.ts tests/2d-ui-qa.spec.ts tests/center-anchor-2d.spec.ts tests/2d-regression.spec.ts tests/2d-discard-motion.spec.ts tests/meld-presentation.spec.ts tests/presentation-transitions.spec.ts --workers=1 --reporter=line
+      - name: Audit Firefox cross-browser layouts
+        run: pnpm exec playwright test tests/cross-browser-touch.spec.ts --browser=firefox --grep @cross-browser --workers=1 --reporter=line
+      - name: Audit WebKit cross-browser layouts
+        run: pnpm exec playwright test tests/cross-browser-touch.spec.ts --browser=webkit --grep @cross-browser --workers=1 --reporter=line
+      - name: Audit Chromium real touch interactions
+        run: pnpm exec playwright test tests/cross-browser-touch.spec.ts --browser=chromium --grep @touch --workers=1 --reporter=line
       - name: Upload responsive screenshots
         if: always()
         uses: actions/upload-artifact@v4

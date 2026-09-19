@@ -97,8 +97,8 @@
    for all four discard rivers, so resizing the viewport or Dev center scale cannot desynchronize it. */
 .mahjong-table:not(.table-3d-active) .table-center.table-center-core {
   z-index: 6;
-  width: 292px !important;
-  height: 292px !important;
+  width: 320px !important;
+  height: 320px !important;
   min-height: 0 !important;
   aspect-ratio: 1 / 1;
   padding: 14px 16px 13px !important;
@@ -168,6 +168,22 @@
   top: 22px !important;
   bottom: auto !important;
   transform: rotate(-90deg) !important;
+}
+
+@media (min-width: 1060px) {
+  .mahjong-table:not(.table-3d-active) .round-title { font-size: 42px; }
+  .mahjong-table:not(.table-3d-active) .table-state-panel {
+    width: min(100%, 232px);
+    gap: 5px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-state-item {
+    min-height: 34px;
+    padding: 4px 5px;
+  }
+  .mahjong-table:not(.table-3d-active) .table-state-item > strong { font-size: 12px; }
+  .mahjong-table:not(.table-3d-active) .table-state-dealer strong { font-size: 11px; }
+  .mahjong-table:not(.table-3d-active) .table-state-dealer span,
+  .mahjong-table:not(.table-3d-active) .table-state-item small { font-size: 7px; }
 }
 
 @media (min-width: 761px) and (max-width: 1059px) {

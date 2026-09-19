@@ -185,11 +185,16 @@
   .is-presenting .tile { transition: none; }
 }
 
-@media (max-width: 980px) {
-  .app-header { grid-template-columns: 1fr auto; gap: 8px; }
-  .header-status { display: none; }
-  .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 1440px) {
+  .app-header { grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; }
+  .save-pill { display: none; }
+  .header-actions { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
   .header-control { min-height: 31px; }
+}
+
+@media (max-width: 1050px) {
+  .app-header { grid-template-columns: auto minmax(0, 1fr); }
+  .header-status { display: none; }
 }
 
 @media (max-width: 680px) {

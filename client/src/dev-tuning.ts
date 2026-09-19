@@ -118,11 +118,11 @@ const DEFAULTS: DevTuning = {
     doraScale: 1.29,
     doraX: 24,
     doraY: 24,
-    centerScale: .92,
+    centerScale: 1.02,
     centerOffsetX: 0,
     centerOffsetY: -10,
-    centerWidth: 309,
-    centerHeight: 265,
+    centerWidth: 340,
+    centerHeight: 300,
     reactionScale: 1,
     gameLogWidth: 290,
     tileLabelScale: 1,
@@ -254,6 +254,9 @@ if (Math.abs(settings.tiles.faceScale - 1.1) < .0001) settings.tiles.faceScale =
 if (settings.tiles.bodyColor.toLowerCase() === '#ffffff') settings.tiles.bodyColor = '#fbfbfb';
 if (settings.tiles.faceTint.toLowerCase() === '#ffffff') settings.tiles.faceTint = '#fbfbfb';
 if (Math.abs(settings.graphics.pixelRatio - 1.35) < .0001) settings.graphics.pixelRatio = 1.0;
+if (Math.abs(settings.ui.centerScale - .92) < .0001) settings.ui.centerScale = 1.02;
+if (Math.abs(settings.ui.centerWidth - 309) < .0001) settings.ui.centerWidth = 340;
+if (Math.abs(settings.ui.centerHeight - 265) < .0001) settings.ui.centerHeight = 300;
 let panel: HTMLElement | null = null;
 
 type PerformanceDetail = {

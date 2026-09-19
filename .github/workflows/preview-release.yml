@@ -1,0 +1,89 @@
+name: Preview release
+
+on:
+  push:
+    branches:
+      - 'release-preview/**'
+    paths:
+      - '.release/**'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve preview tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#release-preview/}"
+          if [[ "$tag" == "$GITHUB_REF_NAME" || ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
+            echo "Invalid preview branch name: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          if [[ ! -f ".release/${tag}.md" ]]; then
+            echo "Missing release notes: .release/${tag}.md" >&2
+            exit 1
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck client
+        run: pnpm client:typecheck
+
+      - name: Build client
+        run: pnpm client:build
+
+      - name: Package static preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="mahjong-live-${TAG}"
+          mkdir -p "$bundle"
+          cp -R client/dist/. "$bundle/"
+          cat > "$bundle/README.txt" <<'EOF'
+          Mahjong Live preview build
+
+          This is a static browser build. Serve this directory through a local HTTP server.
+
+          Example with Python:
+            python -m http.server 8080
+
+          Then open:
+            http://localhost:8080
+
+          Example with Node if you have npx:
+            npx serve .
+          EOF
+          zip -r "${bundle}.zip" "$bundle"
+
+      - name: Publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$TAG" \
+            "mahjong-live-${TAG}.zip#Mahjong Live static preview" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Mahjong Live ${TAG}" \
+            --notes-file ".release/${TAG}.md" \
+            --prerelease

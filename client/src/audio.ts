@@ -3,6 +3,10 @@ import type { RoundEvent } from '@mahjong-live/shared/rules';
 let audioContext: AudioContext | null = null;
 let enabled = true;
 
+export type PresentationCue = 'draw' | 'discard' | 'riichi' | 'call' | 'dora' | 'win';
+
+type PresentationEventType = Pick<RoundEvent, 'type'> | { type: string };
+
 function context(): AudioContext | null {
   if (!enabled) return null;
   if (!audioContext) audioContext = new AudioContext();
@@ -115,7 +119,71 @@ export function playDoraCue(): void {
   doraCue();
 }
 
-/** Fallback cue mapper for the DOM presentation layer. */
+/**
+ * Convert authoritative presentation event types into restrained semantic audio cues.
+ *
+ * A win and Riichi are exclusive because both already contain their own strong accent. Calls and
+ * Dora may intentionally coexist in one frame (notably a Kan completion), while ordinary draw and
+ * discard sounds are suppressed when a more meaningful table event is present.
+ */
+export function presentationCuesForEvents(events: readonly PresentationEventType[]): PresentationCue[] {
+  const has = (...types: string[]) => events.some((event) => types.includes(event.type));
+
+  if (has('HandWon')) return ['win'];
+  if (has('RiichiDeclared')) return ['riichi'];
+
+  const cues: PresentationCue[] = [];
+  if (has('CallMade', 'KanDeclared', 'KanCompleted')) cues.push('call');
+  if (has('DoraIndicatorRevealed')) cues.push('dora');
+  if (cues.length > 0) return cues;
+
+  if (has('TileDiscarded')) return ['discard'];
+  if (has('TileDrawn')) return ['draw'];
+  return [];
+}
+
+function announcePresentationCue(cue: PresentationCue): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('mahjong-live:presentation-cue', { detail: { cue } }));
+}
+
+function playPresentationCue(cue: PresentationCue): void {
+  announcePresentationCue(cue);
+  switch (cue) {
+    case 'win':
+      winCue();
+      break;
+    case 'riichi':
+      riichiCue();
+      break;
+    case 'call':
+      callChime();
+      break;
+    case 'dora':
+      doraCue();
+      break;
+    case 'discard':
+      tileClack();
+      break;
+    case 'draw':
+      drawSlide();
+      break;
+  }
+}
+
+/** Play cues for one already-rendered authoritative presentation frame. */
+export function playPresentationEventTypes(eventTypes: readonly string[]): void {
+  if (!enabled || eventTypes.length === 0) return;
+  const cues = presentationCuesForEvents(eventTypes.map((type) => ({ type })));
+  cues.forEach(playPresentationCue);
+}
+
+/** Compatibility wrapper for callers that already hold full rule events. */
+export function playRoundEvents(events: readonly RoundEvent[]): void {
+  playPresentationEventTypes(events.map((event) => event.type));
+}
+
+/** Legacy helper retained for compatibility; live presentation timing no longer depends on captions. */
 export function playPresentationCaption(caption: string): void {
   if (!enabled || !caption) return;
   const normalized = caption.toLowerCase();
@@ -136,30 +204,4 @@ export function playPresentationCaption(caption: string): void {
     return;
   }
   if (normalized.includes('draw')) drawSlide();
-}
-
-/** Play one restrained cue for the most meaningful event in a presentation frame. */
-export function playRoundEvents(events: readonly RoundEvent[]): void {
-  if (!enabled || events.length === 0) return;
-  if (events.some((event) => event.type === 'HandWon')) {
-    winCue();
-    return;
-  }
-  if (events.some((event) => event.type === 'RiichiDeclared')) {
-    riichiCue();
-    return;
-  }
-  if (events.some((event) => event.type === 'CallMade' || event.type === 'KanCompleted')) {
-    callChime();
-    return;
-  }
-  if (events.some((event) => event.type === 'DoraIndicatorRevealed')) {
-    doraCue();
-    return;
-  }
-  if (events.some((event) => event.type === 'TileDiscarded')) {
-    tileClack();
-    return;
-  }
-  if (events.some((event) => event.type === 'TileDrawn')) drawSlide();
 }

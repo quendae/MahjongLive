@@ -83,32 +83,37 @@ function decorateTileFaces(): void {
 function ensureDoraTray(table: HTMLElement): void {
   const source = table.querySelector<HTMLElement>('.table-center .dora-row');
   if (!source) return;
-  const tray = table.querySelector<HTMLElement>('.table-dora-tray');
+  const stage = document.querySelector<HTMLElement>('#table-3d-stage');
+  const tableTray = table.querySelector<HTMLElement>('.table-dora-tray');
+  const stageTray = stage?.querySelector<HTMLElement>('.table-dora-tray') ?? null;
 
-  // 2D has enough DOM space to render the actual Dora row inside the physical centre counter.
-  // Keep the original source in flow so 1–5 active indicators naturally expand as one row instead
-  // of cloning them into a detached overlay window.
+  // 2D renders the authoritative Dora row inside the physical centre counter.
   if (!table.classList.contains('table-3d-active')) {
     source.classList.remove('clarity-source-hidden');
     source.classList.add('center-dora-integrated');
-    tray?.remove();
+    tableTray?.remove();
+    if (!stage?.classList.contains('is-active')) stageTray?.remove();
     return;
   }
 
-  // 3D still uses the detached HUD tray because the Three.js table covers the DOM counter source.
+  // #app is replaced on every authoritative game render. Mount the 3D Dora HUD in the
+  // stable renderer stage so discards cannot destroy/re-create it and cause a visible blink.
   source.classList.remove('center-dora-integrated');
   source.classList.add('clarity-source-hidden');
+  tableTray?.remove();
+  if (!stage) return;
+
   const signature = [...source.querySelectorAll<HTMLElement>('.tile')]
     .map((tile) => tile.getAttribute('aria-label') ?? '')
     .join('|');
-  let currentTray = tray;
+  let currentTray = stageTray;
   if (currentTray?.dataset.signature === signature) return;
 
   if (!currentTray) {
     currentTray = document.createElement('div');
     currentTray.className = 'table-dora-tray';
     currentTray.setAttribute('aria-label', 'Dora indicators');
-    table.appendChild(currentTray);
+    stage.appendChild(currentTray);
   }
   currentTray.dataset.signature = signature;
   currentTray.replaceChildren();

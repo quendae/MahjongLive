@@ -1,0 +1,463 @@
+:root {
+  --ui-scale-factor: 1;
+  --ui-touch-target: 40px;
+}
+
+:root[data-ui-scale='compact'] {
+  --ui-scale-factor: .9;
+  --ui-touch-target: 36px;
+}
+
+:root[data-ui-scale='normal'] {
+  --ui-scale-factor: 1;
+  --ui-touch-target: 40px;
+}
+
+:root[data-ui-scale='large'] {
+  --ui-scale-factor: 1.15;
+  --ui-touch-target: 44px;
+}
+
+:root[data-ui-scale='extra-large'] {
+  --ui-scale-factor: 1.3;
+  --ui-touch-target: 48px;
+}
+
+/* User-facing scale controls live with the other Options cards. */
+.ui-scale-options-card {
+  grid-column: 1 / -1;
+}
+
+.ui-scale-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 13px 13px;
+}
+
+.ui-scale-preset {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  align-content: center;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  color: #dfe8e2;
+  text-align: left;
+  background: rgba(255,255,255,.035);
+  cursor: pointer;
+}
+
+.ui-scale-preset strong {
+  color: #edf2ee;
+  font-size: 11px;
+}
+
+.ui-scale-preset > span {
+  color: #dfc77e;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ui-scale-preset small {
+  grid-column: 1 / -1;
+  color: #82978a;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.ui-scale-preset:hover,
+.ui-scale-preset.is-selected {
+  border-color: rgba(226, 202, 139, .42);
+  background: rgba(226, 202, 139, .09);
+}
+
+.ui-scale-preset.is-selected {
+  box-shadow: inset 0 0 0 1px rgba(226, 202, 139, .16);
+}
+
+/*
+ * Scale only interface chrome. Table geometry, tiles, rivers, melds, Dora and the 3D viewport are
+ * intentionally absent from this file so user UI scale cannot alter play-field geometry.
+ */
+:root[data-ui-scale] .app-header {
+  min-height: calc(68px * var(--ui-scale-factor));
+  gap: calc(20px * var(--ui-scale-factor));
+  padding: calc(10px * var(--ui-scale-factor)) calc(24px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .brand {
+  gap: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .brand-mark {
+  width: calc(42px * var(--ui-scale-factor));
+  height: calc(42px * var(--ui-scale-factor));
+  border-radius: calc(11px * var(--ui-scale-factor));
+  font-size: calc(23px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .brand strong {
+  font-size: calc(15px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .brand span {
+  margin-top: calc(2px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .header-status,
+:root[data-ui-scale] .header-actions {
+  gap: calc(8px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .save-pill,
+:root[data-ui-scale] .seed-pill {
+  gap: calc(7px * var(--ui-scale-factor));
+  padding: calc(7px * var(--ui-scale-factor)) calc(10px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .header-button,
+:root[data-ui-scale] .header-control {
+  min-height: var(--ui-touch-target);
+  border-radius: calc(9px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .header-button {
+  padding: calc(8px * var(--ui-scale-factor)) calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .header-control {
+  gap: calc(7px * var(--ui-scale-factor));
+  padding: calc(5px * var(--ui-scale-factor)) calc(8px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .header-control strong {
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .action-dock {
+  gap: calc(14px * var(--ui-scale-factor));
+  padding: calc(10px * var(--ui-scale-factor)) calc(14px * var(--ui-scale-factor));
+  border-radius: calc(14px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .action-dock-compact {
+  min-height: calc(54px * var(--ui-scale-factor));
+  margin-top: calc(8px * var(--ui-scale-factor));
+  padding: calc(7px * var(--ui-scale-factor)) calc(10px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .action-buttons,
+:root[data-ui-scale] .setup-actions,
+:root[data-ui-scale] .history-controls,
+:root[data-ui-scale] .history-dialog-actions,
+:root[data-ui-scale] .visual-replay-controls,
+:root[data-ui-scale] .visual-replay-actions {
+  gap: calc(8px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .action-button,
+:root[data-ui-scale] .primary-button,
+:root[data-ui-scale] .secondary-button,
+:root[data-ui-scale] .choice-option,
+:root[data-ui-scale] .history-controls button,
+:root[data-ui-scale] .history-dialog-actions button,
+:root[data-ui-scale] .visual-replay-controls button,
+:root[data-ui-scale] .visual-replay-actions button {
+  min-height: var(--ui-touch-target);
+  font-size: calc(13px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .action-button {
+  padding: calc(9px * var(--ui-scale-factor)) calc(14px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .primary-button,
+:root[data-ui-scale] .secondary-button {
+  margin-top: calc(18px * var(--ui-scale-factor));
+  padding: calc(11px * var(--ui-scale-factor)) calc(14px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .choice-option {
+  padding: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .advisor-strip {
+  gap: calc(8px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .advisor-chip {
+  gap: calc(5px * var(--ui-scale-factor));
+  padding: calc(4px * var(--ui-scale-factor)) calc(7px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .dialog {
+  padding: calc(24px * var(--ui-scale-factor));
+  border-radius: calc(20px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .dialog-eyebrow {
+  font-size: calc(9px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .dialog h2 {
+  margin: calc(5px * var(--ui-scale-factor)) 0 calc(18px * var(--ui-scale-factor));
+  font-size: calc(27px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .result-winner h3,
+:root[data-ui-scale] .draw-summary h3,
+:root[data-ui-scale] .match-result h3 {
+  font-size: calc(14px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .score-headline strong {
+  font-size: calc(18px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .score-headline span,
+:root[data-ui-scale] .yaku-list li,
+:root[data-ui-scale] .payment-line {
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .dora-breakdown,
+:root[data-ui-scale] .result-note,
+:root[data-ui-scale] .delta-row span {
+  font-size: calc(10px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .placement-row {
+  font-size: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .setup-intro,
+:root[data-ui-scale] .tutorial-intro {
+  font-size: calc(13px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .difficulty-card {
+  min-height: calc(128px * var(--ui-scale-factor));
+  padding: calc(14px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .difficulty-card strong {
+  font-size: calc(15px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .difficulty-card span,
+:root[data-ui-scale] .tutorial-step span {
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .tutorial-step {
+  padding: calc(13px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .toast {
+  padding: calc(10px * var(--ui-scale-factor)) calc(14px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .contextual-teaching {
+  gap: calc(5px * var(--ui-scale-factor));
+  padding: calc(9px * var(--ui-scale-factor)) calc(11px * var(--ui-scale-factor));
+  border-radius: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .contextual-teaching-kicker {
+  font-size: calc(9px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .contextual-teaching-title {
+  font-size: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .contextual-teaching-copy {
+  font-size: calc(10.5px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .contextual-teaching-items > span {
+  padding: calc(4px * var(--ui-scale-factor)) calc(6px * var(--ui-scale-factor));
+  font-size: calc(9.5px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .history-summary {
+  gap: calc(14px * var(--ui-scale-factor));
+  font-size: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .history-round {
+  min-height: var(--ui-touch-target);
+  min-width: calc(96px * var(--ui-scale-factor));
+  padding: calc(8px * var(--ui-scale-factor)) calc(10px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .history-round span {
+  font-size: calc(10px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .history-event {
+  padding: calc(14px * var(--ui-scale-factor));
+  font-size: calc(13px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .history-points span {
+  padding: calc(8px * var(--ui-scale-factor));
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .visual-replay-panel {
+  gap: calc(12px * var(--ui-scale-factor)) calc(16px * var(--ui-scale-factor));
+  padding: calc(12px * var(--ui-scale-factor)) calc(14px * var(--ui-scale-factor));
+  border-radius: calc(16px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .visual-replay-copy span,
+:root[data-ui-scale] .visual-replay-status {
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .visual-replay-speed {
+  font-size: calc(10px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .visual-replay-speed select {
+  min-height: var(--ui-touch-target);
+  padding: calc(7px * var(--ui-scale-factor)) calc(8px * var(--ui-scale-factor));
+}
+
+/* Scale the Options dialog itself without changing its fixed viewport envelope. */
+:root[data-ui-scale] .appearance-head {
+  gap: calc(16px * var(--ui-scale-factor));
+  padding: calc(20px * var(--ui-scale-factor)) calc(22px * var(--ui-scale-factor)) calc(16px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-head span {
+  font-size: calc(9px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-head h2 {
+  font-size: calc(28px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-close {
+  width: var(--ui-touch-target);
+  height: var(--ui-touch-target);
+  font-size: calc(23px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-intro {
+  padding: calc(16px * var(--ui-scale-factor)) calc(22px * var(--ui-scale-factor)) 0;
+  font-size: calc(12px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-grid {
+  gap: calc(12px * var(--ui-scale-factor));
+  padding: 0 calc(22px * var(--ui-scale-factor)) calc(20px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-card-head span,
+:root[data-ui-scale] .appearance-color-row strong,
+:root[data-ui-scale] .appearance-select-row strong,
+:root[data-ui-scale] .appearance-range-row strong,
+:root[data-ui-scale] .appearance-file-row strong {
+  font-size: calc(11px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-card-head small,
+:root[data-ui-scale] .appearance-color-row small,
+:root[data-ui-scale] .appearance-select-row small,
+:root[data-ui-scale] .appearance-range-row small,
+:root[data-ui-scale] .appearance-file-row small,
+:root[data-ui-scale] .appearance-status {
+  font-size: calc(9px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-color-row,
+:root[data-ui-scale] .appearance-select-row,
+:root[data-ui-scale] .appearance-range-row,
+:root[data-ui-scale] .appearance-file-row {
+  min-height: calc(62px * var(--ui-scale-factor));
+  gap: calc(14px * var(--ui-scale-factor));
+  padding: calc(9px * var(--ui-scale-factor)) calc(13px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-file-button,
+:root[data-ui-scale] .appearance-mini-button,
+:root[data-ui-scale] .appearance-reset,
+:root[data-ui-scale] .appearance-done,
+:root[data-ui-scale] .ui-scale-preset {
+  min-height: var(--ui-touch-target);
+}
+
+:root[data-ui-scale] .appearance-footer {
+  min-height: calc(66px * var(--ui-scale-factor));
+  gap: calc(8px * var(--ui-scale-factor));
+  padding: calc(12px * var(--ui-scale-factor)) calc(22px * var(--ui-scale-factor));
+}
+
+:root[data-ui-scale] .appearance-reset,
+:root[data-ui-scale] .appearance-done {
+  padding: calc(9px * var(--ui-scale-factor)) calc(12px * var(--ui-scale-factor));
+  font-size: calc(10px * var(--ui-scale-factor));
+}
+
+@media (max-width: 760px) {
+  .ui-scale-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :root[data-ui-scale] .app-header {
+    grid-template-columns: 1fr;
+    gap: calc(7px * var(--ui-scale-factor));
+    padding: calc(8px * var(--ui-scale-factor)) calc(10px * var(--ui-scale-factor));
+  }
+
+  :root[data-ui-scale] .header-actions {
+    gap: calc(5px * var(--ui-scale-factor));
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  :root[data-ui-scale] .appearance-head {
+    padding: calc(14px * var(--ui-scale-factor)) calc(15px * var(--ui-scale-factor)) calc(12px * var(--ui-scale-factor));
+  }
+
+  :root[data-ui-scale] .appearance-intro {
+    padding: calc(12px * var(--ui-scale-factor)) calc(15px * var(--ui-scale-factor)) 0;
+  }
+
+  :root[data-ui-scale] .appearance-grid {
+    padding: 0 calc(15px * var(--ui-scale-factor)) calc(16px * var(--ui-scale-factor));
+  }
+
+  :root[data-ui-scale] .appearance-footer {
+    padding: calc(10px * var(--ui-scale-factor)) calc(15px * var(--ui-scale-factor));
+  }
+}
+
+@media (max-width: 470px) {
+  .ui-scale-presets {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  :root[data-ui-scale] .app-header {
+    min-height: calc(48px * var(--ui-scale-factor));
+    padding: calc(5px * var(--ui-scale-factor)) calc(10px * var(--ui-scale-factor));
+  }
+
+  :root[data-ui-scale] .difficulty-card {
+    min-height: calc(98px * var(--ui-scale-factor));
+    padding: calc(10px * var(--ui-scale-factor));
+  }
+}

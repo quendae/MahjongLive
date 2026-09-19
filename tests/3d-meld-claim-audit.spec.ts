@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const BASE_URL = process.env.MAHJONG_QA_URL ?? 'http://127.0.0.1:4173';
 const CALLED_ID = 9901;
+// Keep both physical called-tile migration and compact multi-meld spacing under the same 3D audit gate.
 
 type Transform = {
   x: number;
@@ -171,4 +172,52 @@ test('called tile keeps its physical actor when moving from source river into th
   const settledMeld = await waitForActor(page, (actor) => actor.zone === 'meld' && actor.motion === null);
   expectSameTransform(settledMeld.group, settledMeld.target);
   expect(settledMeld.tileId).toBe(CALLED_ID);
+});
+
+test('three 3D meld groups stay compact instead of reserving a four-tile stride for every group', async ({ page }) => {
+  await boot3d(page);
+  const groups = [
+    [9910, 9911, 9912],
+    [9920, 9921, 9922],
+    [9930, 9931, 9932],
+  ];
+
+  await page.evaluate((fixtureGroups) => {
+    const row = document.querySelector<HTMLElement>('.player-bottom .human-melds');
+    if (!row) throw new Error('Missing bottom meld row');
+    row.replaceChildren();
+    fixtureGroups.forEach((ids, meldIndex) => {
+      const meld = document.createElement('div');
+      meld.className = 'meld meld-triplet';
+      meld.dataset.meldIndex = String(meldIndex);
+      ids.forEach((id) => {
+        const tile = document.createElement('div');
+        tile.className = 'tile tile-compact';
+        tile.dataset.engineTileId = String(id);
+        tile.setAttribute('aria-label', '5m');
+        tile.innerHTML = '<span></span>';
+        meld.append(tile);
+      });
+      row.append(meld);
+    });
+  }, groups);
+
+  await page.waitForTimeout(850);
+  const snapshot = await audit(page);
+  const actors = new Map(
+    snapshot.actors
+      .filter((actor) => actor.zone === 'meld' && actor.side === 'bottom' && actor.tileId !== null)
+      .map((actor) => [actor.tileId!, actor]),
+  );
+
+  for (const id of groups.flat()) expect(actors.has(id), `missing meld actor ${id}`).toBe(true);
+  const x = (id: number) => actors.get(id)!.target.x;
+  const gap = (a: number, b: number) => Math.abs(x(a) - x(b));
+
+  expect(gap(9910, 9911)).toBeLessThan(.45);
+  expect(gap(9911, 9912)).toBeLessThan(.45);
+  expect(gap(9912, 9920)).toBeGreaterThan(.38);
+  expect(gap(9912, 9920)).toBeLessThan(.70);
+  expect(gap(9922, 9930)).toBeGreaterThan(.38);
+  expect(gap(9922, 9930)).toBeLessThan(.70);
 });
