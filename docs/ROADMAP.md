@@ -1,6 +1,6 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
 Most of those plans describe work that has already landed. This file is the current product backlog
@@ -25,12 +25,13 @@ and should be updated as the game grows.
 - [x] Reclaim desktop play space by keeping the move log DOM-only instead of reserving a permanent column and by removing the old 940/980px desktop table height caps.
 - [x] Add automated Chromium responsive-layout QA with screenshots for 2D and 3D across seven desktop/tablet/phone viewports.
 - [x] Canonicalize 2D river clearance around the center counter, human meld placement at the bottom-right and one source-aware discard animation without the second landing bounce.
-- [ ] Continue responsive table/camera QA on real browsers/devices, especially touch behavior and Firefox/WebKit-specific differences.
+- [ ] Continue responsive table/camera QA on real browsers/devices, especially real GPU/touch behavior and Firefox/WebKit-specific differences not reproducible in hosted CI.
   - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports.
   - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport.
   - 2026-09-05: Playwright matrix passed 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D.
   - 2026-09-16: focused 2D regression + responsive QA passed 29/29, including saved legacy meld-offset migration, center clearance and the single discard-flight path.
   - 2026-09-16: call/meld/Dora/result-transition coverage expanded the browser matrix to 35/35. Real-device/touch QA remains open.
+  - 2026-09-19: hosted cross-browser QA is now gated in CI: the existing Chromium presentation/responsive bundle passed 49/49, Firefox cross-browser layouts 6/6, WebKit cross-browser layouts 6/6 and a Chromium mobile test using real Playwright `tap()` interactions 1/1. Hosted Ubuntu Firefox exposes no WebGL (`AllowWebgl2:false`), so its 3D requests verify the production 2D fallback rather than real GPU rendering; physical-device and real-GPU spot checks remain open.
 
 ## Active implementation sequence
 
@@ -83,7 +84,8 @@ Next rule work:
 - [x] Play deterministic history directly through the normal 2D/3D table in read-only mode with pause and seek controls.
 - [x] Add user-selectable visual-replay playback speed controls.
 - [x] More accessibility/touch/keyboard QA and UI scaling presets.
-  - 2026-09-18: Options now exposes persistent Compact / Normal / Large / Extra large interface-only scaling (90% / 100% / 115% / 130%) for user-facing controls, dialogs and guidance while leaving table, tile, river, meld, Dora and 3D geometry untouched. Chromium QA verifies persistence, Escape/focus restoration, responsive no-overflow behavior at 1366×768, 390×844 and 844×390, and the existing 2D/3D regression matrix remains green. Real-device/touch and Firefox/WebKit coverage remains tracked separately above.
+  - 2026-09-18: Options now exposes persistent Compact / Normal / Large / Extra large interface-only scaling (90% / 100% / 115% / 130%) for user-facing controls, dialogs and guidance while leaving table, tile, river, meld, Dora and 3D geometry untouched. Chromium QA verifies persistence, Escape/focus restoration, responsive no-overflow behavior at 1366×768, 390×844 and 844×390, and the existing 2D/3D regression matrix remains green.
+  - 2026-09-19: automated browser coverage now additionally includes Firefox and WebKit responsive checks plus a true touch-emulation path using `tap()` for game setup, Options, UI-scale selection and a human discard. Remaining accessibility/device QA is limited to physical-device and real-GPU/browser spot checks.
 
 ## Presentation and game feel
 
