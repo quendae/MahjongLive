@@ -7,8 +7,8 @@ import type {
   RoundDiscard,
   RoundEndResult,
   RoundEvent,
-  RoundState,
 } from '@mahjong-live/shared/rules';
+import type { MatchState } from '@mahjong-live/shared/match';
 import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
 
 export type ClientId = string;
@@ -27,6 +27,7 @@ export type RoomSeats = readonly [
   RoomMember | null,
 ];
 
+/** 'finished' means the whole hanchan ended, not one hand. */
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 
 export type PlayerRoundAction = Exclude<RoundAction, { type: 'resolve-reactions' }>;
@@ -34,6 +35,7 @@ export type PlayerRoundAction = Exclude<RoundAction, { type: 'resolve-reactions'
 export type ClientCommand =
   | { type: 'set-ready'; ready: boolean }
   | { type: 'start-round' }
+  | { type: 'advance-round' }
   | { type: 'round-action'; action: PlayerRoundAction }
   | { type: 'pass' };
 
@@ -53,6 +55,7 @@ export type CommandErrorCode =
   | 'SEAT_TAKEN'
   | 'INVALID_SEAT'
   | 'NOT_READY'
+  | 'ROUND_NOT_ENDED'
   | 'WRONG_SEAT'
   | 'SERVER_ONLY'
   | 'NOT_REACTION_PHASE'
@@ -169,7 +172,8 @@ export interface RoomCheckpoint {
   hostClientId: ClientId | null;
   seats: RoomSeats;
   seed: number;
-  round: RoundState | null;
+  match: MatchState | null;
+  /** Mandatory while the round sits in a reaction phase: it cannot be rebuilt without loss. */
   reaction: ReactionBarrierCheckpoint | null;
 }
 

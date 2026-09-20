@@ -3,11 +3,11 @@ import { getLegalActions } from '../rules/round';
 import type { PlayerIndex, RoundDiscard, RoundEndResult, RoundState } from '../rules/types';
 import { suited } from '../tiles/tiles';
 import type { Tile } from '../tiles/types';
+import { deriveSingleRoundSeed } from '../match/orchestration';
 import {
   applyHumanDecision,
   continueSingleGame,
   createSingleGame,
-  deriveSingleRoundSeed,
   driveSingleGame,
 } from './single';
 import type { SingleGameState } from './types';

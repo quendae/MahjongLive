@@ -4,7 +4,12 @@ import {
   normalizeBotDifficulty,
 } from '../bot/difficulty';
 import type { BotDifficulty } from '../bot/difficulty';
-import { advanceMatch, createMatch } from '../match/match';
+import {
+  advanceSeededMatch,
+  createSeededMatch,
+  forcedSeatAction,
+  isReactionPhase,
+} from '../match/orchestration';
 import { applyAction, getLegalActions } from '../rules/round';
 import type {
   ApplyActionResult,
@@ -13,7 +18,6 @@ import type {
   RoundEvent,
   RoundState,
 } from '../rules/types';
-import { createRNG } from '../wall/prng';
 import type {
   HumanDecision,
   HumanPrompt,
@@ -30,21 +34,6 @@ const DEFAULT_SAFETY_CAP = 1024;
 
 type EngineFailure = Extract<ApplyActionResult, { ok: false }>;
 
-function mix32(value: number): number {
-  let x = value >>> 0;
-  x ^= x >>> 16;
-  x = Math.imul(x, 0x7feb352d);
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x846ca68b);
-  x ^= x >>> 16;
-  return x >>> 0;
-}
-
-/** Stable round seed so a serialized single-player state can always resume deterministically. */
-export function deriveSingleRoundSeed(baseSeed: number, roundNumber: number): number {
-  return mix32((Math.trunc(baseSeed) ^ Math.imul(Math.max(1, Math.trunc(roundNumber)), 0x9e3779b9)) >>> 0);
-}
-
 /** Missing difficulty means a pre-Plan-12 save, which used today's Expert production bot. */
 export function singleBotDifficulty(state: SingleGameState): BotDifficulty {
   return normalizeBotDifficulty(state.botDifficulty, DEFAULT_BOT_DIFFICULTY);
@@ -60,7 +49,7 @@ export function createSingleGame(
     seed: normalizedSeed,
     humanSeat,
     botDifficulty: normalizeBotDifficulty(botDifficulty),
-    match: createMatch(createRNG(deriveSingleRoundSeed(normalizedSeed, 1))),
+    match: createSeededMatch(normalizedSeed),
   };
 }
 
@@ -74,7 +63,7 @@ function humanTurnPrompt(state: SingleGameState): HumanPrompt | null {
   }
 
   const human = state.humanSeat;
-  if (round.phase.kind === 'reactions' || round.phase.kind === 'kan-reactions') {
+  if (isReactionPhase(round)) {
     const legalActions = getLegalActions(round, human);
     return legalActions.length > 0
       ? { kind: 'reaction', player: human, legalActions, canPass: true }
@@ -82,13 +71,9 @@ function humanTurnPrompt(state: SingleGameState): HumanPrompt | null {
   }
 
   if (round.phase.kind === 'awaiting-discard' && round.phase.player === human) {
-    const legalActions = getLegalActions(round, human);
-    const optional = legalActions.filter((action) => action.type !== 'discard');
-    const discard = legalActions.find((action) => action.type === 'discard');
-    const forcedDiscard = discard?.type === 'discard' && discard.tileIds.length === 1 && optional.length === 0;
-    return forcedDiscard
+    return forcedSeatAction(round, human)
       ? null
-      : { kind: 'turn', player: human, legalActions };
+      : { kind: 'turn', player: human, legalActions: getLegalActions(round, human) };
   }
 
   return null;
@@ -139,22 +124,6 @@ function commitAction(
   return { ok: true, state: nextState };
 }
 
-function forcedHumanAutomaticAction(state: SingleGameState): RoundAction | null {
-  const round = state.match.round;
-  const human = state.humanSeat;
-  if (round.phase.kind === 'awaiting-draw' && round.phase.player === human) {
-    return { type: 'draw', player: human };
-  }
-  if (round.phase.kind !== 'awaiting-discard' || round.phase.player !== human) return null;
-  const legal = getLegalActions(round, human);
-  const optional = legal.filter((action) => action.type !== 'discard');
-  const discard = legal.find((action) => action.type === 'discard');
-  if (optional.length === 0 && discard?.type === 'discard' && discard.tileIds.length === 1) {
-    return { type: 'discard', player: human, tileId: discard.tileIds[0] };
-  }
-  return null;
-}
-
 function processBotReactions(
   state: SingleGameState,
   events: RoundEvent[],
@@ -162,8 +131,7 @@ function processBotReactions(
   frames: SinglePresentationFrame[],
 ): { ok: true; state: SingleGameState } | { ok: false; message: string; state: SingleGameState } {
   let working = state;
-  const phase = working.match.round.phase;
-  if (phase.kind !== 'reactions' && phase.kind !== 'kan-reactions') {
+  if (!isReactionPhase(working.match.round)) {
     return { ok: false, state: working, message: 'Bot reaction processing requires a reaction phase' };
   }
 
@@ -222,7 +190,7 @@ export function driveSingleGame(
     if (prompt) return success(working, prompt, events, trace, frames);
 
     const round = working.match.round;
-    if (round.phase.kind === 'reactions' || round.phase.kind === 'kan-reactions') {
+    if (isReactionPhase(round)) {
       const reacted = processBotReactions(working, events, trace, frames);
       if (!reacted.ok) {
         return failure(reacted.state, 'AUTOMATION_STALLED', reacted.message, events, trace, frames);
@@ -231,7 +199,7 @@ export function driveSingleGame(
       continue;
     }
 
-    const automaticHuman = forcedHumanAutomaticAction(working);
+    const automaticHuman = forcedSeatAction(round, working.humanSeat);
     if (automaticHuman) {
       const committed = commitAction(working, automaticHuman, 'system', events, trace, frames);
       if (!committed.ok) {
@@ -365,11 +333,7 @@ export function continueSingleGame(
   const normalizedState = state.botDifficulty === undefined
     ? { ...state, botDifficulty: singleBotDifficulty(state) }
     : state;
-  const nextRoundNumber = normalizedState.match.roundNumber + 1;
-  const advanced = advanceMatch(
-    normalizedState.match,
-    createRNG(deriveSingleRoundSeed(normalizedState.seed, nextRoundNumber)),
-  );
+  const advanced = advanceSeededMatch(normalizedState.match, normalizedState.seed);
   if (!advanced.ok) {
     return failure(normalizedState, 'ROUND_NOT_ENDED', advanced.message, events, trace, frames);
   }
