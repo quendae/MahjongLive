@@ -333,10 +333,14 @@ idempotency cache.
 
 Seats are now authenticated by a server-issued join token, and rooms expire on injected time.
 
-Not built, in dependency order: room fault isolation (two invariant `throw`s would take down every
-room in the process behind a socket), network transport, history emission and `MatchHistoryRecord`
-v2 (deferred — it changes a persisted format the client reads), the client multiplayer state layer,
-four-client E2E.
+A room now survives its own invariant failures without taking the process down, and there is a
+running server: `pnpm --filter @mahjong-live/server start` serves create/join over HTTP and the
+match over one WebSocket per client.
+
+Not built, in dependency order: the client multiplayer state layer (the largest remaining item —
+the client is built around `SingleGameState` end to end), history emission and
+`MatchHistoryRecord` v2 (deferred — it changes a persisted format the client reads), and
+four-client browser E2E.
 
 PR #6 should be closed in favour of the fresh branch.
 
