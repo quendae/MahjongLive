@@ -1,126 +1,254 @@
 # Mahjong Live Roadmap
 
-Updated: 2026-09-17
+Updated: 2026-09-20
 
-The repository contains detailed historical implementation plans under `docs/superpowers/plans/`.
-Most of those plans describe work that has already landed. This file is the current product backlog
-and should be updated as the game grows.
+This is the authoritative current product backlog. Historical implementation plans under `docs/superpowers/plans/` describe how earlier work was built; they are not necessarily the current priority list.
 
-## Current focus — table correctness, UX and performance
+For a complete handoff snapshot, see [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+
+## Current stage
+
+Mahjong Live is in **single-player preview playtesting / polish**.
+
+Current implementation branch:
+
+- `feature/visual-table-replay`
+- draft PR #33: https://github.com/quendae/MahjongLive/pull/33
+- PR intentionally remains unmerged during manual playtesting.
+
+Latest test build:
+
+- `v0.1.0-preview.3`
+- https://github.com/quendae/MahjongLive/releases/tag/v0.1.0-preview.3
+
+The project is no longer waiting on major single-player engine features. The immediate goal is to play complete matches, find concrete presentation/gameplay regressions and fix only verified issues before accepting the current preview branch.
+
+## Immediate playtest / polish cycle
+
+- [ ] Complete normal full-match manual playtests of `v0.1.0-preview.3` in 2D.
+- [ ] Complete normal full-match manual playtests of `v0.1.0-preview.3` in 3D on real Windows GPU/browser paths.
+- [ ] Spot-check a real touch device in portrait and landscape where practical.
+- [ ] Fix concrete gameplay/presentation regressions discovered during those playtests.
+- [ ] Re-run required engine/browser CI after every accepted fix batch.
+- [ ] Decide when PR #33 is ready to leave draft / merge; do not merge solely because automated CI is green.
+
+### Current manual 2D focus
+
+- Riichi declaration tile rotates once and remains stable.
+- Left/right/top player discard flight orientation is natural.
+- Discard lands without an artificial hop or second landing animation.
+- Chi / Pon / Kan groups preserve correct called tile and called-from orientation.
+- Dora / Kan-Dora reveal behavior remains stable.
+- Ron / Pon / Chi / Pass flow remains readable and correct.
+- Round transitions, score explanations and end-of-match settlement remain correct.
+- Save/resume survives refresh.
+- History and visual replay work after several rounds.
+
+### Current manual 3D focus
+
+- Renderer starts on real GPU/browser combinations.
+- Dora remains visible and does not blink during discard rerenders.
+- Center counter is readable at normal desktop distance.
+- Multiple meld groups stay compact and aligned.
+- Discard source/orientation matches the acting seat.
+- Hover/lift/settle behavior remains stable.
+- Switching 2D <-> 3D does not change game state.
+- Failed 3D startup cleanly leaves a playable 2D table with `2D · 3D unavailable`.
+
+## Current focus — table correctness, UX and presentation
 
 - [x] Local FluffyStuff/riichi-mahjong-tiles SVG set for all normal tile faces.
 - [x] One face atlas plus merged static face draw path.
-- [x] WebGPU-first renderer on Chromium/Edge; WebGL2 fallback and Firefox path.
+- [x] WebGPU-first renderer on Chromium/Edge with WebGL fallback path.
 - [x] Built-in FPS/RAF/render telemetry, TXT capture and stress-table benchmark.
-- [x] Add bottleneck diagnostics to performance capture: Loop/RAF ratio, scheduler gap, CPU/GPU frame-budget ratios, `syncActors`, reconcile/static-batch cost and shadow-refresh serial.
+- [x] Bottleneck diagnostics: Loop/RAF ratio, scheduler gap, CPU/GPU frame-budget ratios, `syncActors`, reconcile/static-batch cost and shadow-refresh serial.
 - [x] Adjustable tile-corner geometry quality.
-- [x] Keep renderer/device alive when changing graphics tuning; geometry swaps are in-place.
-- [x] Finish WebGL fallback performance work, especially Edge/ANGLE.
-- [x] Keep every DOM tile preview (Dora, reactions, choices) on the same FluffyStuff artwork source.
-- [x] Strong, readable CHI/PON/KAN/RON table announcements with appropriate presentation pauses.
-- [x] Human Tenpai/Furiten status with visible wait tiles, without exposing opponent concealed info.
-- [x] Group-aware meld placement for all four legal meld groups without wrapping/collisions.
-- [x] Restore live 3D Dev camera tuning after the renderer identity-cache optimization without reverting the performance fast-path.
-- [x] Add a separate live 2D Dev layout section for table width/height reserve, player panels, center, Dora, hand and river scaling/positioning.
-- [x] Reclaim desktop play space by keeping the move log DOM-only instead of reserving a permanent column and by removing the old 940/980px desktop table height caps.
-- [x] Add automated Chromium responsive-layout QA with screenshots for 2D and 3D across seven desktop/tablet/phone viewports.
-- [x] Canonicalize 2D river clearance around the center counter, human meld placement at the bottom-right and one source-aware discard animation without the second landing bounce.
-- [ ] Continue responsive table/camera QA on real browsers/devices, especially touch behavior and Firefox/WebKit-specific differences.
-  - 2026-09-05: fixed late dev-tuning CSS overriding the single-column tablet/mobile layout and removed the 610px 3D minimum-height trap on short landscape viewports.
-  - 2026-09-05: restored live camera sliders, added live 2D layout tuning, enlarged/moved Dora to the upper-left table area and expanded both desktop modes to use substantially more of the viewport.
-  - 2026-09-05: Playwright matrix passed 14/14 combinations: 2560×1440, 1920×1080, 1366×768, 1024×768, 820×1180, 390×844 and 844×390, each in both 2D and 3D.
-  - 2026-09-16: focused 2D regression + responsive QA passed 29/29, including saved legacy meld-offset migration, center clearance and the single discard-flight path.
-  - 2026-09-16: call/meld/Dora/result-transition coverage expanded the browser matrix to 35/35. Real-device/touch QA remains open.
+- [x] Keep renderer/device alive when graphics tuning changes; geometry swaps are in-place.
+- [x] WebGL fallback performance work and diagnostics.
+- [x] Shared local tile artwork for table, Dora, reactions and choices.
+- [x] Strong CHI/PON/KAN/RON announcements with authoritative presentation pauses.
+- [x] Human Tenpai/Furiten status and visible waits without concealed-opponent leakage.
+- [x] Group-aware meld placement for up to four legal meld groups.
+- [x] Live 3D Dev camera/orientation tuning.
+- [x] Dedicated live 2D Dev layout tuning.
+- [x] Desktop play-space reclaim without permanent move-log column.
+- [x] Canonical 2D river clearance and bottom-right human meld placement.
+- [x] Source-aware single discard animation with no second landing bounce.
+- [x] Stable 2D Riichi declaration orientation across later rerenders.
+- [x] Side-seat 2D discard flight rotates into river orientation during travel rather than remaining seat-facing throughout flight.
+- [x] 3D Dora mounted outside transient app rerenders so it does not blink/disappear during discards.
+- [x] Larger/readable 2D and 3D center counters.
+- [x] 3D meld spacing based on actual triplet/Kan size rather than fixed four-tile reservation per group.
 
-## Active implementation sequence
+## Browser / responsive / touch QA
 
-1. [x] Finish CHI/PON/KAN/RON presentation and called-from meld orientation while preserving the exact physical called tile.
-2. [x] Audit 3D discard source, hover/lift/settle and seat orientations.
-3. [ ] Re-run 120 Hz / RAF performance work on Firefox and Edge/ANGLE with long discard rivers.
-   - 2026-09-16: automated 24-discards-per-seat / 96-tile stress telemetry now verifies static batching and records independent Three-loop Hz versus browser RAF Hz.
-   - 2026-09-16: Dev/TXT capture now classifies likely animation-loop gap, browser RAF limit, GPU-bound, CPU-submit-bound or available headroom while retaining all raw timings.
-   - 2026-09-16: the 3D animation audit found motion driven by elapsed wall-clock time: discard flights use duration/progress, hover/settle uses exponential damping from frame delta, and halo pulse uses absolute time. No frame-count-dependent interaction animation remains in the renderer loop.
-   - Final Windows Firefox and Edge/ANGLE captures at 120 Hz are still required before changing renderer scheduling; Linux/headless CI cannot reproduce the user's D3D11/ANGLE path or monitor refresh behavior.
-4. [x] Improve Riichi-stick and table-state presentation without covering the play field.
-5. [x] Complete the first bot-strength tuning pass and deterministic match history/replay foundation.
-   - 2026-09-16: winning-hand results now expose expandable Yaku/Han, Dora, Fu, limit and payment explanations.
-   - 2026-09-16: deterministic bot calibration now rotates Casual / Standard / Expert / Expert across seats and records placement, points, wins, deal-ins, Riichi, calls and match-length statistics.
-   - 2026-09-17: a fixed 96-Hanchan calibration pass separated Standard from Expert while keeping Casual clearly weaker; Standard now declines Chi while retaining Riichi, defense, Pon and safe Kan behavior.
-   - 2026-09-17: single-player history now uses a separate versioned append-only record with exact accepted actions and explicit round advances, deterministic step replay and JSON export without changing the autosave format.
+Automated coverage is substantially complete for the current preview.
+
+- [x] Chromium responsive-layout screenshots for 2D and 3D across desktop/tablet/phone viewports.
+- [x] Existing Chromium presentation/responsive bundle: **49/49 passed** before preview.3.
+- [x] Firefox cross-browser layouts: **6/6 passed**.
+- [x] WebKit cross-browser layouts: **6/6 passed**.
+- [x] Chromium mobile touch path using real Playwright `tap()`: **1/1 passed**.
+- [x] UI-scale persistence, Escape/focus restoration and no-overflow checks.
+- [x] 2D/3D replay parity and autosave isolation checks.
+- [x] Clean 2D fallback if 3D/WebGL startup fails.
+- [ ] Physical-device spot check for behavior that emulation cannot guarantee.
+- [ ] Real Firefox/WebGL GPU spot check on Windows hardware.
+
+Important hosted-CI limitation: Ubuntu Playwright Firefox reports WebGL disabled (`AllowWebgl2:false`). Its 3D request cases therefore validate the production 2D fallback, not actual Firefox GPU rendering.
 
 ## Rules and scoring
 
-The existing engine already has dedicated modules/tests for round flow, waits/Furiten, Riichi,
-Chi/Pon/Kan, Chankan, Rinshan, Nagashi, scoring, common/rare yaku and Yakuman.
+The production engine has dedicated modules/tests for round flow, waits/Furiten, Riichi, Chi/Pon/Kan, Chankan, Rinshan, Nagashi, scoring, common/rare Yaku and Yakuman.
 
-Current product rule decision:
+Current deliberate product ruling:
 
 - **Kan-Dora is revealed immediately when a Kan completes**, including Daiminkan and Shouminkan.
-  This intentionally supersedes the older historical Plan 8 Tenhou-style delayed-Dora ruling.
+  This supersedes the older historical Tenhou-style delayed-Dora plan.
 
-Next rule work:
+Completed rule/scoring work:
 
-- [ ] Continue edge-case audit using deterministic full-match simulation and regression seeds.
-- [x] Expand result explanations so Fu/Yaku/Dora/payment calculation is easy to inspect.
-- [ ] Add rule-profile plumbing before introducing optional table/rules variants.
-- [ ] Keep save-state compatibility tests whenever engine state changes.
+- [x] Result explanation for Yaku/Han, Dora, Fu, limits and payments.
+- [x] Deterministic full-match edge-case audit with pinned regression seeds.
+- [x] Central `RuleProfile` plumbing with production `standard` profile.
+- [x] Persist `ruleProfileId` through match/round state.
+- [x] Legacy save migration when `ruleProfileId` is missing.
+- [x] Save-state compatibility regression tests.
+
+### Deterministic rules audit baseline
+
+`pnpm rules:audit` runs six pinned full Hanchan seeds and checks point/Riichi-stick conservation, dealer/wind/hand/Honba continuity, terminal placements and deterministic replay coverage.
+
+Current pinned baseline:
+
+- 58 rounds;
+- 13 Tsumo;
+- 41 Ron;
+- 4 exhaustive draws;
+- 15 dealer repeats;
+- 43 dealer advances;
+- 61 Riichi declarations;
+- 102 calls;
+- 6 Kans.
+
+Future rule variants should extend the central profile instead of introducing UI-local rule branches.
 
 ## Single-player
 
 - [x] Casual / Standard / Expert bot profiles.
 - [x] Public-information discard advisor.
 - [x] Autosave/resume and seeded deterministic games.
-- [x] Add deterministic bot calibration statistics with seat rotations and a reproducible `pnpm bot:benchmark` report.
-- [ ] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
-- [x] Use calibration statistics to tune bot strength and defense/offense behavior.
-- [x] Match history and replay viewer/export from deterministic action history.
-- [ ] Play saved replays directly through the normal 2D/3D table presentation with pause, speed and seek controls.
-- [ ] More accessibility/touch/keyboard QA and UI scaling presets.
+- [x] Deterministic bot calibration statistics with seat rotation and `pnpm bot:benchmark`.
+- [x] Better contextual teaching for waits, Furiten, Riichi, calls, Kan and scoring.
+- [x] Bot tuning based on calibration statistics.
+- [x] Versioned append-only deterministic match history.
+- [x] Exact accepted-action and explicit round-advance history.
+- [x] JSON history export.
+- [x] Visual replay directly on the normal 2D/3D table.
+- [x] Replay Start / previous / next / Play-Pause / End seeking and round jumps.
+- [x] Replay speeds 0.5x / 1x / 2x / 4x.
+- [x] Closing replay restores the exact live state without mutating autosave/history.
+- [x] Persistent UI scaling: Compact / Normal / Large / Extra large = 90% / 100% / 115% / 130%.
+- [x] Keyboard/focus and automated touch QA.
 
 ## Presentation and game feel
 
-- [x] Stage A polish for the fast 2D table: richer felt/frame treatment, lighter player cards, stronger center counter, structured discard rivers and a more prominent human hand.
-- [x] Move background/table/tile appearance out of Dev into user-facing Options shared by 2D and 3D, including presets, colors, felt texture and tile-back texture/pattern controls.
-- [x] Make user appearance Options update the 2D table live instead of being masked by the old Dev inline-preview styles.
-- [x] Give 2D seat-oriented concealed racks, rivers around the center, source-aware tsumogiri/tedashi discard motion, clearer player badges and seat-oriented meld groups.
-- [x] Refresh cached 3D shadows during hover-lift/settle instead of leaving the contact shadow at the tile's resting position.
-- [x] Finalize call/Ron presentation, Dora reveal timing/animation and result transitions.
-- [x] Add clearer Riichi-stick/table-state presentation without covering the play field.
-- [x] Improve meld orientation based on called-from seat while keeping exact physical called tile.
-- [ ] Keep optional sound cues synchronized with authoritative presentation frames.
-- [ ] Add quality presets (`Performance`, `Balanced`, `High`) on top of Dev-level individual sliders.
+- [x] Stage A polish for the fast 2D table.
+- [x] User-facing background/table/tile appearance controls shared by 2D and 3D.
+- [x] 2D live appearance updates not masked by old Dev preview styles.
+- [x] Seat-oriented concealed racks and rivers.
+- [x] Source-aware Tsumogiri/Tedashi presentation.
+- [x] Clearer player badges and seat-oriented meld groups.
+- [x] 3D moving-tile shadow refresh.
+- [x] Call/Ron presentation, Dora reveal behavior and result transitions.
+- [x] Riichi-stick/table-state presentation.
+- [x] Meld orientation based on called-from seat while preserving the exact physical called tile.
+- [x] Optional sound cues synchronized from authoritative presentation `RoundEvent` types.
+- [x] User-facing 3D quality profiles: Maximum / High / Balanced / Low.
 
-## Multiplayer — future expansion
+## Performance work — deferred / non-blocking
 
-The historical single-player plans explicitly kept multiplayer/server work out of scope. There is no
-implemented multiplayer roadmap yet, so this needs a dedicated architecture plan before coding.
+The previously planned 120 Hz renderer scheduling investigation is **deferred**. It is not a blocker for the current single-player preview or the next multiplayer design stage.
 
-Candidate direction:
+Already completed:
 
-- [ ] Define authoritative multiplayer state/transport boundary around the existing deterministic engine.
-- [ ] Lobby + room codes + reconnect/resume semantics.
-- [ ] Hidden-information-safe state projection per player.
-- [ ] Server-authoritative action validation or a carefully specified deterministic peer protocol.
-- [ ] Spectator/replay protocol based on public action history.
-- [ ] Disconnect/time-control/AFK policy.
-- [ ] Multiplayer integration tests and browser E2E tests for four clients.
+- [x] 96-tile / 24-discards-per-seat automated stress telemetry.
+- [x] independent Three-loop Hz vs browser RAF Hz capture.
+- [x] scheduler-gap / CPU / GPU / headroom classification.
+- [x] elapsed-time / frame-delta animation audit.
+- [x] no known frame-count-dependent interaction animation remains in the renderer loop.
 
-## Historical plans already in the repository
+If this work is resumed later, the remaining useful evidence is a real Windows hardware capture on:
 
-The detailed plan archive currently covers, among other topics:
+- Firefox with real WebGL/D3D path;
+- Edge/ANGLE;
+- a 120 Hz monitor;
+- long discard rivers.
+
+Do not change renderer scheduling based only on Linux/headless CI because it cannot reproduce the relevant D3D11/ANGLE/monitor-refresh path.
+
+## Next major stage — multiplayer
+
+Multiplayer has **not** been implemented. It is the next major product area after the preview/polish cycle and requires an architecture/design pass before coding.
+
+### Phase 1 — architecture contract
+
+- [ ] Define authoritative multiplayer state/transport boundary around the deterministic engine.
+- [ ] Define hidden-information-safe state projection per player.
+- [ ] Decide server-authoritative validation model vs any deterministic peer responsibilities.
+- [ ] Define action sequencing, idempotency and replay/event identity.
+- [ ] Define lobby / room-code lifecycle.
+- [ ] Define reconnect / resume semantics.
+- [ ] Define timeout / disconnect / AFK policy.
+- [ ] Define spectator/public-history protocol.
+
+### Phase 2 — multiplayer MVP
+
+- [ ] Create/join room by code.
+- [ ] Four human seats.
+- [ ] Server-authoritative legal action validation.
+- [ ] Per-player concealed hand projection.
+- [ ] Public table event synchronization.
+- [ ] Reconnect to an in-progress match.
+- [ ] Bot replacement policy for disconnected/abandoned seats if adopted in the design.
+
+### Phase 3 — validation
+
+- [ ] Engine/transport integration tests.
+- [ ] Hidden-information leakage tests.
+- [ ] Reconnect/resume regression tests.
+- [ ] Four-client browser E2E.
+- [ ] Deterministic spectator/replay consistency checks.
+- [ ] Mobile/touch multiplayer smoke tests.
+
+## Preview acceptance / release policy
+
+A preview build is considered useful for advancement when:
+
+- automated shared engine gates are green;
+- browser/responsive gates are green;
+- no known blocker corrupts authoritative game state;
+- normal manual full-match play does not reveal a repeatable critical gameplay/presentation regression;
+- save/resume and deterministic history remain intact.
+
+A green CI run by itself is **not** a reason to merge the large draft PR. Manual normal-play validation is part of the acceptance process.
+
+## Historical plans
+
+Detailed implementation plans under `docs/superpowers/plans/` cover, among other topics:
 
 - rules-engine foundation;
-- common, rare and Yakuman yaku;
+- common, rare and Yakuman Yaku;
 - Dora, Fu and scoring;
 - Riichi, calls and Furiten;
 - Kan / Rinshan / Chankan / Nagashi;
-- bot ukeire and full single-player bots/match flow;
+- bot Ukeire and full single-player bots/match flow;
 - browser single-player client and presentation timeline;
 - bot difficulty/advisor UX;
 - game feel and 3D launch;
 - full-3D stabilization;
 - beginner clarity, Dora tray, reaction popup, central counter, meld and river layout;
-- standing-hand face visibility.
+- standing-hand face visibility;
+- deterministic history and live visual replay.
 
-When a new feature changes a deliberate rules ruling, record the new product decision in this roadmap
-(or a dedicated rule decision document) instead of silently contradicting an old historical plan.
+When a new feature changes a deliberate rules ruling or project-stage decision, update this roadmap and [`CURRENT_STATUS.md`](CURRENT_STATUS.md) rather than silently contradicting an old historical plan.
