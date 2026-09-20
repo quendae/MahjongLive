@@ -337,10 +337,15 @@ A room now survives its own invariant failures without taking the process down, 
 running server: `pnpm --filter @mahjong-live/server start` serves create/join over HTTP and the
 match over one WebSocket per client.
 
+Phase 3 validation passes on the server side: four clients play a full match over real sockets
+deciding only from their own projections, a whole-match wire audit finds no hidden tile on any
+client's stream, reconnect resumes in both the tail and trimmed cases, and two rooms on one seed
+produce identical spectator streams.
+
 Not built, in dependency order: the client multiplayer state layer (the largest remaining item —
-the client is built around `SingleGameState` end to end), history emission and
-`MatchHistoryRecord` v2 (deferred — it changes a persisted format the client reads), and
-four-client browser E2E.
+the client is built around `SingleGameState` end to end, and this collides with draft PR #33),
+four-client browser E2E, mobile/touch multiplayer smoke tests, and history emission with
+`MatchHistoryRecord` v2 (deferred — it changes a persisted format the client reads).
 
 PR #6 should be closed in favour of the fresh branch.
 
