@@ -238,18 +238,19 @@ orchestrator and the deterministic history existed.
 Ordered by dependency. Items 1-3 are corrections the landed core needs before transport is
 worth writing.
 
-- [ ] Match-level room loop: hold `MatchState` and advance hands. The room is single-round today and stops at `'finished'` when a *round* ends.
-- [ ] Derive round seeds with `deriveSingleRoundSeed`, so a recorded match replays to the same game.
-- [ ] Emit `MatchHistoryRecord` from the room; extend it to v2 with a four-seat descriptor instead of `humanSeat` / `botDifficulty`.
-- [ ] Invert event projection from a denylist to an exhaustive switch, so a new `RoundEvent` is a compile error rather than a leak.
-- [ ] Fix checkpoint restore: a reaction-phase checkpoint with no barrier silently discards responses already given.
+- [x] Match-level room loop: the room holds `MatchState`, advances hands through `advance-round`, settles forced actions like `driveSingleGame`, and `'finished'` now means the *match* ended.
+- [x] Derive round seeds with `deriveSingleRoundSeed`. Seeding is unstatable by a caller: `createSeededMatch` / `advanceSeededMatch` in `shared/src/engine/match/orchestration.ts` are the only entry points, and a parity test compares a full hanchan through the room against single-player on the same seed, walls included.
+- [x] Project match-level position (`wind`, `hand`, `roundNumber`, status, result) into `RoomView`.
+- [x] Invert event projection from a denylist to an exhaustive switch. A new `RoundEvent` is now `TS2366` in `projection.ts` rather than a silent leak.
+- [x] Fix checkpoint restore: a reaction-phase checkpoint with no barrier is now rejected instead of silently discarding a pass.
+- [ ] Emit `MatchHistoryRecord` from the room; extend it to v2 with a four-seat descriptor instead of `humanSeat` / `botDifficulty`. Deliberately deferred — it changes a persisted format the client reads, and there is no multiplayer match to record until transport exists.
 - [ ] Turn and reaction deadlines. A single silent client currently stalls the barrier forever.
 - [ ] Bot takeover for a disconnected or timed-out seat, recorded in history with its profile.
 - [ ] Room-code allocation, join tokens and room TTL. `ClientId` is unauthenticated today.
 - [ ] Network transport: WebSocket, envelope framing, per-viewer fan-out.
-- [ ] Trim the catch-up transition log to the reconnect window.
+- [ ] Trim the catch-up transition log to the reconnect window, and retain the idempotency cache by version window rather than by 256-entry count — a full hanchan evicts within one match.
 - [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item.
-- [ ] Extract forced-action / auto-resolve / round-advance decisions into `shared/` so the room and `single.ts` cannot drift into two rulesets.
+- [x] Extract forced-action / seeding / reaction-eligibility decisions into `shared/src/engine/match/orchestration.ts` so the room and `single.ts` cannot drift into two rulesets. The empty-window auto-resolve stays duplicated on purpose: the two control flows differ, and only the eligibility scan is genuinely shared.
 
 ### Phase 3 — validation
 

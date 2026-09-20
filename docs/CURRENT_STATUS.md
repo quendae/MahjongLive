@@ -320,9 +320,15 @@ Landed there:
 
 Design contract: [`MULTIPLAYER_ARCHITECTURE.md`](MULTIPLAYER_ARCHITECTURE.md).
 
-Not built, in dependency order: match-level room loop (single-round today), history emission and
-seed derivation matching `deriveSingleRoundSeed`, turn/reaction deadlines, bot takeover, room codes
-and join tokens, network transport, the client multiplayer state layer, four-client E2E.
+Since landed on the same branch: the room holds `MatchState` and plays a full hanchan; seeding goes
+through `shared/src/engine/match/orchestration.ts` so a recorded match cannot replay to a different
+game; event projection is an exhaustive switch, making a new `RoundEvent` a compile error rather
+than a leak; match-level position is projected into the room view; and a reaction-phase checkpoint
+that lost its barrier is rejected rather than silently dropping a pass.
+
+Not built, in dependency order: history emission and `MatchHistoryRecord` v2 (deferred — it changes
+a persisted format the client reads), turn/reaction deadlines, bot takeover, room codes and join
+tokens, network transport, the client multiplayer state layer, four-client E2E.
 
 PR #6 should be closed in favour of the fresh branch.
 
