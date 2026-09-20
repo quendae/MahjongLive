@@ -370,6 +370,23 @@ describe('reconnect', () => {
     connect(hub, room.id, clients[0]!.auth, 6_000);
     expect(room.evictableAt()).toBeNull();
   });
+
+  it('ignores a dropped socket\'s late close when the seat already reconnected', () => {
+    const hub = new RoomHub();
+    const { room, clients } = seatFour(hub, 99);
+    startMatch(hub, clients, 1_000);
+
+    // The client reconnects before the dead socket's close event arrives -- the ordinary case
+    // on a flaky network, not an edge case.
+    const dropped = clients[1]!;
+    connect(hub, room.id, dropped.auth, 2_000);
+    hub.close(dropped.connection, 2_100);
+
+    // The room must still consider seat 1 present, and must not hand it to a bot at the grace.
+    expect(room.checkpoint().seats[1]!.disconnectedAt ?? null).toBeNull();
+    hub.tick(2_100 + room.timing.disconnectGraceMs + 1);
+    expect(room.viewFor(null).seats[1].bot).toBeNull();
+  });
 });
 
 describe('room teardown', () => {

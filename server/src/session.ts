@@ -148,6 +148,15 @@ export class RoomHub {
     if (connection.roomId === null || connection.auth === null) return;
     const room = this.manager.get(connection.roomId);
     if (!room) return;
+    // A reconnect routinely beats the dropped socket's close event, so another live connection
+    // may already hold this seat. Reporting the absence anyway would mark a present player away
+    // and start walking their seat toward a bot.
+    const stillHeld = [...this.connections].some(
+      (other) =>
+        other.roomId === connection.roomId &&
+        other.auth?.clientId === connection.auth!.clientId,
+    );
+    if (stillHeld) return;
     room.setConnected(connection.auth, false, now);
     this.flush(room);
   }
