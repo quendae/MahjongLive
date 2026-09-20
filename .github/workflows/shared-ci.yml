@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'shared/**'
+      - 'server/**'
       - 'client/**'
       - 'scripts/**'
       - 'START_GAME.bat'
@@ -16,6 +17,7 @@ on:
     branches: [master]
     paths:
       - 'shared/**'
+      - 'server/**'
       - 'client/**'
       - 'scripts/**'
       - 'START_GAME.bat'
@@ -44,6 +46,8 @@ jobs:
       - run: pnpm bot:benchmark -- --help
       - run: pnpm --filter @mahjong-live/shared typecheck
       - run: pnpm --filter @mahjong-live/shared test
+      - run: pnpm --filter @mahjong-live/server typecheck
+      - run: pnpm --filter @mahjong-live/server test
       - run: pnpm bot:benchmark -- --seeds 20260916 --rotations 0 --max-rounds 48 --max-actions 1600
       - run: pnpm client:typecheck
       - run: pnpm client:build
