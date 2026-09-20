@@ -248,6 +248,7 @@ worth writing.
 - [x] Bot takeover at the `standard` profile after three lapsed turns or a disconnect past the grace period, reclaimable on any accepted command or reconnect. Determinism verified against two independently seeded rooms. Lapsed *reaction* windows deliberately do not count: ignoring a call prompt is ordinary play. History recording of the takeover waits on `MatchHistoryRecord` v2; `SeatBotControl.sinceVersion` is the hook.
 - [x] Room-code allocation: six characters, alphabet without `I L O U 0 1`, collision retry, case-insensitive lookup.
 - [ ] Join tokens and room TTL. `ClientId` is still unauthenticated, so anyone who learns one can act as that seat. This is a prerequisite for reconnect, not an enhancement.
+- [ ] Isolate a room fault before transport. Two invariant `throw`s are reachable at runtime from `submit` and `tick` — a settle pass that does not converge, and a server-generated action the engine rejects. In-process they are the right instinct, but behind a socket an unhandled throw takes down every room the process is holding. They need a room-level fault state that fails one room and answers its clients with a receipt.
 - [ ] Network transport: WebSocket, envelope framing, per-viewer fan-out.
 - [x] Trim the catch-up transition log to the disconnect window, and retain the idempotency cache by version window rather than by 256-entry count.
 - [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item.
