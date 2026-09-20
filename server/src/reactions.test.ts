@@ -7,6 +7,8 @@ import type {
   RoundPlayerState,
   RoundState,
 } from '@mahjong-live/shared/rules';
+import { reactionEligibleSeats } from '@mahjong-live/shared/match';
+import type { MatchState } from '@mahjong-live/shared/match';
 import { AuthoritativeRoom } from './room';
 import type { RoomCheckpoint, RoomSeats } from './protocol';
 
@@ -88,6 +90,18 @@ function reactionState(playersOverride: Partial<Record<PlayerIndex, RoundPlayerS
   };
 }
 
+function matchFrom(round: RoundState): MatchState {
+  return {
+    status: 'playing',
+    initialDealer: 0,
+    wind: 'east',
+    hand: 1,
+    targetPoints: 30_000,
+    roundNumber: 1,
+    round,
+  };
+}
+
 function roomFrom(round: RoundState, version = 10): AuthoritativeRoom {
   const seats: RoomSeats = [
     { clientId: 'c0', displayName: 'P0', ready: true },
@@ -102,8 +116,12 @@ function roomFrom(round: RoundState, version = 10): AuthoritativeRoom {
     hostClientId: 'c0',
     seats,
     seed: 1,
-    round,
-    reaction: null,
+    match: matchFrom(round),
+    reaction: {
+      phaseVersion: version,
+      eligibleSeats: reactionEligibleSeats(round),
+      respondedSeats: [],
+    },
   };
   return AuthoritativeRoom.restore(checkpoint);
 }
@@ -133,7 +151,8 @@ describe('reaction barrier', () => {
       command: { type: 'round-action', action: { type: 'ron', player: 2 } },
     });
     expect(second).toMatchObject({ ok: true, version: 11 });
-    expect(room.roomStatus).toBe('finished');
+    // A finished hand leaves the room playing: only the hanchan ending finishes it.
+    expect(room.roomStatus).toBe('playing');
     const phase = room.viewFor(null).round?.phase;
     expect(phase?.kind).toBe('ended');
     if (!phase || phase.kind !== 'ended' || phase.result.type !== 'ron') return;
@@ -155,9 +174,9 @@ describe('reaction barrier', () => {
     const second = room.submit('c1', envelope);
     expect(second).toMatchObject({ ok: true, duplicate: true, version: 10 });
     const checkpoint = room.checkpoint();
-    expect(checkpoint.round?.phase.kind).toBe('reactions');
-    if (checkpoint.round?.phase.kind !== 'reactions') return;
-    expect(checkpoint.round.phase.ronClaims).toHaveLength(1);
+    expect(checkpoint.match?.round.phase.kind).toBe('reactions');
+    if (checkpoint.match?.round.phase.kind !== 'reactions') return;
+    expect(checkpoint.match.round.phase.ronClaims).toHaveLength(1);
   });
 
   it('resolves Ron over a competing Pon without exposing the Pon as a public transition', () => {
@@ -226,20 +245,71 @@ describe('reaction barrier', () => {
       expectedVersion: 10,
       command: { type: 'pass' },
     });
-    expect(pass).toMatchObject({ ok: true, version: 11 });
-    expect(room.viewFor(null).round?.phase).toEqual({ kind: 'awaiting-draw', player: 1 });
+    // Resolution bumps once, then the forced draw for seat 1 bumps again.
+    expect(pass).toMatchObject({ ok: true, version: 12 });
+    expect(room.viewFor(null).round?.phase).toMatchObject({
+      kind: 'awaiting-discard',
+      player: 1,
+    });
 
     const late = room.submit('c1', {
       commandId: 'late-pass',
       expectedVersion: 10,
       command: { type: 'pass' },
     });
-    expect(late).toMatchObject({ ok: false, code: 'STALE_VERSION', version: 11 });
+    expect(late).toMatchObject({ ok: false, code: 'STALE_VERSION', version: 12 });
+  });
+
+  it('rejects a reaction-phase checkpoint that lost its barrier', () => {
+    const room = roomFrom(reactionState({
+      1: player(pinfuWait4p(100)),
+      2: player(pinfuWait4p(200)),
+    }));
+    const checkpoint: RoomCheckpoint = { ...room.checkpoint(), reaction: null };
+    expect(() => AuthoritativeRoom.restore(checkpoint)).toThrow(/reaction barrier/);
+  });
+
+  it('restores a half-answered window without forgetting a pass', () => {
+    const chi3 = physical(suited('pin', 3), 800);
+    const chi5 = physical(suited('pin', 5), 801);
+    const ponA = physical(suited('pin', 4), 802);
+    const ponB = physical(suited('pin', 4), 803);
+    const room = roomFrom(reactionState({
+      1: player([chi3, chi5]),
+      2: player([ponA, ponB]),
+    }));
+    // A pass leaves no trace in the round state, so only the barrier remembers it.
+    expect(room.submit('c1', {
+      commandId: 'pass-1',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    })).toMatchObject({ ok: true, version: 10 });
+
+    const restored = AuthoritativeRoom.restore(JSON.parse(JSON.stringify(room.checkpoint())));
+    expect(restored.submit('c1', {
+      commandId: 'pass-again',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    })).toMatchObject({ ok: false, code: 'ALREADY_RESPONDED' });
+
+    const pon = restored.submit('c2', {
+      commandId: 'pon',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [ponA.id!, ponB.id!] } },
+    });
+    expect(pon).toMatchObject({ ok: true, version: 11 });
+    expect(restored.viewFor(null).round?.phase).toMatchObject({ kind: 'awaiting-discard', player: 2 });
   });
 
   it('reveals the Kan-Dora immediately when a Daiminkan completes', () => {
     const kanTiles = [500, 501, 502].map((id) => physical(suited('pin', 4), id));
-    const room = roomFrom(reactionState({ 2: player(kanTiles) }));
+    // Filler keeps the post-Kan discard a real choice, so the room stops instead of settling on.
+    const filler = [
+      physical(suited('sou', 7), 510),
+      physical(suited('man', 2), 511),
+      physical(suited('pin', 9), 512),
+    ];
+    const room = roomFrom(reactionState({ 2: player([...kanTiles, ...filler]) }));
     const before = room.viewFor('c2').round!;
     expect(before.wall.doraIndicators).toHaveLength(1);
 

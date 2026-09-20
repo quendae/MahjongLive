@@ -1,17 +1,19 @@
-import {
-  applyAction,
-  createRound,
-  getLegalActions,
-} from '@mahjong-live/shared/rules';
+import { applyAction } from '@mahjong-live/shared/rules';
 import type {
   ApplyActionResult,
-  LegalAction,
   PlayerIndex,
   RoundAction,
   RoundEvent,
   RoundState,
 } from '@mahjong-live/shared/rules';
-import { createRNG } from '@mahjong-live/shared/prng';
+import {
+  advanceSeededMatch,
+  createSeededMatch,
+  forcedSeatAction,
+  isReactionPhase,
+  reactionEligibleSeats,
+} from '@mahjong-live/shared/match';
+import type { MatchState } from '@mahjong-live/shared/match';
 import { projectEngineEvent, projectRoom } from './projection';
 import type {
   ClientId,
@@ -32,7 +34,8 @@ import type {
 
 const PLAYERS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const MAX_PROCESSED_COMMANDS = 256;
-const REACTION_ACTIONS = new Set<LegalAction['type']>(['ron', 'chi', 'pon', 'daiminkan']);
+/** A settle pass only chains draws, forced discards and empty reaction windows. */
+const MAX_SETTLE_STEPS = 64;
 
 interface ReactionBarrier {
   phaseVersion: number;
@@ -54,14 +57,6 @@ function replaceSeat(
   return [copy[0], copy[1], copy[2], copy[3]];
 }
 
-function isReactionPhase(round: RoundState): boolean {
-  return round.phase.kind === 'reactions' || round.phase.kind === 'kan-reactions';
-}
-
-function hasReactionAction(actions: readonly LegalAction[]): boolean {
-  return actions.some((action) => REACTION_ACTIONS.has(action.type));
-}
-
 function isReactionRoundAction(action: RoundAction): boolean {
   return action.type === 'ron' || action.type === 'chi' || action.type === 'pon' || action.type === 'daiminkan';
 }
@@ -73,7 +68,7 @@ export class AuthoritativeRoom {
   private hostClientId: ClientId | null = null;
   private seats: RoomSeats = emptySeats();
   private readonly seed: number;
-  private round: RoundState | null = null;
+  private match: MatchState | null = null;
   private reaction: ReactionBarrier | null = null;
   private transitions: RoomTransition[] = [];
   private processed = new Map<string, Extract<CommandReceipt, { ok: true }>>();
@@ -88,19 +83,24 @@ export class AuthoritativeRoom {
   }
 
   static restore(checkpoint: RoomCheckpoint): AuthoritativeRoom {
+    const round = checkpoint.match?.round ?? null;
+    if (round && isReactionPhase(round) && !checkpoint.reaction) {
+      // Rebuilding it would forget every response already given, including passes.
+      throw new Error('Checkpoint in a reaction phase must carry its reaction barrier');
+    }
     const room = new AuthoritativeRoom(checkpoint.id, checkpoint.seed);
     room.status = checkpoint.status;
     room.version = checkpoint.version;
     room.hostClientId = checkpoint.hostClientId;
     room.seats = checkpoint.seats;
-    room.round = checkpoint.round;
+    room.match = checkpoint.match;
     room.reaction = checkpoint.reaction
       ? {
           phaseVersion: checkpoint.reaction.phaseVersion,
           eligibleSeats: new Set(checkpoint.reaction.eligibleSeats),
           respondedSeats: new Set(checkpoint.reaction.respondedSeats),
         }
-      : room.buildReactionBarrier();
+      : null;
     return room;
   }
 
@@ -110,6 +110,11 @@ export class AuthoritativeRoom {
 
   get roomStatus(): RoomStatus {
     return this.status;
+  }
+
+  /** The authoritative match. Server-side only: it contains the wall. */
+  get matchState(): MatchState | null {
+    return this.match;
   }
 
   join(clientId: ClientId, displayName: string, preferredSeat?: PlayerIndex): JoinResult {
@@ -170,7 +175,10 @@ export class AuthoritativeRoom {
         receipt = this.setReady(seat, envelope.commandId, envelope.command.ready);
         break;
       case 'start-round':
-        receipt = this.startRound(clientId, envelope.commandId);
+        receipt = this.startMatch(clientId, envelope.commandId);
+        break;
+      case 'advance-round':
+        receipt = this.advanceRound(envelope.commandId);
         break;
       case 'pass':
         receipt = this.passReaction(seat, envelope.commandId);
@@ -225,9 +233,13 @@ export class AuthoritativeRoom {
       hostClientId: this.hostClientId,
       seats: this.seats,
       seed: this.seed,
-      round: this.round,
+      match: this.match,
       reaction,
     };
+  }
+
+  private get round(): RoundState | null {
+    return this.match?.round ?? null;
   }
 
   private setReady(seat: PlayerIndex, commandId: string, ready: boolean): CommandReceipt {
@@ -242,7 +254,7 @@ export class AuthoritativeRoom {
     return this.success(commandId);
   }
 
-  private startRound(clientId: ClientId, commandId: string): CommandReceipt {
+  private startMatch(clientId: ClientId, commandId: string): CommandReceipt {
     if (this.status !== 'lobby') {
       return this.failure(commandId, 'ROOM_NOT_LOBBY', 'The room already left the lobby');
     }
@@ -253,15 +265,33 @@ export class AuthoritativeRoom {
       return this.failure(commandId, 'NOT_READY', 'All four occupied seats must be ready');
     }
 
-    this.round = createRound(createRNG(this.seed));
+    this.match = createSeededMatch(this.seed);
     this.status = 'playing';
     this.bumpVersion([]);
-    this.syncReactionBarrier(true);
+    this.settle();
+    return this.success(commandId);
+  }
+
+  /** Mirrors `continueSingleGame`: an explicit command starts the next hand of the hanchan. */
+  private advanceRound(commandId: string): CommandReceipt {
+    if (this.status !== 'playing' || this.match === null) {
+      return this.failure(commandId, 'ROOM_NOT_PLAYING', 'No active match exists');
+    }
+    if (this.match.round.phase.kind !== 'ended') {
+      return this.failure(commandId, 'ROUND_NOT_ENDED', 'The current hand is still in progress');
+    }
+    const advanced = advanceSeededMatch(this.match, this.seed);
+    if (!advanced.ok) {
+      return this.failure(commandId, 'ROUND_NOT_ENDED', advanced.message);
+    }
+    this.commitMatch(advanced.state, []);
+    this.settle();
     return this.success(commandId);
   }
 
   private submitRoundAction(seat: PlayerIndex, commandId: string, action: RoundAction): CommandReceipt {
-    if (this.status !== 'playing' || this.round === null) {
+    const round = this.round;
+    if (this.status !== 'playing' || round === null) {
       return this.failure(commandId, 'ROOM_NOT_PLAYING', 'No active round exists');
     }
     if (action.type === 'resolve-reactions') {
@@ -271,33 +301,34 @@ export class AuthoritativeRoom {
       return this.failure(commandId, 'WRONG_SEAT', 'Action player does not match authenticated seat');
     }
 
-    if (isReactionPhase(this.round)) {
+    if (isReactionPhase(round)) {
       if (!isReactionRoundAction(action)) {
         return this.failure(commandId, 'NOT_REACTION_PHASE', 'Only a legal reaction or pass is accepted now');
       }
       const barrierError = this.validateReactionSeat(seat, commandId);
       if (barrierError) return barrierError;
 
-      const result = applyAction(this.round, action);
+      const result = applyAction(round, action);
       if (!result.ok) return this.engineFailure(commandId, result);
-      this.round = result.state;
+      this.match = { ...this.match!, round: result.state };
       this.reaction!.respondedSeats.add(seat);
       this.resolveReactionIfComplete();
       return this.success(commandId);
     }
 
-    const result = applyAction(this.round, action);
+    const result = applyAction(round, action);
     if (!result.ok) return this.engineFailure(commandId, result);
-    this.commitVisibleRound(result.state, result.events);
-    this.syncReactionBarrier(true);
+    this.commitMatch({ ...this.match!, round: result.state }, result.events);
+    this.settle();
     return this.success(commandId);
   }
 
   private passReaction(seat: PlayerIndex, commandId: string): CommandReceipt {
-    if (this.status !== 'playing' || this.round === null) {
+    const round = this.round;
+    if (this.status !== 'playing' || round === null) {
       return this.failure(commandId, 'ROOM_NOT_PLAYING', 'No active round exists');
     }
-    if (!isReactionPhase(this.round)) {
+    if (!isReactionPhase(round)) {
       return this.failure(commandId, 'NOT_REACTION_PHASE', 'Pass is only valid during a reaction window');
     }
     const barrierError = this.validateReactionSeat(seat, commandId);
@@ -321,48 +352,64 @@ export class AuthoritativeRoom {
   }
 
   private resolveReactionIfComplete(): void {
-    if (!this.reaction || !this.round) return;
+    if (!this.reaction || !this.match) return;
     for (const seat of this.reaction.eligibleSeats) {
       if (!this.reaction.respondedSeats.has(seat)) return;
     }
-
-    const result = applyAction(this.round, { type: 'resolve-reactions' });
-    if (!result.ok) {
-      throw new Error(`Server invariant: reaction resolution failed: ${result.error.code} ${result.error.message}`);
-    }
     this.reaction = null;
-    this.commitVisibleRound(result.state, result.events);
-    this.syncReactionBarrier(true);
+    this.applyServerAction({ type: 'resolve-reactions' });
+    this.settle();
   }
 
-  private syncReactionBarrier(autoResolveEmpty: boolean): void {
-    if (!this.round || !isReactionPhase(this.round)) {
+  /**
+   * Applies every transition no seat has a choice about — draws, the forced Riichi tsumogiri and
+   * an empty reaction window — then leaves the room waiting on a real decision. Same decisions as
+   * `driveSingleGame`, via the shared helpers, so the two orchestrators cannot drift.
+   */
+  private settle(): void {
+    for (let step = 0; step < MAX_SETTLE_STEPS; step++) {
+      const round = this.round;
+      if (round === null || round.phase.kind === 'ended') {
+        this.reaction = null;
+        return;
+      }
+
+      if (isReactionPhase(round)) {
+        if (!this.reaction || this.reaction.phaseVersion !== this.version) {
+          this.reaction = {
+            phaseVersion: this.version,
+            eligibleSeats: new Set(reactionEligibleSeats(round)),
+            respondedSeats: new Set(),
+          };
+        }
+        if (this.reaction.eligibleSeats.size > 0) return;
+        this.reaction = null;
+        this.applyServerAction({ type: 'resolve-reactions' });
+        continue;
+      }
+
       this.reaction = null;
-      return;
+      const phase = round.phase;
+      if (phase.kind !== 'awaiting-draw' && phase.kind !== 'awaiting-discard') return;
+      const forced = forcedSeatAction(round, phase.player);
+      if (!forced) return;
+      this.applyServerAction(forced);
     }
-
-    this.reaction = this.buildReactionBarrier();
-    if (autoResolveEmpty && this.reaction && this.reaction.eligibleSeats.size === 0) {
-      this.resolveReactionIfComplete();
-    }
+    throw new Error('Server invariant: the room did not settle on a decision');
   }
 
-  private buildReactionBarrier(): ReactionBarrier | null {
-    if (!this.round || !isReactionPhase(this.round)) return null;
-    const eligibleSeats = new Set<PlayerIndex>();
-    for (const seat of PLAYERS) {
-      if (hasReactionAction(getLegalActions(this.round, seat))) eligibleSeats.add(seat);
+  private applyServerAction(action: RoundAction): void {
+    const result = applyAction(this.round!, action);
+    if (!result.ok) {
+      throw new Error(`Server invariant: ${action.type} failed: ${result.error.code} ${result.error.message}`);
     }
-    return {
-      phaseVersion: this.version,
-      eligibleSeats,
-      respondedSeats: new Set(),
-    };
+    this.commitMatch({ ...this.match!, round: result.state }, result.events);
   }
 
-  private commitVisibleRound(state: RoundState, events: readonly RoundEvent[]): void {
-    this.round = state;
-    if (state.phase.kind === 'ended') this.status = 'finished';
+  private commitMatch(state: MatchState, events: readonly RoundEvent[]): void {
+    this.match = state;
+    // A finished hand is not a finished room: the hanchan ends only when the match does.
+    if (state.status === 'ended') this.status = 'finished';
     this.bumpVersion(events);
   }
 

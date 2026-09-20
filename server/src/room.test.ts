@@ -37,6 +37,15 @@ function startedRoom(seed = 123): { room: AuthoritativeRoom; clients: string[] }
   return { room, clients };
 }
 
+/** The room auto-draws, exactly as `driveSingleGame` does, so a seat's turn starts on a discard. */
+function firstDiscardTileId(room: AuthoritativeRoom, clientId: string): number {
+  const legal = room.viewFor(clientId).round!.legalActions;
+  const discard = legal.find((action) => action.type === 'discard');
+  expect(discard?.type).toBe('discard');
+  if (discard?.type !== 'discard') throw new Error('no discard offered');
+  return discard.tileIds[0];
+}
+
 describe('authoritative lobby', () => {
   it('assigns four seats, makes the first join host and rejects a fifth player', () => {
     const room = new AuthoritativeRoom('alpha');
@@ -73,7 +82,11 @@ describe('authoritative lobby', () => {
     });
     expect(start.ok).toBe(true);
     expect(room.roomStatus).toBe('playing');
-    expect(room.viewFor(clients[0]).round).not.toBeNull();
+    // The dealer's draw is forced, so the first hand opens on a discard decision.
+    expect(room.viewFor(clients[0]).round?.phase).toMatchObject({
+      kind: 'awaiting-discard',
+      player: 0,
+    });
   });
 
   it('starts deterministically from the same seed', () => {
@@ -100,27 +113,31 @@ describe('authorization, versioning and idempotency', () => {
   it('rejects stale commands after a public transition', () => {
     const { room, clients } = startedRoom(102);
     const version = room.publicVersion;
-    const draw = room.submit(clients[0], {
-      commandId: 'draw',
+    const tileId = firstDiscardTileId(room, clients[0]);
+    const discard = room.submit(clients[0], {
+      commandId: 'discard',
       expectedVersion: version,
-      command: { type: 'round-action', action: { type: 'draw', player: 0 } },
+      command: { type: 'round-action', action: { type: 'discard', player: 0, tileId } },
     });
-    expect(draw.ok).toBe(true);
+    expect(discard.ok).toBe(true);
     const stale = room.submit(clients[0], {
       commandId: 'stale',
       expectedVersion: version,
-      command: { type: 'round-action', action: { type: 'draw', player: 0 } },
+      command: { type: 'round-action', action: { type: 'discard', player: 0, tileId } },
     });
     expect(stale).toMatchObject({ ok: false, code: 'STALE_VERSION' });
   });
 
   it('returns a cached receipt for a duplicate command without applying it twice', () => {
     const { room, clients } = startedRoom(103);
-    const version = room.publicVersion;
+    const tileId = firstDiscardTileId(room, clients[0]);
     const envelope = {
-      commandId: 'draw-once',
-      expectedVersion: version,
-      command: { type: 'round-action' as const, action: { type: 'draw' as const, player: 0 as const } },
+      commandId: 'discard-once',
+      expectedVersion: room.publicVersion,
+      command: {
+        type: 'round-action' as const,
+        action: { type: 'discard' as const, player: 0 as const, tileId },
+      },
     };
     const first = room.submit(clients[0], envelope);
     expect(first).toMatchObject({ ok: true, duplicate: false });
@@ -128,7 +145,7 @@ describe('authorization, versioning and idempotency', () => {
     const second = room.submit(clients[0], envelope);
     expect(second).toMatchObject({ ok: true, duplicate: true, version: afterFirst });
     expect(room.publicVersion).toBe(afterFirst);
-    expect(room.viewFor(clients[0]).round?.players[0].concealedCount).toBe(14);
+    expect(room.viewFor(clients[0]).round?.players[0].discards).toHaveLength(1);
   });
 
   it('round-trips an authoritative checkpoint through JSON', () => {
