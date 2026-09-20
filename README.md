@@ -126,7 +126,7 @@ pnpm start
 pnpm dev               # start without opening a browser
 pnpm client:build      # production client build
 pnpm client:typecheck  # client TypeScript validation
-pnpm rules:audit       # deterministic six-seed full-match audit
+pnpm rules:audit       # deterministic six-seed full-match audit (feature/visual-table-replay only)
 pnpm bot:benchmark     # reproducible bot calibration benchmark
 pnpm check             # shared typecheck/tests + client typecheck/build
 ```
@@ -161,4 +161,5 @@ The previously investigated **120 Hz renderer scheduling work is deferred and is
 
 - [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — authoritative current project snapshot and handoff.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — active backlog and next stages.
+- [`docs/MULTIPLAYER_ARCHITECTURE.md`](docs/MULTIPLAYER_ARCHITECTURE.md) — multiplayer Phase 1 decision record.
 - `docs/superpowers/plans/` — historical implementation plans; useful context, but not necessarily the current backlog.

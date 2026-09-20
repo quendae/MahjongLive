@@ -1,9 +1,8 @@
 import type { BotDifficulty } from '../bot/difficulty';
-import { advanceMatch } from '../match/match';
+import { advanceSeededMatch } from '../match/orchestration';
 import { applyAction } from '../rules/round';
 import type { PlayerIndex, RoundAction } from '../rules/types';
-import { createRNG } from '../wall/prng';
-import { createSingleGame, deriveSingleRoundSeed } from './single';
+import { createSingleGame } from './single';
 import type { SingleActionTrace, SingleDriveSuccess, SingleGameState } from './types';
 
 export const MATCH_HISTORY_VERSION = 1 as const;
@@ -151,11 +150,7 @@ export function replayMatchHistory(
       continue;
     }
 
-    const nextRoundNumber = state.match.roundNumber + 1;
-    const advanced = advanceMatch(
-      state.match,
-      createRNG(deriveSingleRoundSeed(state.seed, nextRoundNumber)),
-    );
+    const advanced = advanceSeededMatch(state.match, state.seed);
     if (!advanced.ok) {
       return {
         ok: false,

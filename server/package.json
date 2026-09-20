@@ -1,0 +1,22 @@
+{
+  "name": "@mahjong-live/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mahjong-live/shared": "workspace:*",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

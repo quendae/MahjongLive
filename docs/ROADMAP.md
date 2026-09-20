@@ -110,14 +110,14 @@ Completed rule/scoring work:
 
 - [x] Result explanation for Yaku/Han, Dora, Fu, limits and payments.
 - [x] Deterministic full-match edge-case audit with pinned regression seeds.
-- [x] Central `RuleProfile` plumbing with production `standard` profile.
-- [x] Persist `ruleProfileId` through match/round state.
-- [x] Legacy save migration when `ruleProfileId` is missing.
+- [x] Central `RuleProfile` plumbing with production `standard` profile. *(on `feature/visual-table-replay` only — no `RuleProfile` or `ruleProfileId` exists on `master`)*
+- [x] Persist `ruleProfileId` through match/round state. *(same branch)*
+- [x] Legacy save migration when `ruleProfileId` is missing. *(same branch)*
 - [x] Save-state compatibility regression tests.
 
 ### Deterministic rules audit baseline
 
-`pnpm rules:audit` runs six pinned full Hanchan seeds and checks point/Riichi-stick conservation, dealer/wind/hand/Honba continuity, terminal placements and deterministic replay coverage.
+`pnpm rules:audit` (present on `feature/visual-table-replay`; **not yet on `master`**) runs six pinned full Hanchan seeds and checks point/Riichi-stick conservation, dealer/wind/hand/Honba continuity, terminal placements and deterministic replay coverage.
 
 Current pinned baseline:
 
@@ -189,28 +189,71 @@ Do not change renderer scheduling based only on Linux/headless CI because it can
 
 ## Next major stage — multiplayer
 
-Multiplayer has **not** been implemented. It is the next major product area after the preview/polish cycle and requires an architecture/design pass before coding.
+Playable multiplayer has **not** shipped. Phase 1 is now closed and an in-memory authoritative
+core exists; there is still no transport, so nobody can connect to anything.
+
+Earlier revisions of this roadmap stated multiplayer was untouched. That was wrong: an
+authoritative server core was written on `plan8-authoritative-server` (open PR #6) on
+2026-08-30 and then abandoned without ever being mentioned here.
+
+Current multiplayer branch:
+
+- `feature/multiplayer-server-core`
+- contract: [`MULTIPLAYER_ARCHITECTURE.md`](MULTIPLAYER_ARCHITECTURE.md)
 
 ### Phase 1 — architecture contract
 
-- [ ] Define authoritative multiplayer state/transport boundary around the deterministic engine.
-- [ ] Define hidden-information-safe state projection per player.
-- [ ] Decide server-authoritative validation model vs any deterministic peer responsibilities.
-- [ ] Define action sequencing, idempotency and replay/event identity.
-- [ ] Define lobby / room-code lifecycle.
-- [ ] Define reconnect / resume semantics.
-- [ ] Define timeout / disconnect / AFK policy.
-- [ ] Define spectator/public-history protocol.
+Closed. Every decision, and each one's status, is recorded in
+[`MULTIPLAYER_ARCHITECTURE.md`](MULTIPLAYER_ARCHITECTURE.md).
+
+- [x] Define authoritative multiplayer state/transport boundary around the deterministic engine.
+- [x] Define hidden-information-safe state projection per player.
+- [x] Decide server-authoritative validation model vs any deterministic peer responsibilities.
+- [x] Define action sequencing, idempotency and replay/event identity.
+- [x] Define lobby / room-code lifecycle. *(seating settled; code allocation and join tokens recommended, not settled)*
+- [x] Define reconnect / resume semantics.
+- [x] Define timeout / disconnect / AFK policy. *(recommended; no clock exists yet)*
+- [x] Define spectator/public-history protocol.
+
+### Phase 1b — authoritative core landed
+
+The plan8 core was re-landed fresh against the current engine rather than rebased, because its
+branch tip does not typecheck and it forked before the match layer, the bots, the single-player
+orchestrator and the deterministic history existed.
+
+- [x] `server/` workspace, filling the slot `pnpm-workspace.yaml` already declared.
+- [x] Room session: join/seating, host-only start, ready flags, room registry.
+- [x] Command envelope: `commandId` at-most-once execution, `expectedVersion` optimistic concurrency.
+- [x] Hidden-information-safe per-viewer projection, allowlist-shaped.
+- [x] Reaction-barrier arbitration across concurrently responding seats.
+- [x] Room checkpoint / restore as plain JSON.
+- [x] Server-held round seed; a client can no longer choose it and derive the wall.
+- [x] Leakage tests sweeping all four viewpoints for concealed, live-wall and dead-wall tile IDs.
+- [x] Server typecheck and tests wired into `Shared engine CI`.
+
+**PR #6 should be closed** in favour of this branch.
 
 ### Phase 2 — multiplayer MVP
 
-- [ ] Create/join room by code.
-- [ ] Four human seats.
-- [ ] Server-authoritative legal action validation.
-- [ ] Per-player concealed hand projection.
-- [ ] Public table event synchronization.
-- [ ] Reconnect to an in-progress match.
-- [ ] Bot replacement policy for disconnected/abandoned seats if adopted in the design.
+Ordered by dependency. Items 1-3 are corrections the landed core needs before transport is
+worth writing.
+
+- [x] Match-level room loop: the room holds `MatchState`, advances hands through `advance-round`, settles forced actions like `driveSingleGame`, and `'finished'` now means the *match* ended.
+- [x] Derive round seeds with `deriveSingleRoundSeed`. Seeding is unstatable by a caller: `createSeededMatch` / `advanceSeededMatch` in `shared/src/engine/match/orchestration.ts` are the only entry points, and a parity test compares a full hanchan through the room against single-player on the same seed, walls included.
+- [x] Project match-level position (`wind`, `hand`, `roundNumber`, status, result) into `RoomView`.
+- [x] Invert event projection from a denylist to an exhaustive switch. A new `RoundEvent` is now `TS2366` in `projection.ts` rather than a silent leak.
+- [x] Fix checkpoint restore: a reaction-phase checkpoint with no barrier is now rejected instead of silently discarding a pass.
+- [ ] Emit `MatchHistoryRecord` from the room; extend it to v2 with a four-seat descriptor instead of `humanSeat` / `botDifficulty`. Deliberately deferred — it changes a persisted format the client reads, and there is no multiplayer match to record until transport exists.
+- [x] Turn and reaction deadlines. Time is injected (`tick(now)`, `submit(..., now?)`, `setConnected(..., now)`), never read, so the room stays synchronous and a four-client test needs no fake timers. A room with no clock has no deadline.
+- [x] Bot takeover at the `standard` profile after three lapsed turns or a disconnect past the grace period, reclaimable on any accepted command or reconnect. Determinism verified against two independently seeded rooms. Lapsed *reaction* windows deliberately do not count: ignoring a call prompt is ordinary play. History recording of the takeover waits on `MatchHistoryRecord` v2; `SeatBotControl.sinceVersion` is the hook.
+- [x] Room-code allocation: six characters, alphabet without `I L O U 0 1`, collision retry, case-insensitive lookup.
+- [x] Join tokens and room TTL. A 192-bit CSPRNG token bound to `(room, seat)`, compared in constant time, verified on `submit`, `viewFor`, `publicEventsSince`, `setConnected` and rejoin. Closes a real seat-theft hole: `join` used to hand an occupied seat to anyone who knew its client id. Rooms sweep on injected time, and `playingRetentionMs < disconnectGraceMs` throws so a room cannot be evicted before reconnect is possible.
+- [x] Isolate a room fault. A failed invariant now marks the room `faulted` and terminal: commands answer `ROOM_FAULTED`, `tick` is inert, the clock is dropped, and the room stays readable so a client can be told what happened.
+- [x] Network transport. `node:http` for `POST /rooms` and `POST /rooms/:id/join`, `ws` for the socket, one 250ms timer driving `tick` and `sweep`. `RoomHub` is socket-free and takes an injected `now`, so the transport tests need neither real sockets nor real time. `room.ts` needed no changes. Per-viewer fan-out with a transport-level leakage test over four clients and a spectator; a shared-payload fan-out fails it.
+- [x] Backpressure: a socket over 1 MiB buffered is dropped, which is safe precisely because reconnect is snapshot-first.
+- [x] Trim the catch-up transition log to the disconnect window, and retain the idempotency cache by version window rather than by 256-entry count.
+- [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item.
+- [x] Extract forced-action / seeding / reaction-eligibility decisions into `shared/src/engine/match/orchestration.ts` so the room and `single.ts` cannot drift into two rulesets. The empty-window auto-resolve stays duplicated on purpose: the two control flows differ, and only the eligibility scan is genuinely shared.
 
 ### Phase 3 — validation
 

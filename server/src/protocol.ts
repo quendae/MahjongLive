@@ -1,0 +1,273 @@
+import type {
+  LegalAction,
+  PlayerIndex,
+  PlayerMeld,
+  RiichiState,
+  RoundAction,
+  RoundDiscard,
+  RoundEndResult,
+  RoundEvent,
+} from '@mahjong-live/shared/rules';
+import type { MatchState } from '@mahjong-live/shared/match';
+import type { BotDifficulty } from '@mahjong-live/shared/bot';
+import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
+import type {
+  MatchHand,
+  MatchResult,
+  MatchStatus,
+  MatchWind,
+} from '@mahjong-live/shared/match';
+
+export type ClientId = string;
+export type RoomId = string;
+
+/**
+ * What a seated client presents on every call it makes. `clientId` is only a name -- it says
+ * which seat is being claimed. `token` is the server-issued credential that proves the claim,
+ * and it is the only half that authenticates anything.
+ */
+export interface SeatAuth {
+  clientId: ClientId;
+  token: string;
+}
+
+/**
+ * Recorded per seat rather than per event, because `MatchHistoryRecord` v2 carries a four-entry
+ * seat descriptor. `sinceVersion` is what makes it replayable: bot output is profile-dependent,
+ * so a future history entry has to say which profile played from which version on.
+ */
+export interface SeatBotControl {
+  profile: BotDifficulty;
+  sinceVersion: number;
+}
+
+export interface RoomMember {
+  clientId: ClientId;
+  /**
+   * Server-issued credential bound to this (room, seat). Held server-side and in the checkpoint
+   * so a restored room still honours tokens it handed out; never projected into any view.
+   */
+  token: string;
+  displayName: string;
+  ready: boolean;
+  /** Set when the room took the seat over on expiry or disconnect; cleared when the client returns. */
+  bot?: SeatBotControl | null;
+  /** Clock reading of the last disconnect the transport reported, null while connected. */
+  disconnectedAt?: number | null;
+}
+
+export type RoomSeats = readonly [
+  RoomMember | null,
+  RoomMember | null,
+  RoomMember | null,
+  RoomMember | null,
+];
+
+/** 'finished' means the whole hanchan ended, not one hand. */
+/**
+ * `faulted` is terminal. A room reaches it when a server invariant fails, and it exists so that
+ * one broken room answers its own clients with a receipt instead of taking down every other room
+ * the process is holding.
+ */
+export type RoomStatus = 'lobby' | 'playing' | 'finished' | 'faulted';
+
+export type PlayerRoundAction = Exclude<RoundAction, { type: 'resolve-reactions' }>;
+
+export type ClientCommand =
+  | { type: 'set-ready'; ready: boolean }
+  | { type: 'start-round' }
+  | { type: 'advance-round' }
+  | { type: 'round-action'; action: PlayerRoundAction }
+  | { type: 'pass' };
+
+export interface CommandEnvelope {
+  commandId: string;
+  expectedVersion: number;
+  command: ClientCommand;
+}
+
+export type CommandErrorCode =
+  /** The `clientId` holds no seat in this room. Unchanged meaning: identity, not authentication. */
+  | 'UNKNOWN_CLIENT'
+  /** The `clientId` holds a seat, but the join token presented for it is wrong or missing. */
+  | 'INVALID_TOKEN'
+  /** A server invariant failed and this room is dead. Nothing the client sends will be accepted. */
+  | 'ROOM_FAULTED'
+  | 'STALE_VERSION'
+  | 'HOST_ONLY'
+  | 'ROOM_FULL'
+  | 'ROOM_NOT_LOBBY'
+  | 'ROOM_NOT_PLAYING'
+  | 'SEAT_TAKEN'
+  | 'INVALID_SEAT'
+  | 'NOT_READY'
+  | 'ROUND_NOT_ENDED'
+  | 'WRONG_SEAT'
+  | 'SERVER_ONLY'
+  | 'NOT_REACTION_PHASE'
+  | 'NOT_ELIGIBLE'
+  | 'ALREADY_RESPONDED'
+  | 'ENGINE_REJECTED';
+
+export type CommandReceipt =
+  | {
+      ok: true;
+      commandId: string;
+      version: number;
+      duplicate: boolean;
+    }
+  | {
+      ok: false;
+      commandId: string;
+      version: number;
+      code: CommandErrorCode;
+      message: string;
+      engineCode?: string;
+    };
+
+export type JoinResult =
+  /** `token` is the credential for this seat: store it, and replay it on every later call. */
+  | { ok: true; seat: PlayerIndex; version: number; token: string }
+  | {
+      ok: false;
+      code: Extract<
+        CommandErrorCode,
+        'ROOM_FULL' | 'ROOM_NOT_LOBBY' | 'SEAT_TAKEN' | 'INVALID_SEAT' | 'INVALID_TOKEN'
+      >;
+      message: string;
+    };
+
+export interface LobbySeatView {
+  seat: PlayerIndex;
+  occupied: boolean;
+  displayName: string | null;
+  ready: boolean;
+  isHost: boolean;
+  /** Null while a human holds the seat; the profile playing it once the room took over. */
+  bot: BotDifficulty | null;
+}
+
+export interface PlayerView {
+  seat: PlayerIndex;
+  points: number;
+  concealed: readonly Tile[] | null;
+  concealedCount: number;
+  melds: readonly PlayerMeld[];
+  discards: readonly RoundDiscard[];
+  riichi: RiichiState;
+  drawCount: number;
+  discardCount: number;
+  privateState?: {
+    ippatsuEligible: boolean;
+    temporaryFuriten: boolean;
+    riichiFuriten: boolean;
+  };
+}
+
+export type PublicRoundPhase =
+  | { kind: 'awaiting-draw'; player: PlayerIndex }
+  | {
+      kind: 'awaiting-discard';
+      player: PlayerIndex;
+      drawnTileId: number | null;
+      wasLastLiveDraw: boolean;
+      isRinshan: boolean;
+      pendingKanDora: boolean;
+    }
+  | {
+      kind: 'reactions';
+      discarder: PlayerIndex;
+      discardIndex: number;
+      pendingRiichi?: { player: PlayerIndex; doubleRiichi: boolean };
+    }
+  | {
+      kind: 'kan-reactions';
+      declarer: PlayerIndex;
+      meldIndex: number;
+      addedTile: Tile;
+    }
+  | { kind: 'ended'; result: RoundEndResult };
+
+export interface WallView {
+  remainingLiveTiles: number;
+  doraIndicators: readonly Tile[];
+}
+
+export interface RoundView {
+  dealer: PlayerIndex;
+  roundWind: Wind;
+  honba: number;
+  riichiSticks: number;
+  currentPlayer: PlayerIndex;
+  callsMade: number;
+  phase: PublicRoundPhase;
+  wall: WallView;
+  players: readonly [PlayerView, PlayerView, PlayerView, PlayerView];
+  legalActions: readonly LegalAction[];
+}
+
+/**
+ * Match-level position. Every field is public under the projection contract:
+ * `MatchResult` carries only placements and points, never a hand or a wall tile.
+ */
+export interface MatchView {
+  status: MatchStatus;
+  wind: MatchWind;
+  hand: MatchHand;
+  roundNumber: number;
+  result: MatchResult | null;
+}
+
+/**
+ * Public: a wall-clock instant, never who is eligible to answer. Eligibility is derived from
+ * concealed hands, so naming the seats on the clock would leak a tenpai read to the table.
+ */
+export interface RoomDeadline {
+  kind: 'turn' | 'reaction';
+  expiresAt: number;
+}
+
+export interface RoomView {
+  id: RoomId;
+  status: RoomStatus;
+  version: number;
+  viewerSeat: PlayerIndex | null;
+  seats: readonly [LobbySeatView, LobbySeatView, LobbySeatView, LobbySeatView];
+  match: MatchView | null;
+  round: RoundView | null;
+  deadline: RoomDeadline | null;
+}
+
+export interface ReactionBarrierCheckpoint {
+  phaseVersion: number;
+  eligibleSeats: readonly PlayerIndex[];
+  respondedSeats: readonly PlayerIndex[];
+}
+
+export interface RoomCheckpoint {
+  id: RoomId;
+  status: RoomStatus;
+  version: number;
+  hostClientId: ClientId | null;
+  seats: RoomSeats;
+  seed: number;
+  match: MatchState | null;
+  /** Mandatory while the round sits in a reaction phase: it cannot be rebuilt without loss. */
+  reaction: ReactionBarrierCheckpoint | null;
+}
+
+export interface RoomTransition {
+  version: number;
+  /** Clock reading when the transition was committed, so the catch-up log can be trimmed by age. */
+  at: number;
+  events: readonly RoundEvent[];
+}
+
+export type PublicEngineEvent =
+  | RoundEvent
+  | {
+      type: 'TileDrawn';
+      player: PlayerIndex;
+      wasLastLiveDraw: boolean;
+      isRinshan?: boolean;
+    };

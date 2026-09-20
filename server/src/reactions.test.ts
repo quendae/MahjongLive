@@ -1,0 +1,387 @@
+import { describe, expect, it } from 'vitest';
+import { suited } from '@mahjong-live/shared/tiles';
+import type { Tile } from '@mahjong-live/shared/tile-types';
+import type {
+  PlayerIndex,
+  RoundDiscard,
+  RoundPlayerState,
+  RoundState,
+} from '@mahjong-live/shared/rules';
+import { reactionEligibleSeats } from '@mahjong-live/shared/match';
+import type { MatchState } from '@mahjong-live/shared/match';
+import { AuthoritativeRoom } from './room';
+import type { RoomTiming } from './room';
+import type { RoomCheckpoint, RoomSeats, SeatAuth } from './protocol';
+
+/** The rooms here are restored from a literal checkpoint, so their tokens are literals too. */
+const as = (clientId: string): SeatAuth => ({ clientId, token: `tk-${clientId}` });
+
+function physical(tile: Tile, id: number): Tile {
+  return { ...tile, id };
+}
+
+function player(
+  concealed: readonly Tile[] = [],
+  overrides: Partial<RoundPlayerState> = {},
+): RoundPlayerState {
+  return {
+    points: 25_000,
+    concealed,
+    melds: [],
+    discards: [],
+    riichi: 'none',
+    ippatsuEligible: false,
+    temporaryFuriten: false,
+    riichiFuriten: false,
+    drawCount: 1,
+    discardCount: 0,
+    ...overrides,
+  };
+}
+
+function pinfuWait4p(startId: number): Tile[] {
+  let id = startId;
+  const t = (tile: Tile) => physical(tile, id++);
+  return [
+    t(suited('man', 1)), t(suited('man', 2)), t(suited('man', 3)),
+    t(suited('pin', 5)), t(suited('pin', 6)),
+    t(suited('sou', 2)), t(suited('sou', 3)), t(suited('sou', 4)),
+    t(suited('man', 6)), t(suited('man', 7)), t(suited('man', 8)),
+    t(suited('sou', 5)), t(suited('sou', 5)),
+  ];
+}
+
+function reactionState(playersOverride: Partial<Record<PlayerIndex, RoundPlayerState>>): RoundState {
+  const winning = physical(suited('pin', 4), 9000);
+  const discard: RoundDiscard = {
+    tile: winning,
+    tileId: winning.id!,
+    tsumogiri: false,
+    wasLastLiveDraw: false,
+  };
+  const players: RoundPlayerState[] = [
+    player([], { discards: [discard], discardCount: 1 }),
+    player(),
+    player(),
+    player(),
+  ];
+  for (const [seatText, replacement] of Object.entries(playersOverride)) {
+    players[Number(seatText)] = replacement;
+  }
+  const deadWall = Array.from({ length: 14 }, (_, index) =>
+    physical(suited('man', ((index % 9) + 1) as 1), 9200 + index),
+  );
+  return {
+    wall: {
+      liveWall: [physical(suited('man', 9), 9100), physical(suited('sou', 9), 9101)],
+      deadWall,
+      doraIndicators: [deadWall[0]],
+    },
+    players: [players[0], players[1], players[2], players[3]],
+    dealer: 0,
+    roundWind: 'east',
+    honba: 0,
+    riichiSticks: 0,
+    currentPlayer: 0,
+    callsMade: 0,
+    phase: {
+      kind: 'reactions',
+      discarder: 0,
+      discardIndex: 0,
+      ronClaims: [],
+      callClaims: [],
+    },
+  };
+}
+
+function matchFrom(round: RoundState): MatchState {
+  return {
+    status: 'playing',
+    initialDealer: 0,
+    wind: 'east',
+    hand: 1,
+    targetPoints: 30_000,
+    roundNumber: 1,
+    round,
+  };
+}
+
+function roomFrom(
+  round: RoundState,
+  version = 10,
+  timing: Partial<RoomTiming> = {},
+): AuthoritativeRoom {
+  const seats: RoomSeats = [
+    { clientId: 'c0', token: 'tk-c0', displayName: 'P0', ready: true },
+    { clientId: 'c1', token: 'tk-c1', displayName: 'P1', ready: true },
+    { clientId: 'c2', token: 'tk-c2', displayName: 'P2', ready: true },
+    { clientId: 'c3', token: 'tk-c3', displayName: 'P3', ready: true },
+  ];
+  const checkpoint: RoomCheckpoint = {
+    id: 'reaction-room',
+    status: 'playing',
+    version,
+    hostClientId: 'c0',
+    seats,
+    seed: 1,
+    match: matchFrom(round),
+    reaction: {
+      phaseVersion: version,
+      eligibleSeats: reactionEligibleSeats(round),
+      respondedSeats: [],
+    },
+  };
+  return AuthoritativeRoom.restore(checkpoint, timing);
+}
+
+describe('reaction barrier', () => {
+  it('collects two Ron claims at one public version and resolves only after both seats answered', () => {
+    const room = roomFrom(reactionState({
+      1: player(pinfuWait4p(100)),
+      2: player(pinfuWait4p(200)),
+    }));
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('ron');
+    expect(room.viewFor(as('c2')).round?.legalActions.map((action) => action.type)).toContain('ron');
+
+    const first = room.submit(as('c1'), {
+      commandId: 'ron-1',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'ron', player: 1 } },
+    });
+    expect(first).toMatchObject({ ok: true, version: 10 });
+    expect(room.publicVersion).toBe(10);
+    expect(room.viewFor(as('c1')).round?.legalActions).toEqual([]);
+    expect(room.publicEventsSince(null, 10)).toEqual([]);
+
+    const second = room.submit(as('c2'), {
+      commandId: 'ron-2',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'ron', player: 2 } },
+    });
+    expect(second).toMatchObject({ ok: true, version: 11 });
+    // A finished hand leaves the room playing: only the hanchan ending finishes it.
+    expect(room.roomStatus).toBe('playing');
+    const phase = room.viewFor(null).round?.phase;
+    expect(phase?.kind).toBe('ended');
+    if (!phase || phase.kind !== 'ended' || phase.result.type !== 'ron') return;
+    expect(phase.result.winners.map((winner) => winner.player)).toEqual([1, 2]);
+  });
+
+  it('keeps a hidden claim idempotent without duplicating the engine claim', () => {
+    const room = roomFrom(reactionState({
+      1: player(pinfuWait4p(300)),
+      2: player(pinfuWait4p(400)),
+    }));
+    const envelope = {
+      commandId: 'same-ron',
+      expectedVersion: 10,
+      command: { type: 'round-action' as const, action: { type: 'ron' as const, player: 1 as const } },
+    };
+    const first = room.submit(as('c1'), envelope);
+    expect(first).toMatchObject({ ok: true, duplicate: false, version: 10 });
+    const second = room.submit(as('c1'), envelope);
+    expect(second).toMatchObject({ ok: true, duplicate: true, version: 10 });
+    const checkpoint = room.checkpoint();
+    expect(checkpoint.match?.round.phase.kind).toBe('reactions');
+    if (checkpoint.match?.round.phase.kind !== 'reactions') return;
+    expect(checkpoint.match.round.phase.ronClaims).toHaveLength(1);
+  });
+
+  it('resolves Ron over a competing Pon without exposing the Pon as a public transition', () => {
+    const p4a = physical(suited('pin', 4), 500);
+    const p4b = physical(suited('pin', 4), 501);
+    const room = roomFrom(reactionState({
+      1: player(pinfuWait4p(5000)),
+      2: player([p4a, p4b]),
+    }));
+    const pon = room.submit(as('c2'), {
+      commandId: 'pon',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [p4a.id!, p4b.id!] } },
+    });
+    expect(pon).toMatchObject({ ok: true, version: 10 });
+
+    const ron = room.submit(as('c1'), {
+      commandId: 'ron',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'ron', player: 1 } },
+    });
+    expect(ron).toMatchObject({ ok: true, version: 11 });
+    const view = room.viewFor(null);
+    expect(view.round?.phase.kind).toBe('ended');
+    expect(view.round?.players[2].melds).toHaveLength(0);
+  });
+
+  it('resolves Pon over Chi when both players respond in either order', () => {
+    const chi3 = physical(suited('pin', 3), 600);
+    const chi5 = physical(suited('pin', 5), 601);
+    const ponA = physical(suited('pin', 4), 602);
+    const ponB = physical(suited('pin', 4), 603);
+    const room = roomFrom(reactionState({
+      1: player([chi3, chi5]),
+      2: player([ponA, ponB]),
+    }));
+
+    const chi = room.submit(as('c1'), {
+      commandId: 'chi',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'chi', player: 1, tileIds: [chi3.id!, chi5.id!] } },
+    });
+    expect(chi).toMatchObject({ ok: true, version: 10 });
+    expect(room.viewFor(as('c1')).round?.legalActions).toEqual([]);
+
+    const pon = room.submit(as('c2'), {
+      commandId: 'pon',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [ponA.id!, ponB.id!] } },
+    });
+    expect(pon).toMatchObject({ ok: true, version: 11 });
+    const phase = room.viewFor(null).round?.phase;
+    expect(phase).toMatchObject({ kind: 'awaiting-discard', player: 2 });
+    expect(room.viewFor(null).round?.players[2].melds[0]).toMatchObject({ type: 'triplet', isOpen: true });
+    expect(room.viewFor(null).round?.players[1].melds).toHaveLength(0);
+  });
+
+  it('turns an all-pass window into one authoritative resolution and rejects a late stale response', () => {
+    const chi3 = physical(suited('pin', 3), 700);
+    const chi5 = physical(suited('pin', 5), 701);
+    const room = roomFrom(reactionState({ 1: player([chi3, chi5]) }));
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('chi');
+
+    const pass = room.submit(as('c1'), {
+      commandId: 'pass',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    });
+    // Resolution bumps once, then the forced draw for seat 1 bumps again.
+    expect(pass).toMatchObject({ ok: true, version: 12 });
+    expect(room.viewFor(null).round?.phase).toMatchObject({
+      kind: 'awaiting-discard',
+      player: 1,
+    });
+
+    const late = room.submit(as('c1'), {
+      commandId: 'late-pass',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    });
+    expect(late).toMatchObject({ ok: false, code: 'STALE_VERSION', version: 12 });
+  });
+
+  it('rejects a reaction-phase checkpoint that lost its barrier', () => {
+    const room = roomFrom(reactionState({
+      1: player(pinfuWait4p(100)),
+      2: player(pinfuWait4p(200)),
+    }));
+    const checkpoint: RoomCheckpoint = { ...room.checkpoint(), reaction: null };
+    expect(() => AuthoritativeRoom.restore(checkpoint)).toThrow(/reaction barrier/);
+  });
+
+  it('restores a half-answered window without forgetting a pass', () => {
+    const chi3 = physical(suited('pin', 3), 800);
+    const chi5 = physical(suited('pin', 5), 801);
+    const ponA = physical(suited('pin', 4), 802);
+    const ponB = physical(suited('pin', 4), 803);
+    const room = roomFrom(reactionState({
+      1: player([chi3, chi5]),
+      2: player([ponA, ponB]),
+    }));
+    // A pass leaves no trace in the round state, so only the barrier remembers it.
+    expect(room.submit(as('c1'), {
+      commandId: 'pass-1',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    })).toMatchObject({ ok: true, version: 10 });
+
+    const restored = AuthoritativeRoom.restore(JSON.parse(JSON.stringify(room.checkpoint())));
+    expect(restored.submit(as('c1'), {
+      commandId: 'pass-again',
+      expectedVersion: 10,
+      command: { type: 'pass' },
+    })).toMatchObject({ ok: false, code: 'ALREADY_RESPONDED' });
+
+    const pon = restored.submit(as('c2'), {
+      commandId: 'pon',
+      expectedVersion: 10,
+      command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [ponA.id!, ponB.id!] } },
+    });
+    expect(pon).toMatchObject({ ok: true, version: 11 });
+    expect(restored.viewFor(null).round?.phase).toMatchObject({ kind: 'awaiting-discard', player: 2 });
+  });
+
+  it('auto-passes an expired window instead of taking a Ron nobody claimed', () => {
+    const room = roomFrom(reactionState({ 1: player(pinfuWait4p(900)) }), 10, { reactionMs: 500 });
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('ron');
+
+    room.tick(0);
+    expect(room.currentDeadline).toEqual({ kind: 'reaction', expiresAt: 500 });
+    room.tick(499);
+    expect(room.publicVersion).toBe(10);
+    expect(room.viewFor(null).round?.phase.kind).toBe('reactions');
+
+    room.tick(500);
+    // Section 7: an auto-win is irreversible and a seat may be passing on purpose, so silence passes.
+    expect(room.publicVersion).toBeGreaterThan(10);
+    expect(room.viewFor(null).round?.phase.kind).not.toBe('ended');
+  });
+
+  it('lets a claim already made stand when the silent seat is auto-passed', () => {
+    const ponA = physical(suited('pin', 4), 910);
+    const ponB = physical(suited('pin', 4), 911);
+    const room = roomFrom(
+      reactionState({ 1: player(pinfuWait4p(920)), 2: player([ponA, ponB]) }),
+      10,
+      { reactionMs: 500 },
+    );
+    expect(
+      room.submit(as('c1'), {
+        commandId: 'ron',
+        expectedVersion: 10,
+        command: { type: 'round-action', action: { type: 'ron', player: 1 } },
+      }),
+    ).toMatchObject({ ok: true, version: 10 });
+
+    room.tick(0);
+    room.tick(500);
+    const phase = room.viewFor(null).round?.phase;
+    expect(phase?.kind).toBe('ended');
+    if (!phase || phase.kind !== 'ended' || phase.result.type !== 'ron') throw new Error('no Ron');
+    expect(phase.result.winners.map((winner) => winner.player)).toEqual([1]);
+  });
+
+  it('reveals the Kan-Dora immediately when a Daiminkan completes', () => {
+    const kanTiles = [500, 501, 502].map((id) => physical(suited('pin', 4), id));
+    // Filler keeps the post-Kan discard a real choice, so the room stops instead of settling on.
+    const filler = [
+      physical(suited('sou', 7), 510),
+      physical(suited('man', 2), 511),
+      physical(suited('pin', 9), 512),
+    ];
+    const room = roomFrom(reactionState({ 2: player([...kanTiles, ...filler]) }));
+    const before = room.viewFor(as('c2')).round!;
+    expect(before.wall.doraIndicators).toHaveLength(1);
+
+    const kan = room.submit(as('c2'), {
+      commandId: 'daiminkan',
+      expectedVersion: 10,
+      command: {
+        type: 'round-action',
+        action: {
+          type: 'daiminkan',
+          player: 2,
+          tileIds: [kanTiles[0].id!, kanTiles[1].id!, kanTiles[2].id!],
+        },
+      },
+    });
+    expect(kan).toMatchObject({ ok: true, version: 11 });
+
+    const after = room.viewFor(as('c2')).round!;
+    expect(after.wall.doraIndicators).toHaveLength(2);
+    expect(after.phase).toMatchObject({
+      kind: 'awaiting-discard',
+      player: 2,
+      isRinshan: true,
+      pendingKanDora: false,
+    });
+  });
+});
