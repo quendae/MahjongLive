@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, createRound, getLegalActions } from '@mahjong-live/shared/rules';
 import type { PlayerIndex, RoundEvent, RoundState } from '@mahjong-live/shared/rules';
 import { createRNG } from '@mahjong-live/shared/prng';
-import { projectEngineEvent, projectRound } from './projection';
+import { createSeededMatch } from '@mahjong-live/shared/match';
+import { projectEngineEvent, projectRoom, projectRound } from './projection';
 
 function collectPhysicalIds(value: unknown, ids = new Set<number>()): Set<number> {
   if (Array.isArray(value)) {
@@ -260,5 +261,59 @@ describe('event projection', () => {
     const call: RoundEvent = { type: 'CallClaimed', player: 1, kind: 'pon', discarder: 0 };
     expect(projectEngineEvent(ron, 0)).toBeNull();
     expect(projectEngineEvent(call, 0)).toBeNull();
+  });
+});
+
+describe('match-level room view', () => {
+  const emptySeats = () => [null, null, null, null] as const;
+
+  it('exposes where the match is, so a client can render more than one hand', () => {
+    const match = createSeededMatch(7);
+    const view = projectRoom({
+      roomId: 'ROOM',
+      status: 'playing',
+      version: 3,
+      hostClientId: null,
+      seats: emptySeats(),
+      match,
+      round: match.round,
+      viewerSeat: 0,
+    });
+
+    expect(view.match).toEqual({
+      status: match.status,
+      wind: match.wind,
+      hand: match.hand,
+      roundNumber: match.roundNumber,
+      result: null,
+    });
+    // The match block is public: a spectator sees the same position.
+    expect(
+      projectRoom({
+        roomId: 'ROOM',
+        status: 'playing',
+        version: 3,
+        hostClientId: null,
+        seats: emptySeats(),
+        match,
+        round: match.round,
+        viewerSeat: null,
+      }).match,
+    ).toEqual(view.match);
+  });
+
+  it('carries no match block in the lobby', () => {
+    expect(
+      projectRoom({
+        roomId: 'ROOM',
+        status: 'lobby',
+        version: 0,
+        hostClientId: null,
+        seats: emptySeats(),
+        match: null,
+        round: null,
+        viewerSeat: null,
+      }).match,
+    ).toBeNull();
   });
 });

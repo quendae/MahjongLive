@@ -10,6 +10,12 @@ import type {
 } from '@mahjong-live/shared/rules';
 import type { MatchState } from '@mahjong-live/shared/match';
 import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
+import type {
+  MatchHand,
+  MatchResult,
+  MatchStatus,
+  MatchWind,
+} from '@mahjong-live/shared/match';
 
 export type ClientId = string;
 export type RoomId = string;
@@ -150,12 +156,25 @@ export interface RoundView {
   legalActions: readonly LegalAction[];
 }
 
+/**
+ * Match-level position. Every field is public under the projection contract:
+ * `MatchResult` carries only placements and points, never a hand or a wall tile.
+ */
+export interface MatchView {
+  status: MatchStatus;
+  wind: MatchWind;
+  hand: MatchHand;
+  roundNumber: number;
+  result: MatchResult | null;
+}
+
 export interface RoomView {
   id: RoomId;
   status: RoomStatus;
   version: number;
   viewerSeat: PlayerIndex | null;
   seats: readonly [LobbySeatView, LobbySeatView, LobbySeatView, LobbySeatView];
+  match: MatchView | null;
   round: RoundView | null;
 }
 

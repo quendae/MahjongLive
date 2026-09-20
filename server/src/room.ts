@@ -200,6 +200,7 @@ export class AuthoritativeRoom {
       version: this.version,
       hostClientId: this.hostClientId,
       seats: this.seats,
+      match: this.match,
       round: this.round,
       viewerSeat,
       respondedSeats: this.reaction?.respondedSeats,

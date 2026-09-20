@@ -1,7 +1,9 @@
 import { getLegalActions } from '@mahjong-live/shared/rules';
 import type { PlayerIndex, RoundEvent, RoundState } from '@mahjong-live/shared/rules';
+import type { MatchState } from '@mahjong-live/shared/match';
 import type {
   LobbySeatView,
+  MatchView,
   PlayerView,
   PublicEngineEvent,
   PublicRoundPhase,
@@ -20,6 +22,7 @@ export interface ProjectionContext {
   version: number;
   hostClientId: string | null;
   seats: RoomSeats;
+  match: MatchState | null;
   round: RoundState | null;
   viewerSeat: PlayerIndex | null;
   respondedSeats?: ReadonlySet<PlayerIndex>;
@@ -133,6 +136,16 @@ export function projectRound(
   };
 }
 
+function matchView(match: MatchState): MatchView {
+  return {
+    status: match.status,
+    wind: match.wind,
+    hand: match.hand,
+    roundNumber: match.roundNumber,
+    result: match.result ?? null,
+  };
+}
+
 export function projectRoom(context: ProjectionContext): RoomView {
   const seats = PLAYERS.map((seat) =>
     seatView(seat, context.seats[seat], context.hostClientId),
@@ -143,6 +156,7 @@ export function projectRoom(context: ProjectionContext): RoomView {
     version: context.version,
     viewerSeat: context.viewerSeat,
     seats,
+    match: context.match ? matchView(context.match) : null,
     round: context.round
       ? projectRound(context.round, context.viewerSeat, context.respondedSeats)
       : null,
