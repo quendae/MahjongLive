@@ -10,6 +10,7 @@ import type {
 import { reactionEligibleSeats } from '@mahjong-live/shared/match';
 import type { MatchState } from '@mahjong-live/shared/match';
 import { AuthoritativeRoom } from './room';
+import type { RoomTiming } from './room';
 import type { RoomCheckpoint, RoomSeats } from './protocol';
 
 function physical(tile: Tile, id: number): Tile {
@@ -102,7 +103,11 @@ function matchFrom(round: RoundState): MatchState {
   };
 }
 
-function roomFrom(round: RoundState, version = 10): AuthoritativeRoom {
+function roomFrom(
+  round: RoundState,
+  version = 10,
+  timing: Partial<RoomTiming> = {},
+): AuthoritativeRoom {
   const seats: RoomSeats = [
     { clientId: 'c0', displayName: 'P0', ready: true },
     { clientId: 'c1', displayName: 'P1', ready: true },
@@ -123,7 +128,7 @@ function roomFrom(round: RoundState, version = 10): AuthoritativeRoom {
       respondedSeats: [],
     },
   };
-  return AuthoritativeRoom.restore(checkpoint);
+  return AuthoritativeRoom.restore(checkpoint, timing);
 }
 
 describe('reaction barrier', () => {
@@ -299,6 +304,46 @@ describe('reaction barrier', () => {
     });
     expect(pon).toMatchObject({ ok: true, version: 11 });
     expect(restored.viewFor(null).round?.phase).toMatchObject({ kind: 'awaiting-discard', player: 2 });
+  });
+
+  it('auto-passes an expired window instead of taking a Ron nobody claimed', () => {
+    const room = roomFrom(reactionState({ 1: player(pinfuWait4p(900)) }), 10, { reactionMs: 500 });
+    expect(room.viewFor('c1').round?.legalActions.map((action) => action.type)).toContain('ron');
+
+    room.tick(0);
+    expect(room.currentDeadline).toEqual({ kind: 'reaction', expiresAt: 500 });
+    room.tick(499);
+    expect(room.publicVersion).toBe(10);
+    expect(room.viewFor(null).round?.phase.kind).toBe('reactions');
+
+    room.tick(500);
+    // Section 7: an auto-win is irreversible and a seat may be passing on purpose, so silence passes.
+    expect(room.publicVersion).toBeGreaterThan(10);
+    expect(room.viewFor(null).round?.phase.kind).not.toBe('ended');
+  });
+
+  it('lets a claim already made stand when the silent seat is auto-passed', () => {
+    const ponA = physical(suited('pin', 4), 910);
+    const ponB = physical(suited('pin', 4), 911);
+    const room = roomFrom(
+      reactionState({ 1: player(pinfuWait4p(920)), 2: player([ponA, ponB]) }),
+      10,
+      { reactionMs: 500 },
+    );
+    expect(
+      room.submit('c1', {
+        commandId: 'ron',
+        expectedVersion: 10,
+        command: { type: 'round-action', action: { type: 'ron', player: 1 } },
+      }),
+    ).toMatchObject({ ok: true, version: 10 });
+
+    room.tick(0);
+    room.tick(500);
+    const phase = room.viewFor(null).round?.phase;
+    expect(phase?.kind).toBe('ended');
+    if (!phase || phase.kind !== 'ended' || phase.result.type !== 'ron') throw new Error('no Ron');
+    expect(phase.result.winners.map((winner) => winner.player)).toEqual([1]);
   });
 
   it('reveals the Kan-Dora immediately when a Daiminkan completes', () => {

@@ -7,6 +7,7 @@ import type {
   PlayerView,
   PublicEngineEvent,
   PublicRoundPhase,
+  RoomDeadline,
   RoomMember,
   RoomSeats,
   RoomStatus,
@@ -26,6 +27,7 @@ export interface ProjectionContext {
   round: RoundState | null;
   viewerSeat: PlayerIndex | null;
   respondedSeats?: ReadonlySet<PlayerIndex>;
+  deadline?: RoomDeadline | null;
 }
 
 function seatView(
@@ -39,6 +41,7 @@ function seatView(
     displayName: member?.displayName ?? null,
     ready: member?.ready ?? false,
     isHost: member !== null && member.clientId === hostClientId,
+    bot: member?.bot?.profile ?? null,
   };
 }
 
@@ -159,6 +162,9 @@ export function projectRoom(context: ProjectionContext): RoomView {
     match: context.match ? matchView(context.match) : null,
     round: context.round
       ? projectRound(context.round, context.viewerSeat, context.respondedSeats)
+      : null,
+    deadline: context.deadline
+      ? { kind: context.deadline.kind, expiresAt: context.deadline.expiresAt }
       : null,
   };
 }
