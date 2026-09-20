@@ -89,12 +89,23 @@ Replay and event identity reuse the existing single-player history. Do not fork 
 
 ## 5. Lobby and room-code lifecycle
 
-Status: **Realized** for seating, **Open** for codes, identity and lifetime.
+Status: **Realized**.
 
-- Realized: seat assignment with an optional preferred seat, first joiner becomes host, explicit rejections for a full room / taken seat / invalid seat, per-seat ready flags, host-only start requiring four occupied and ready seats, and a room registry with create / get / list / remove / restore.
-- Open — code allocation. The plan8 registry takes a caller-supplied room id and throws on collision. Recommendation: a six-character code from an alphabet that excludes `I`, `L`, `O`, `U`, `0` and `1`, generated server-side with retry on collision, looked up case-insensitively. At this scale, transcription ambiguity matters more than code length.
-- Open — identity. `ClientId` is an opaque string with no authentication, so anyone who learns one can act as that seat. Recommendation: a server-issued join token bound to `(room, seat)`, returned on join, stored client-side, replayed on reconnect. This is a prerequisite for reconnect, not an enhancement.
-- Open — room lifetime. Recommendation: evict an empty `lobby` room after a short idle period; retain a `playing` room well past the last disconnect, because that retention *is* the reconnect window; drop a `finished` room once the result is acknowledged or a TTL expires. Trade-off: longer retention costs memory and code space and is the only thing that makes reconnect real.
+- Seating: optional preferred seat, first joiner is host, explicit rejections for a full room / taken seat / invalid seat, per-seat ready flags, host-only start requiring four occupied and ready seats, and a registry with allocate / create / get / list / remove / restore / sweep.
+- Code allocation: six characters from an alphabet without `I`, `L`, `O`, `U`, `0` and `1`, retry on collision, case-insensitive lookup. At this scale transcription ambiguity matters more than code length.
+- Identity: a server-issued join token bound to `(room, seat)`, returned on join and replayed to reconnect. Every path that previously trusted a bare `clientId` now verifies it: `submit`, `viewFor`, `publicEventsSince`, `setConnected` and the rejoin branch of `join`.
+- Room lifetime: an empty lobby is swept on a short TTL, a `playing` room is retained well past the last disconnect because that retention *is* the reconnect window, and a `finished` room drops on its own TTL. Defaults: empty lobby 5 min, finished 10 min, playing retention 15 min. Time is a parameter — `evictableAt(now)` and `RoomManager.sweep(now)`, no timers.
+
+Decisions and corrections from implementing it:
+
+- **The rejoin branch was the actual seat-theft primitive**, and it is worth naming plainly: a `join` from an already-seated `clientId` returned that seat and took it back off the bot. Knowing a client id — a value that travels in every message — was enough to seize an occupied seat mid-match. A token is now required to rejoin.
+- **A forged presence report was a takeover lever.** `setConnected(victim, false)` walks a present player toward a bot seat; `setConnected(victim, true)` pulls a seat back off one. Presence is authenticated like anything else.
+- **A bad token on a read path is not an error, it is the spectator view.** `viewFor` and `publicEventsSince` fall through to `viewerSeat: null` rather than throwing. The projection already computes exactly the safe answer for a seatless viewer, so this is fail-closed at no cost and adds no error surface.
+- **Authentication sits in front of the idempotency cache.** A cached receipt is still a fact about a seat the caller has not proven.
+- **"Empty lobby" had to be widened to "no connected seat".** With no leave command, a room is literally empty only if nobody ever joined, so four people joining and walking away would leak forever. This depends on presence, which section 7 had to invent.
+- **`playingRetentionMs < disconnectGraceMs` throws at construction.** A room evicted before the takeover grace elapses makes reconnect unreachable, so the ordering is enforced rather than commented.
+- **The checkpoint carries tokens.** A restored room must honour credentials it issued before the restart, or every restore is a forced global logout. Same class of persisted-format change as the `MatchState` addition in section 6.
+- Tokens are 192 bits from the platform CSPRNG and compared in constant time: a known `clientId` plus a repeatable probe is exactly the shape where `===` short-circuiting is an oracle. Room codes stay `Math.random` on purpose — a code is a lookup handle people read aloud, a token is the thing that authenticates.
 
 ## 6. Reconnect and resume
 
@@ -103,7 +114,7 @@ Status: **Realized** in concept, **Amend** for match scope and one restore hole.
 - Reconnect is snapshot-first: re-authenticate to the seat, take a complete `viewFor(clientId)` snapshot, then optionally take `publicEventsSince(clientId, lastSeenVersion)` to animate what was missed. The snapshot is self-sufficient; the event tail is presentation only and may be skipped entirely on a long absence.
 - This matches the existing autosave model rather than inventing a second one. Single-player already persists only fully resolved authoritative state and explicitly keeps presentation frames out of the save, so a reload resumes from resolved state and never mid-animation. Multiplayer keeps the same rule at the server boundary.
 - `RoomCheckpoint` is a plain JSON value carrying id, status, version, host, seats, seed, round and the reaction barrier. It now also carries `MatchState`. It does **not** carry an in-progress history record: history emission is deferred until there is a real multiplayer match to record, since `MatchHistoryRecord` v2 changes a persisted format the client reads.
-- Client persistence: single-player owns `mahjong-live:single:v1` and `mahjong-live:history:v1`. Multiplayer must not reuse either key. The multiplayer client persists only room code, seat, join token and last seen version, and re-fetches everything else. Trade-off: no offline resume, in exchange for no possibility of a stale local board contradicting the server.
+- Client persistence: single-player owns `mahjong-live:single:v1` and `mahjong-live:history:v1`. Multiplayer must not reuse either key. The multiplayer client persists only room code, seat, join token and last seen version, and re-fetches everything else. This was already the documented contract while `join` still handed a seat to whoever knew the client id; the token is what makes it true. Trade-off: no offline resume, in exchange for no possibility of a stale local board contradicting the server.
 - Fixed: restoring a checkpoint whose reaction barrier was absent while the round sat in a reaction phase used to rebuild an empty barrier, silently discarding responses already given. Such a checkpoint is now rejected. The case that actually lost data was a *pass*, which leaves no trace in round state — claims survive in `phase.ronClaims`, passes do not.
 
 ## 7. Timeout, disconnect and AFK policy

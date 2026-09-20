@@ -331,9 +331,12 @@ synchronous and testable without fake timers; bot takeover at the `standard` pro
 verified deterministic; room-code allocation; and bounded retention for the catch-up log and the
 idempotency cache.
 
-Not built, in dependency order: join tokens and room TTL (`ClientId` is still unauthenticated),
-network transport, history emission and `MatchHistoryRecord` v2 (deferred — it changes a persisted
-format the client reads), the client multiplayer state layer, four-client E2E.
+Seats are now authenticated by a server-issued join token, and rooms expire on injected time.
+
+Not built, in dependency order: room fault isolation (two invariant `throw`s would take down every
+room in the process behind a socket), network transport, history emission and `MatchHistoryRecord`
+v2 (deferred — it changes a persisted format the client reads), the client multiplayer state layer,
+four-client E2E.
 
 PR #6 should be closed in favour of the fresh branch.
 
