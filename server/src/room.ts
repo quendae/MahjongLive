@@ -1,3 +1,4 @@
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { applyAction, getLegalActions } from '@mahjong-live/shared/rules';
 import type {
   ApplyActionResult,
@@ -33,6 +34,7 @@ import type {
   RoomStatus,
   RoomTransition,
   RoomView,
+  SeatAuth,
 } from './protocol';
 
 const PLAYERS: readonly PlayerIndex[] = [0, 1, 2, 3];
@@ -50,6 +52,27 @@ const MAX_SETTLE_STEPS = 1024;
 /** Section 7: takeover plays at `standard`, and the profile is recorded because output depends on it. */
 const TAKEOVER_PROFILE: BotDifficulty = 'standard';
 
+/**
+ * A join token is a credential, not a lookup handle, and the distinction decides the source of
+ * randomness. Room codes are deliberately `Math.random` (see `roomManager.ts`): a code is read
+ * aloud and typed in by hand, so it is a handle people share on purpose. A token is never seen by
+ * a human and is the only thing between a stranger who learned a `clientId` and that seat's
+ * concealed hand, so it comes from the platform CSPRNG with 192 bits of entropy.
+ */
+function randomToken(): string {
+  return randomBytes(24).toString('base64url');
+}
+
+/**
+ * Compared in constant time. The token is a secret an attacker can probe repeatedly with a known
+ * `clientId`, and `===` on strings short-circuits on the first differing byte.
+ */
+function tokensMatch(expected: string, given: string): boolean {
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(given, 'utf8');
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
+}
+
 export interface RoomTiming {
   /** Window for a real decision on `awaiting-draw` / `awaiting-discard`. */
   turnMs: number;
@@ -59,6 +82,16 @@ export interface RoomTiming {
   expiriesBeforeTakeover: number;
   /** Disconnect length before a bot takes the seat, and the age at which the catch-up log is trimmed. */
   disconnectGraceMs: number;
+  /** Idle time before a lobby with nobody connected in it is swept. Nothing is lost by dropping it. */
+  emptyLobbyTtlMs: number;
+  /**
+   * How long a playing room outlives its last connected seat. This retention *is* the reconnect
+   * window, so it may never be shorter than `disconnectGraceMs`: a seat handed to a bot at the end
+   * of the grace period must still have a room to come back to. The constructor enforces it.
+   */
+  playingRetentionMs: number;
+  /** How long a finished room is kept for clients still reading the result. */
+  finishedTtlMs: number;
 }
 
 export const DEFAULT_ROOM_TIMING: RoomTiming = {
@@ -66,6 +99,10 @@ export const DEFAULT_ROOM_TIMING: RoomTiming = {
   reactionMs: 8_000,
   expiriesBeforeTakeover: 3,
   disconnectGraceMs: 60_000,
+  emptyLobbyTtlMs: 300_000,
+  // 15x the disconnect grace: long enough that a phone switching networks still finds its hand.
+  playingRetentionMs: 900_000,
+  finishedTtlMs: 600_000,
 };
 
 interface ReactionBarrier {
@@ -115,6 +152,8 @@ export class AuthoritativeRoom {
    */
   private clock: number | null = null;
   private deadline: RoomDeadline | null = null;
+  /** Clock reading when the hanchan ended, for the finished-room TTL. Null while it has not. */
+  private finishedAt: number | null = null;
   /** `version:kind` of the wait the current deadline belongs to; a new wait resets the window. */
   private deadlineKey = '';
   private consecutiveExpiries: number[] = [0, 0, 0, 0];
@@ -124,24 +163,41 @@ export class AuthoritativeRoom {
     id: RoomId,
     seed: number = Math.floor(Math.random() * 0x7fffffff),
     timing: Partial<RoomTiming> = {},
+    /** Injected so a test gets deterministic tokens. Production takes the CSPRNG default. */
+    private readonly newToken: () => string = randomToken,
   ) {
     if (!id.trim()) throw new Error('Room ID must not be empty');
     if (!Number.isFinite(seed)) throw new Error('Room seed must be a finite number');
     this.id = id;
     this.seed = Math.trunc(seed);
     this.timing = { ...DEFAULT_ROOM_TIMING, ...timing };
-    for (const value of [this.timing.turnMs, this.timing.reactionMs, this.timing.disconnectGraceMs]) {
+    for (const value of [
+      this.timing.turnMs,
+      this.timing.reactionMs,
+      this.timing.disconnectGraceMs,
+      this.timing.emptyLobbyTtlMs,
+      this.timing.playingRetentionMs,
+      this.timing.finishedTtlMs,
+    ]) {
       if (!(value > 0)) throw new Error('Room timing windows must be positive');
+    }
+    if (this.timing.playingRetentionMs < this.timing.disconnectGraceMs) {
+      // Evicting a room before the takeover grace elapses would make reconnect unreachable.
+      throw new Error('Playing retention must not be shorter than the disconnect grace');
     }
   }
 
-  static restore(checkpoint: RoomCheckpoint, timing: Partial<RoomTiming> = {}): AuthoritativeRoom {
+  static restore(
+    checkpoint: RoomCheckpoint,
+    timing: Partial<RoomTiming> = {},
+    newToken: () => string = randomToken,
+  ): AuthoritativeRoom {
     const round = checkpoint.match?.round ?? null;
     if (round && isReactionPhase(round) && !checkpoint.reaction) {
       // Rebuilding it would forget every response already given, including passes.
       throw new Error('Checkpoint in a reaction phase must carry its reaction barrier');
     }
-    const room = new AuthoritativeRoom(checkpoint.id, checkpoint.seed, timing);
+    const room = new AuthoritativeRoom(checkpoint.id, checkpoint.seed, timing, newToken);
     room.status = checkpoint.status;
     room.version = checkpoint.version;
     room.hostClientId = checkpoint.hostClientId;
@@ -170,12 +226,29 @@ export class AuthoritativeRoom {
     return this.match;
   }
 
-  join(clientId: ClientId, displayName: string, preferredSeat?: PlayerIndex): JoinResult {
+  /**
+   * A first join issues the seat's token; a rejoin has to present it. Rejoin is exactly the flow
+   * where a client re-asserts an identity it claimed earlier, so it is the one path where a bare
+   * `clientId` would hand a stranger a seat that is already occupied.
+   */
+  join(
+    clientId: ClientId,
+    displayName: string,
+    preferredSeat?: PlayerIndex,
+    token?: string,
+  ): JoinResult {
     const existing = this.findSeat(clientId);
     if (existing !== null) {
+      if (token === undefined || !tokensMatch(this.seats[existing]!.token, token)) {
+        return {
+          ok: false,
+          code: 'INVALID_TOKEN',
+          message: 'Rejoining an occupied seat requires the join token issued for it',
+        };
+      }
       // Re-joining is a return: the seat comes back off the bot even without a presence report.
       this.reclaimSeat(existing);
-      return { ok: true, seat: existing, version: this.version };
+      return { ok: true, seat: existing, version: this.version, token };
     }
     if (this.status !== 'lobby') {
       return { ok: false, code: 'ROOM_NOT_LOBBY', message: 'Cannot join after the round started' };
@@ -200,13 +273,46 @@ export class AuthoritativeRoom {
 
     const member: RoomMember = {
       clientId,
+      token: this.newToken(),
       displayName: displayName.trim() || `Player ${seat + 1}`,
       ready: false,
     };
     this.seats = replaceSeat(this.seats, seat, member);
     if (this.hostClientId === null) this.hostClientId = clientId;
     this.bumpVersion([]);
-    return { ok: true, seat, version: this.version };
+    return { ok: true, seat, version: this.version, token: member.token };
+  }
+
+  /**
+   * Section 5 room lifetime, as a pure function of injected time: the instant at which this room
+   * is dead weight, or null while something still holds it open. The room neither reads a clock
+   * nor sets a timer -- `RoomManager.sweep(now)` decides when to look.
+   *
+   * - `lobby`: nobody connected in it, so nothing is lost. Short TTL.
+   * - `playing`: measured from the last moment any seat was connected, because that retention
+   *   *is* the reconnect window. The constructor guarantees it outlasts the disconnect grace, so
+   *   a seat that was handed to a bot still has a room to come back to.
+   * - `finished`: kept for clients still reading the result. The transport drops it earlier by
+   *   calling `RoomManager.remove` once the result is acknowledged.
+   */
+  evictableAt(): number | null {
+    if (this.status === 'finished') {
+      return (this.finishedAt ?? this.clock ?? 0) + this.timing.finishedTtlMs;
+    }
+    let lastPresence: number | null = null;
+    for (const seat of PLAYERS) {
+      const member = this.seats[seat];
+      if (!member) continue;
+      // A seat the transport never reported on counts as present: keeping a live room is the
+      // right way to be wrong.
+      if (member.disconnectedAt == null) return null;
+      lastPresence = Math.max(lastPresence ?? member.disconnectedAt, member.disconnectedAt);
+    }
+    const base = lastPresence ?? this.clock ?? 0;
+    return (
+      base +
+      (this.status === 'playing' ? this.timing.playingRetentionMs : this.timing.emptyLobbyTtlMs)
+    );
   }
 
   /** The deadline the room is currently waiting on, or null when nothing is on the clock. */
@@ -231,9 +337,10 @@ export class AuthoritativeRoom {
    * invalidate every in-flight `expectedVersion`, and during a reaction window it would break the
    * barrier, whose `phaseVersion` is what keeps all four seats answering the same question.
    */
-  setConnected(clientId: ClientId, connected: boolean, now: number): void {
+  setConnected(auth: SeatAuth, connected: boolean, now: number): void {
     this.advanceClock(now);
-    const seat = this.findSeat(clientId);
+    // Presence moves a seat on and off the bot, so an unauthenticated report is a takeover lever.
+    const seat = this.authenticate(auth);
     if (seat === null) return;
     const member = this.seats[seat]!;
     this.seats = replaceSeat(this.seats, seat, {
@@ -246,16 +353,21 @@ export class AuthoritativeRoom {
     this.syncDeadline();
   }
 
-  submit(clientId: ClientId, envelope: CommandEnvelope, now?: number): CommandReceipt {
+  submit(auth: SeatAuth, envelope: CommandEnvelope, now?: number): CommandReceipt {
     this.advanceClock(now);
-    const key = `${clientId}\u0000${envelope.commandId}`;
-    const cached = this.processed.get(key);
-    if (cached) return { ...cached, duplicate: true };
-
-    const seat = this.findSeat(clientId);
+    // Authenticated before the idempotency cache is consulted: a cached receipt is still a fact
+    // about someone else's seat, and an unproven caller has no business reaching the map.
+    const seat = this.findSeat(auth.clientId);
     if (seat === null) {
       return this.failure(envelope.commandId, 'UNKNOWN_CLIENT', 'Client is not seated in this room');
     }
+    if (!tokensMatch(this.seats[seat]!.token, auth.token)) {
+      return this.failure(envelope.commandId, 'INVALID_TOKEN', 'Join token does not match this seat');
+    }
+
+    const key = `${auth.clientId}\u0000${envelope.commandId}`;
+    const cached = this.processed.get(key);
+    if (cached) return { ...cached, duplicate: true };
     if (envelope.expectedVersion !== this.version) {
       return this.failure(
         envelope.commandId,
@@ -270,7 +382,7 @@ export class AuthoritativeRoom {
         receipt = this.setReady(seat, envelope.commandId, envelope.command.ready);
         break;
       case 'start-round':
-        receipt = this.startMatch(clientId, envelope.commandId);
+        receipt = this.startMatch(auth.clientId, envelope.commandId);
         break;
       case 'advance-round':
         receipt = this.advanceRound(envelope.commandId);
@@ -292,8 +404,13 @@ export class AuthoritativeRoom {
     return receipt;
   }
 
-  viewFor(clientId: ClientId | null = null): RoomView {
-    const viewerSeat = clientId === null ? null : this.findSeat(clientId);
+  /**
+   * The seat's own view when the credential checks out. A wrong or missing token does not throw:
+   * it falls back to the spectator projection, which is public by construction, so a bad claim
+   * gets a safe view rather than a leak.
+   */
+  viewFor(auth: SeatAuth | null = null): RoomView {
+    const viewerSeat = this.authenticate(auth);
     return projectRoom({
       roomId: this.id,
       status: this.status,
@@ -308,8 +425,12 @@ export class AuthoritativeRoom {
     });
   }
 
-  publicEventsSince(clientId: ClientId | null, afterVersion: number): Array<{ version: number; events: PublicEngineEvent[] }> {
-    const viewerSeat = clientId === null ? null : this.findSeat(clientId);
+  /** Same rule as `viewFor`: an unproven claim is served the spectator tail, never the seat's. */
+  publicEventsSince(
+    auth: SeatAuth | null,
+    afterVersion: number,
+  ): Array<{ version: number; events: PublicEngineEvent[] }> {
+    const viewerSeat = this.authenticate(auth);
     return this.transitions
       .filter((transition) => transition.version > afterVersion)
       .map((transition) => ({
@@ -679,13 +800,28 @@ export class AuthoritativeRoom {
   private commitMatch(state: MatchState, events: readonly RoundEvent[]): void {
     this.match = state;
     // A finished hand is not a finished room: the hanchan ends only when the match does.
-    if (state.status === 'ended') this.status = 'finished';
+    if (state.status === 'ended') {
+      this.status = 'finished';
+      this.finishedAt ??= this.clock ?? 0;
+    }
     this.bumpVersion(events);
   }
 
   private bumpVersion(events: readonly RoundEvent[]): void {
     this.version += 1;
     this.transitions.push({ version: this.version, at: this.clock ?? 0, events });
+  }
+
+  /**
+   * The seat this credential owns, or null. Both halves are required: `clientId` picks the seat,
+   * the token proves it. Every read and write path that used to trust a bare `clientId` routes
+   * through here, so there is one place to get it right instead of five.
+   */
+  private authenticate(auth: SeatAuth | null): PlayerIndex | null {
+    if (!auth) return null;
+    const seat = this.findSeat(auth.clientId);
+    if (seat === null) return null;
+    return tokensMatch(this.seats[seat]!.token, auth.token) ? seat : null;
   }
 
   private findSeat(clientId: ClientId): PlayerIndex | null {

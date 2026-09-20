@@ -11,7 +11,7 @@ import {
   driveSingleGame,
 } from '@mahjong-live/shared/single';
 import { AuthoritativeRoom } from './room';
-import type { PlayerRoundAction } from './protocol';
+import type { PlayerRoundAction, SeatAuth } from './protocol';
 
 const SEATS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const DIFFICULTY: BotDifficulty = 'standard';
@@ -65,9 +65,12 @@ function playSingle(seed: number): PlayedMatch {
 /** Drives the same policy through the authoritative room, one command per seat decision. */
 function playRoom(seed: number): PlayedMatch {
   const room = new AuthoritativeRoom(`match-${seed}`, seed);
-  const clients = SEATS.map((seat) => `c${seat}`);
+  const clients: SeatAuth[] = [];
   for (const seat of SEATS) {
-    expect(room.join(clients[seat], `Player ${seat}`, seat)).toMatchObject({ ok: true, seat });
+    const joined = room.join(`c${seat}`, `Player ${seat}`, seat);
+    expect(joined).toMatchObject({ ok: true, seat });
+    if (!joined.ok) throw new Error(`seat ${seat} could not join`);
+    clients[seat] = { clientId: `c${seat}`, token: joined.token };
     expect(
       room.submit(clients[seat], {
         commandId: `ready-${seat}`,

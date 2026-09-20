@@ -55,6 +55,25 @@ export class RoomManager {
     return this.rooms.delete(normalize(roomId));
   }
 
+  /**
+   * Drops every room whose lifetime has run out and returns the codes freed. Time is a parameter
+   * for the same reason it is on the room: no timers, so the registry stays synchronous and a
+   * test drives eviction by passing a larger number. The caller decides how often to sweep.
+   */
+  sweep(now: number): RoomId[] {
+    if (!Number.isFinite(now)) throw new Error('Injected time must be a finite number');
+    const dropped: RoomId[] = [];
+    // ponytail: O(rooms) per sweep. Fine at lobby scale; bucket by expiry if it ever is not.
+    for (const [code, room] of this.rooms) {
+      const expiresAt = room.evictableAt();
+      if (expiresAt !== null && now >= expiresAt) {
+        this.rooms.delete(code);
+        dropped.push(code);
+      }
+    }
+    return dropped;
+  }
+
   restore(room: AuthoritativeRoom): void {
     const id = normalize(room.id);
     if (this.rooms.has(id)) throw new Error(`Room already exists: ${id}`);

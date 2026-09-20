@@ -22,6 +22,16 @@ export type ClientId = string;
 export type RoomId = string;
 
 /**
+ * What a seated client presents on every call it makes. `clientId` is only a name -- it says
+ * which seat is being claimed. `token` is the server-issued credential that proves the claim,
+ * and it is the only half that authenticates anything.
+ */
+export interface SeatAuth {
+  clientId: ClientId;
+  token: string;
+}
+
+/**
  * Recorded per seat rather than per event, because `MatchHistoryRecord` v2 carries a four-entry
  * seat descriptor. `sinceVersion` is what makes it replayable: bot output is profile-dependent,
  * so a future history entry has to say which profile played from which version on.
@@ -33,6 +43,11 @@ export interface SeatBotControl {
 
 export interface RoomMember {
   clientId: ClientId;
+  /**
+   * Server-issued credential bound to this (room, seat). Held server-side and in the checkpoint
+   * so a restored room still honours tokens it handed out; never projected into any view.
+   */
+  token: string;
   displayName: string;
   ready: boolean;
   /** Set when the room took the seat over on expiry or disconnect; cleared when the client returns. */
@@ -67,7 +82,10 @@ export interface CommandEnvelope {
 }
 
 export type CommandErrorCode =
+  /** The `clientId` holds no seat in this room. Unchanged meaning: identity, not authentication. */
   | 'UNKNOWN_CLIENT'
+  /** The `clientId` holds a seat, but the join token presented for it is wrong or missing. */
+  | 'INVALID_TOKEN'
   | 'STALE_VERSION'
   | 'HOST_ONLY'
   | 'ROOM_FULL'
@@ -101,8 +119,16 @@ export type CommandReceipt =
     };
 
 export type JoinResult =
-  | { ok: true; seat: PlayerIndex; version: number }
-  | { ok: false; code: Extract<CommandErrorCode, 'ROOM_FULL' | 'ROOM_NOT_LOBBY' | 'SEAT_TAKEN' | 'INVALID_SEAT'>; message: string };
+  /** `token` is the credential for this seat: store it, and replay it on every later call. */
+  | { ok: true; seat: PlayerIndex; version: number; token: string }
+  | {
+      ok: false;
+      code: Extract<
+        CommandErrorCode,
+        'ROOM_FULL' | 'ROOM_NOT_LOBBY' | 'SEAT_TAKEN' | 'INVALID_SEAT' | 'INVALID_TOKEN'
+      >;
+      message: string;
+    };
 
 export interface LobbySeatView {
   seat: PlayerIndex;
