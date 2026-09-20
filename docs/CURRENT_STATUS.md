@@ -326,9 +326,14 @@ game; event projection is an exhaustive switch, making a new `RoundEvent` a comp
 than a leak; match-level position is projected into the room view; and a reaction-phase checkpoint
 that lost its barrier is rejected rather than silently dropping a pass.
 
-Not built, in dependency order: history emission and `MatchHistoryRecord` v2 (deferred — it changes
-a persisted format the client reads), turn/reaction deadlines, bot takeover, room codes and join
-tokens, network transport, the client multiplayer state layer, four-client E2E.
+Also landed: turn and reaction deadlines with time injected rather than read, so the room stays
+synchronous and testable without fake timers; bot takeover at the `standard` profile, reclaimable,
+verified deterministic; room-code allocation; and bounded retention for the catch-up log and the
+idempotency cache.
+
+Not built, in dependency order: join tokens and room TTL (`ClientId` is still unauthenticated),
+network transport, history emission and `MatchHistoryRecord` v2 (deferred — it changes a persisted
+format the client reads), the client multiplayer state layer, four-client E2E.
 
 PR #6 should be closed in favour of the fresh branch.
 

@@ -244,11 +244,12 @@ worth writing.
 - [x] Invert event projection from a denylist to an exhaustive switch. A new `RoundEvent` is now `TS2366` in `projection.ts` rather than a silent leak.
 - [x] Fix checkpoint restore: a reaction-phase checkpoint with no barrier is now rejected instead of silently discarding a pass.
 - [ ] Emit `MatchHistoryRecord` from the room; extend it to v2 with a four-seat descriptor instead of `humanSeat` / `botDifficulty`. Deliberately deferred — it changes a persisted format the client reads, and there is no multiplayer match to record until transport exists.
-- [ ] Turn and reaction deadlines. A single silent client currently stalls the barrier forever.
-- [ ] Bot takeover for a disconnected or timed-out seat, recorded in history with its profile.
-- [ ] Room-code allocation, join tokens and room TTL. `ClientId` is unauthenticated today.
+- [x] Turn and reaction deadlines. Time is injected (`tick(now)`, `submit(..., now?)`, `setConnected(..., now)`), never read, so the room stays synchronous and a four-client test needs no fake timers. A room with no clock has no deadline.
+- [x] Bot takeover at the `standard` profile after three lapsed turns or a disconnect past the grace period, reclaimable on any accepted command or reconnect. Determinism verified against two independently seeded rooms. Lapsed *reaction* windows deliberately do not count: ignoring a call prompt is ordinary play. History recording of the takeover waits on `MatchHistoryRecord` v2; `SeatBotControl.sinceVersion` is the hook.
+- [x] Room-code allocation: six characters, alphabet without `I L O U 0 1`, collision retry, case-insensitive lookup.
+- [ ] Join tokens and room TTL. `ClientId` is still unauthenticated, so anyone who learns one can act as that seat. This is a prerequisite for reconnect, not an enhancement.
 - [ ] Network transport: WebSocket, envelope framing, per-viewer fan-out.
-- [ ] Trim the catch-up transition log to the reconnect window, and retain the idempotency cache by version window rather than by 256-entry count — a full hanchan evicts within one match.
+- [x] Trim the catch-up transition log to the disconnect window, and retain the idempotency cache by version window rather than by 256-entry count.
 - [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item.
 - [x] Extract forced-action / seeding / reaction-eligibility decisions into `shared/src/engine/match/orchestration.ts` so the room and `single.ts` cannot drift into two rulesets. The empty-window auto-resolve stays duplicated on purpose: the two control flows differ, and only the eligibility scan is genuinely shared.
 
