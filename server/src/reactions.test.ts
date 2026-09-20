@@ -11,7 +11,10 @@ import { reactionEligibleSeats } from '@mahjong-live/shared/match';
 import type { MatchState } from '@mahjong-live/shared/match';
 import { AuthoritativeRoom } from './room';
 import type { RoomTiming } from './room';
-import type { RoomCheckpoint, RoomSeats } from './protocol';
+import type { RoomCheckpoint, RoomSeats, SeatAuth } from './protocol';
+
+/** The rooms here are restored from a literal checkpoint, so their tokens are literals too. */
+const as = (clientId: string): SeatAuth => ({ clientId, token: `tk-${clientId}` });
 
 function physical(tile: Tile, id: number): Tile {
   return { ...tile, id };
@@ -109,10 +112,10 @@ function roomFrom(
   timing: Partial<RoomTiming> = {},
 ): AuthoritativeRoom {
   const seats: RoomSeats = [
-    { clientId: 'c0', displayName: 'P0', ready: true },
-    { clientId: 'c1', displayName: 'P1', ready: true },
-    { clientId: 'c2', displayName: 'P2', ready: true },
-    { clientId: 'c3', displayName: 'P3', ready: true },
+    { clientId: 'c0', token: 'tk-c0', displayName: 'P0', ready: true },
+    { clientId: 'c1', token: 'tk-c1', displayName: 'P1', ready: true },
+    { clientId: 'c2', token: 'tk-c2', displayName: 'P2', ready: true },
+    { clientId: 'c3', token: 'tk-c3', displayName: 'P3', ready: true },
   ];
   const checkpoint: RoomCheckpoint = {
     id: 'reaction-room',
@@ -137,20 +140,20 @@ describe('reaction barrier', () => {
       1: player(pinfuWait4p(100)),
       2: player(pinfuWait4p(200)),
     }));
-    expect(room.viewFor('c1').round?.legalActions.map((action) => action.type)).toContain('ron');
-    expect(room.viewFor('c2').round?.legalActions.map((action) => action.type)).toContain('ron');
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('ron');
+    expect(room.viewFor(as('c2')).round?.legalActions.map((action) => action.type)).toContain('ron');
 
-    const first = room.submit('c1', {
+    const first = room.submit(as('c1'), {
       commandId: 'ron-1',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'ron', player: 1 } },
     });
     expect(first).toMatchObject({ ok: true, version: 10 });
     expect(room.publicVersion).toBe(10);
-    expect(room.viewFor('c1').round?.legalActions).toEqual([]);
+    expect(room.viewFor(as('c1')).round?.legalActions).toEqual([]);
     expect(room.publicEventsSince(null, 10)).toEqual([]);
 
-    const second = room.submit('c2', {
+    const second = room.submit(as('c2'), {
       commandId: 'ron-2',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'ron', player: 2 } },
@@ -174,9 +177,9 @@ describe('reaction barrier', () => {
       expectedVersion: 10,
       command: { type: 'round-action' as const, action: { type: 'ron' as const, player: 1 as const } },
     };
-    const first = room.submit('c1', envelope);
+    const first = room.submit(as('c1'), envelope);
     expect(first).toMatchObject({ ok: true, duplicate: false, version: 10 });
-    const second = room.submit('c1', envelope);
+    const second = room.submit(as('c1'), envelope);
     expect(second).toMatchObject({ ok: true, duplicate: true, version: 10 });
     const checkpoint = room.checkpoint();
     expect(checkpoint.match?.round.phase.kind).toBe('reactions');
@@ -191,14 +194,14 @@ describe('reaction barrier', () => {
       1: player(pinfuWait4p(5000)),
       2: player([p4a, p4b]),
     }));
-    const pon = room.submit('c2', {
+    const pon = room.submit(as('c2'), {
       commandId: 'pon',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [p4a.id!, p4b.id!] } },
     });
     expect(pon).toMatchObject({ ok: true, version: 10 });
 
-    const ron = room.submit('c1', {
+    const ron = room.submit(as('c1'), {
       commandId: 'ron',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'ron', player: 1 } },
@@ -219,15 +222,15 @@ describe('reaction barrier', () => {
       2: player([ponA, ponB]),
     }));
 
-    const chi = room.submit('c1', {
+    const chi = room.submit(as('c1'), {
       commandId: 'chi',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'chi', player: 1, tileIds: [chi3.id!, chi5.id!] } },
     });
     expect(chi).toMatchObject({ ok: true, version: 10 });
-    expect(room.viewFor('c1').round?.legalActions).toEqual([]);
+    expect(room.viewFor(as('c1')).round?.legalActions).toEqual([]);
 
-    const pon = room.submit('c2', {
+    const pon = room.submit(as('c2'), {
       commandId: 'pon',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [ponA.id!, ponB.id!] } },
@@ -243,9 +246,9 @@ describe('reaction barrier', () => {
     const chi3 = physical(suited('pin', 3), 700);
     const chi5 = physical(suited('pin', 5), 701);
     const room = roomFrom(reactionState({ 1: player([chi3, chi5]) }));
-    expect(room.viewFor('c1').round?.legalActions.map((action) => action.type)).toContain('chi');
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('chi');
 
-    const pass = room.submit('c1', {
+    const pass = room.submit(as('c1'), {
       commandId: 'pass',
       expectedVersion: 10,
       command: { type: 'pass' },
@@ -257,7 +260,7 @@ describe('reaction barrier', () => {
       player: 1,
     });
 
-    const late = room.submit('c1', {
+    const late = room.submit(as('c1'), {
       commandId: 'late-pass',
       expectedVersion: 10,
       command: { type: 'pass' },
@@ -284,20 +287,20 @@ describe('reaction barrier', () => {
       2: player([ponA, ponB]),
     }));
     // A pass leaves no trace in the round state, so only the barrier remembers it.
-    expect(room.submit('c1', {
+    expect(room.submit(as('c1'), {
       commandId: 'pass-1',
       expectedVersion: 10,
       command: { type: 'pass' },
     })).toMatchObject({ ok: true, version: 10 });
 
     const restored = AuthoritativeRoom.restore(JSON.parse(JSON.stringify(room.checkpoint())));
-    expect(restored.submit('c1', {
+    expect(restored.submit(as('c1'), {
       commandId: 'pass-again',
       expectedVersion: 10,
       command: { type: 'pass' },
     })).toMatchObject({ ok: false, code: 'ALREADY_RESPONDED' });
 
-    const pon = restored.submit('c2', {
+    const pon = restored.submit(as('c2'), {
       commandId: 'pon',
       expectedVersion: 10,
       command: { type: 'round-action', action: { type: 'pon', player: 2, tileIds: [ponA.id!, ponB.id!] } },
@@ -308,7 +311,7 @@ describe('reaction barrier', () => {
 
   it('auto-passes an expired window instead of taking a Ron nobody claimed', () => {
     const room = roomFrom(reactionState({ 1: player(pinfuWait4p(900)) }), 10, { reactionMs: 500 });
-    expect(room.viewFor('c1').round?.legalActions.map((action) => action.type)).toContain('ron');
+    expect(room.viewFor(as('c1')).round?.legalActions.map((action) => action.type)).toContain('ron');
 
     room.tick(0);
     expect(room.currentDeadline).toEqual({ kind: 'reaction', expiresAt: 500 });
@@ -331,7 +334,7 @@ describe('reaction barrier', () => {
       { reactionMs: 500 },
     );
     expect(
-      room.submit('c1', {
+      room.submit(as('c1'), {
         commandId: 'ron',
         expectedVersion: 10,
         command: { type: 'round-action', action: { type: 'ron', player: 1 } },
@@ -355,10 +358,10 @@ describe('reaction barrier', () => {
       physical(suited('pin', 9), 512),
     ];
     const room = roomFrom(reactionState({ 2: player([...kanTiles, ...filler]) }));
-    const before = room.viewFor('c2').round!;
+    const before = room.viewFor(as('c2')).round!;
     expect(before.wall.doraIndicators).toHaveLength(1);
 
-    const kan = room.submit('c2', {
+    const kan = room.submit(as('c2'), {
       commandId: 'daiminkan',
       expectedVersion: 10,
       command: {
@@ -372,7 +375,7 @@ describe('reaction barrier', () => {
     });
     expect(kan).toMatchObject({ ok: true, version: 11 });
 
-    const after = room.viewFor('c2').round!;
+    const after = room.viewFor(as('c2')).round!;
     expect(after.wall.doraIndicators).toHaveLength(2);
     expect(after.phase).toMatchObject({
       kind: 'awaiting-discard',

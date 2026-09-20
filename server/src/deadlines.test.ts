@@ -3,9 +3,13 @@ import { chooseBotDecisionForDifficulty } from '@mahjong-live/shared/bot';
 import type { PlayerIndex } from '@mahjong-live/shared/rules';
 import { AuthoritativeRoom } from './room';
 import type { RoomTiming } from './room';
+import type { SeatAuth } from './protocol';
 
 const SEATS: readonly PlayerIndex[] = [0, 1, 2, 3];
 const CLIENTS = ['c0', 'c1', 'c2', 'c3'];
+/** `startedRoom` injects this token source, so every seat's credential is known up front. */
+const token = (seat: number) => `tk${seat}`;
+const CREDS: SeatAuth[] = CLIENTS.map((clientId, seat) => ({ clientId, token: token(seat) }));
 const FAST: Partial<RoomTiming> = {
   turnMs: 1_000,
   reactionMs: 400,
@@ -15,13 +19,14 @@ const FAST: Partial<RoomTiming> = {
 
 /** A four-seat room mid-hand, with no clock yet: nothing is on a deadline until time is injected. */
 function startedRoom(timing: Partial<RoomTiming> = FAST, seed = 4242): AuthoritativeRoom {
-  const room = new AuthoritativeRoom(`clock-${seed}`, seed, timing);
+  let issued = 0;
+  const room = new AuthoritativeRoom(`clock-${seed}`, seed, timing, () => token(issued++));
   for (const seat of SEATS) {
     expect(room.join(CLIENTS[seat], `Player ${seat}`, seat)).toMatchObject({ ok: true, seat });
   }
   for (const seat of SEATS) {
     expect(
-      room.submit(CLIENTS[seat], {
+      room.submit(CREDS[seat], {
         commandId: `ready-${seat}`,
         expectedVersion: room.publicVersion,
         command: { type: 'set-ready', ready: true },
@@ -29,7 +34,7 @@ function startedRoom(timing: Partial<RoomTiming> = FAST, seed = 4242): Authorita
     ).toBe(true);
   }
   expect(
-    room.submit(CLIENTS[0], {
+    room.submit(CREDS[0], {
       commandId: 'start',
       expectedVersion: room.publicVersion,
       command: { type: 'start-round' },
@@ -68,7 +73,7 @@ describe('room deadlines', () => {
   it('has no deadline before time is injected, and never expires the first tick', () => {
     const room = startedRoom();
     expect(room.currentDeadline).toBeNull();
-    expect(room.viewFor('c0').deadline).toBeNull();
+    expect(room.viewFor(CREDS[0]).deadline).toBeNull();
 
     const before = room.publicVersion;
     // Far past any window: a room that has never been told the time cannot already be late.
@@ -76,7 +81,7 @@ describe('room deadlines', () => {
     expect(room.publicVersion).toBe(before);
     expect(room.currentDeadline).toEqual({ kind: 'turn', expiresAt: 11_000 });
     // The deadline is public, so a client can render a clock.
-    expect(room.viewFor('c0').deadline).toEqual({ kind: 'turn', expiresAt: 11_000 });
+    expect(room.viewFor(CREDS[0]).deadline).toEqual({ kind: 'turn', expiresAt: 11_000 });
     expect(room.viewFor(null).deadline).toEqual({ kind: 'turn', expiresAt: 11_000 });
   });
 
@@ -102,7 +107,7 @@ describe('room deadlines', () => {
         phase.kind === 'awaiting-draw'
           ? ({ type: 'draw', player: seat } as const)
           : ({ type: 'discard', player: seat, tileId: drawnTileId(room) } as const);
-      const receipt = room.submit(CLIENTS[seat], {
+      const receipt = room.submit(CREDS[seat], {
         commandId: `keep-alive-${step}`,
         expectedVersion: room.publicVersion,
         command: { type: 'round-action', action: command },
@@ -175,7 +180,7 @@ describe('room deadlines', () => {
     runOutTheClock(room);
     expect(room.viewFor(null).seats[0].bot).toBe('standard');
 
-    const receipt = room.submit(CLIENTS[0], {
+    const receipt = room.submit(CREDS[0], {
       commandId: 'advance',
       expectedVersion: room.publicVersion,
       command: { type: 'advance-round' },
@@ -198,7 +203,7 @@ describe('disconnect takeover', () => {
   it('takes a seat over once the disconnect outlives the grace, and returns it on reconnect', () => {
     const room = startedRoom(SLOW);
     room.tick(0);
-    room.setConnected('c1', false, 0);
+    room.setConnected(CREDS[1], false, 0);
 
     room.tick(4_999);
     expect(room.viewFor(null).seats[1].bot).toBeNull();
@@ -207,7 +212,7 @@ describe('disconnect takeover', () => {
     expect(room.viewFor(null).seats[1].bot).toBe('standard');
     expect(room.checkpoint().seats[1]?.bot?.profile).toBe('standard');
 
-    room.setConnected('c1', true, 6_000);
+    room.setConnected(CREDS[1], true, 6_000);
     expect(room.viewFor(null).seats[1].bot).toBeNull();
     expect(room.checkpoint().seats[1]?.disconnectedAt).toBeNull();
   });
@@ -216,9 +221,12 @@ describe('disconnect takeover', () => {
 describe('bounded room memory', () => {
   it('retains idempotency by version window, so commands at one version do not evict each other', () => {
     const room = new AuthoritativeRoom('cache', 7);
-    expect(room.join('c0', 'Player 0', 0).ok).toBe(true);
+    const joined = room.join('c0', 'Player 0', 0);
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) throw new Error('join failed');
+    const c0: SeatAuth = { clientId: 'c0', token: joined.token };
     expect(
-      room.submit('c0', {
+      room.submit(c0, {
         commandId: 'ready',
         expectedVersion: room.publicVersion,
         command: { type: 'set-ready', ready: true },
@@ -229,7 +237,7 @@ describe('bounded room memory', () => {
     // all land on one version. Insertion-count eviction would have thrown the first ones away.
     const version = room.publicVersion;
     for (let index = 0; index < 400; index++) {
-      const receipt = room.submit('c0', {
+      const receipt = room.submit(c0, {
         commandId: `noop-${index}`,
         expectedVersion: version,
         command: { type: 'set-ready', ready: true },
@@ -239,7 +247,7 @@ describe('bounded room memory', () => {
     expect(room.publicVersion).toBe(version);
 
     expect(
-      room.submit('c0', {
+      room.submit(c0, {
         commandId: 'noop-0',
         expectedVersion: version,
         command: { type: 'set-ready', ready: true },

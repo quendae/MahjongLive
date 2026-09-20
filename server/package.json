@@ -12,6 +12,7 @@
     "@mahjong-live/shared": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
