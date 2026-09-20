@@ -252,16 +252,17 @@ worth writing.
 - [x] Network transport. `node:http` for `POST /rooms` and `POST /rooms/:id/join`, `ws` for the socket, one 250ms timer driving `tick` and `sweep`. `RoomHub` is socket-free and takes an injected `now`, so the transport tests need neither real sockets nor real time. `room.ts` needed no changes. Per-viewer fan-out with a transport-level leakage test over four clients and a spectator; a shared-payload fan-out fails it.
 - [x] Backpressure: a socket over 1 MiB buffered is dropped, which is safe precisely because reconnect is snapshot-first.
 - [x] Trim the catch-up transition log to the disconnect window, and retain the idempotency cache by version window rather than by 256-entry count.
-- [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item.
+- [ ] Client multiplayer state layer beside the existing `SingleGameState` path. Largest single item, and the one that collides with draft PR #33: both touch the table, state flow, history and autosave. Decide the shape before starting — resolve #33 first, or build a separate entry point that leaves every existing client file alone.
+- [ ] Index the catch-up log. `publicEventsSince` filters the whole log per connection per flush, so a fast-moving room that never reaches its trim threshold is O(V^2 x connections) across a match. Not slow enough to matter at four seats; worth knowing before any spectator cap is raised.
 - [x] Extract forced-action / seeding / reaction-eligibility decisions into `shared/src/engine/match/orchestration.ts` so the room and `single.ts` cannot drift into two rulesets. The empty-window auto-resolve stays duplicated on purpose: the two control flows differ, and only the eligibility scan is genuinely shared.
 
 ### Phase 3 — validation
 
-- [ ] Engine/transport integration tests.
-- [ ] Hidden-information leakage tests.
-- [ ] Reconnect/resume regression tests.
-- [ ] Four-client browser E2E.
-- [ ] Deterministic spectator/replay consistency checks.
+- [x] Engine/transport integration: four clients play a full 12-hand match to `status: 'ended'` over real sockets, 1052 commands, each seat deciding **only** from its own projection. The driver throws if a seat ever needs state it cannot see; it never threw.
+- [x] Hidden-information leakage at the wire level, over a whole match: 6307 frames audited against 253,082 hidden tile ids, plus a spectator that is sent no hand at any point.
+- [x] Reconnect/resume regression: tail case, trimmed case, and a seat coming back off a bot.
+- [x] Deterministic spectator consistency: two rooms on one seed produce the same public event stream. Catches nondeterminism, not seed *drift* — that stays the parity test in `matchLoop.test.ts`, and the two are complementary.
+- [ ] Four-client **browser** E2E. The headless four-client pass above is not a substitute: it proves the protocol, not the UI.
 - [ ] Mobile/touch multiplayer smoke tests.
 
 ## Preview acceptance / release policy

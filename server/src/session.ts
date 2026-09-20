@@ -278,7 +278,15 @@ export class RoomHub {
     // The spectator view changes if and only if something public changed, and everything private
     // changes only alongside the version, which that view carries. One stringify is therefore a
     // complete change signal for all four seats, and it cannot drift when a field is added.
-    const signature = JSON.stringify(room.viewFor(null));
+    //
+    // One private change has no version to ride on: answering a reaction window deliberately does
+    // not bump it (section 4), and a seatless viewer never had the legal actions that just went
+    // away. Signalling the barrier's answered set alongside the spectator view is what stops the
+    // seat that just answered being left rendering controls the room will now reject.
+    const signature = JSON.stringify([
+      room.viewFor(null),
+      room.checkpoint().reaction?.respondedSeats,
+    ]);
     if (this.signatures.get(room.id) === signature) return;
     this.signatures.set(room.id, signature);
 
