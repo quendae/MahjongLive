@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 type BenchmarkConfig = {
@@ -14,9 +13,11 @@ type CliModule = {
 };
 
 async function loadCli(): Promise<CliModule | null> {
-  // fileURLToPath, not the file:// href: a checkout path containing a space stays
-  // percent-encoded through the vitest loader and fails to resolve.
-  const path = fileURLToPath(new URL('../../../../scripts/bot-benchmark.mjs', import.meta.url));
+  // A decoded filesystem path, not the file:// href: the vitest loader does not
+  // percent-decode, so a checkout path containing a space fails to resolve.
+  // `node:url` is not importable here -- shared carries no Node type dependency.
+  const url = new URL('../../../../scripts/bot-benchmark.mjs', import.meta.url);
+  const path = decodeURIComponent(url.pathname).replace(/^\/(?=[A-Za-z]:)/, '');
   try {
     return await import(path) as CliModule;
   } catch {
