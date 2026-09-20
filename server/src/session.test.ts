@@ -287,6 +287,79 @@ describe('per-viewer fan-out', () => {
       expect(frame.view.round.players.every((player) => player.concealed === null)).toBe(true);
     }
   });
+
+  /**
+   * The fan-out skips a broadcast when the public view is unchanged, and answering a reaction
+   * window changes nothing public: it bumps no version by design, and a spectator never had the
+   * legal actions that just disappeared. Without an explicit signal, the seat that answered is
+   * left holding a view whose buttons the room will now reject with ALREADY_RESPONDED.
+   */
+  it('tells the table when a seat answers a reaction window, although no version moves', () => {
+    const hub = new RoomHub();
+    const { room, clients } = seatFour(hub, 20260920);
+    startMatch(hub, clients, 1_000);
+
+    const eligibleSeats = () =>
+      SEATS.filter((seat) => room.viewFor(clients[seat]!.auth).round!.legalActions.length > 0);
+
+    for (let step = 0; step < 4_000; step++) {
+      const round = room.matchState!.round;
+      if (round.phase.kind === 'ended') {
+        expect(command(hub, clients[0]!, `adv-${step}`, { type: 'advance-round' }, 1_000).ok).toBe(true);
+        continue;
+      }
+
+      if (isReactionPhase(round)) {
+        const eligible = eligibleSeats();
+        if (eligible.length >= 2) {
+          const responder = eligible[0]!;
+          const waiting = eligible[1]!;
+          const before = clients.map((client) => client.socket.sent.length);
+          const version = room.publicVersion;
+
+          expect(command(hub, clients[responder]!, `pass-${step}`, { type: 'pass' }, 1_000).ok).toBe(true);
+          // The barrier invariant is untouched: a reaction still bumps nothing.
+          expect(room.publicVersion).toBe(version);
+
+          const update = (seat: PlayerIndex) =>
+            clients[seat]!.socket.sent.slice(before[seat]!).find((frame) => frame.type === 'update');
+          const answered = update(responder);
+          expect(answered?.type).toBe('update');
+          if (answered?.type !== 'update') return;
+          expect(answered.view.version).toBe(version);
+          expect(answered.view.round!.legalActions).toEqual([]);
+
+          // The seat still being waited on keeps its own window open.
+          const pending = update(waiting);
+          expect(pending?.type).toBe('update');
+          if (pending?.type !== 'update') return;
+          expect(pending.view.round!.legalActions.length).toBeGreaterThan(0);
+          return;
+        }
+        for (const seat of eligible) {
+          command(hub, clients[seat]!, `p-${step}-${seat}`, { type: 'pass' }, 1_000);
+        }
+        continue;
+      }
+
+      const phase = round.phase;
+      if (phase.kind !== 'awaiting-draw' && phase.kind !== 'awaiting-discard') {
+        throw new Error(`unexpected phase ${phase.kind}`);
+      }
+      const decision = chooseBotDecisionForDifficulty(round, phase.player, 'standard');
+      if (decision.type === 'pass') throw new Error('bot policy passed on its own turn');
+      expect(
+        command(
+          hub,
+          clients[phase.player]!,
+          `turn-${step}`,
+          { type: 'round-action', action: playerAction(decision.action) },
+          1_000,
+        ).ok,
+      ).toBe(true);
+    }
+    throw new Error('no reaction window with two eligible seats appeared');
+  });
 });
 
 describe('reconnect', () => {
