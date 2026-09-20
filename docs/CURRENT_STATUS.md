@@ -65,13 +65,13 @@ Current deliberate product decision:
 
 - **Kan-Dora is revealed immediately when a Kan completes**, including Daiminkan and Shouminkan.
 
-A stable `ruleProfileId` now flows through match and round state. Only the production `standard` profile is currently exposed; the plumbing exists so future rule variants do not require hard-coded forks throughout the engine.
+A stable `ruleProfileId` flows through match and round state **on `feature/visual-table-replay`**. Neither `RuleProfile` nor `ruleProfileId` exists on `master`; the plumbing lands when PR #33 merges. Only the production `standard` profile is currently exposed; the plumbing exists so future rule variants do not require hard-coded forks throughout the engine.
 
 Legacy saves that predate `ruleProfileId` are migrated in memory to `standard` and are covered by compatibility tests.
 
 ### Deterministic rules audit
 
-`pnpm rules:audit` runs six pinned full-Hanchan seeds through the production engine and verifies:
+`pnpm rules:audit` runs six pinned full-Hanchan seeds through the production engine and verifies the following. The script and its package entry live on `feature/visual-table-replay`; on a fresh `master` checkout the command does not exist yet.
 
 - point conservation;
 - Riichi-stick conservation;
@@ -281,7 +281,7 @@ pnpm start
 pnpm dev               # start source checkout without auto-opening browser
 pnpm client:build      # production client build
 pnpm client:typecheck  # client TypeScript validation
-pnpm rules:audit       # deterministic six-seed full-match rules audit
+pnpm rules:audit       # deterministic six-seed full-match rules audit (feature/visual-table-replay only)
 pnpm bot:benchmark     # reproducible bot calibration benchmark
 pnpm check             # shared typecheck/tests + client typecheck/build
 ```
@@ -296,17 +296,35 @@ pnpm check             # shared typecheck/tests + client typecheck/build
 
 ### Next major stage
 
-**Multiplayer architecture** is the next major implementation area after the current preview/polish cycle.
-It has not been implemented yet and must start with an explicit design covering:
+**Multiplayer.** The design pass is done and an authoritative in-memory core now exists.
+Playable multiplayer does not: there is no transport, so nothing can connect yet.
 
-- authoritative multiplayer state / transport boundary;
-- hidden-information-safe per-player state projection;
-- lobby and room codes;
-- reconnect / resume semantics;
-- server-authoritative action validation or a precisely specified deterministic protocol;
-- spectator/replay protocol;
-- disconnect / timeout / AFK policy;
-- four-client integration and browser E2E tests.
+An earlier revision of this file said multiplayer had not been touched. That was inaccurate.
+A complete authoritative server core was written on `plan8-authoritative-server` (open PR #6) on
+2026-08-30, then abandoned and never recorded here. Its branch tip does not typecheck, and it
+forked before the match layer, the bots, the single-player orchestrator and the deterministic
+history landed, so it was re-landed fresh rather than rebased.
+
+Current multiplayer branch: `feature/multiplayer-server-core`.
+
+Landed there:
+
+- `server/` workspace filling the slot `pnpm-workspace.yaml` already declared;
+- room sessions, seating, host-only start and a room registry;
+- command envelope with `commandId` at-most-once execution and `expectedVersion` concurrency;
+- allowlist-shaped per-viewer projection, with leakage tests over all four viewpoints;
+- reaction-barrier arbitration;
+- checkpoint / restore as plain JSON;
+- server-held round seed, so a client can no longer choose it and derive the wall;
+- server typecheck and tests in `Shared engine CI`.
+
+Design contract: [`MULTIPLAYER_ARCHITECTURE.md`](MULTIPLAYER_ARCHITECTURE.md).
+
+Not built, in dependency order: match-level room loop (single-round today), history emission and
+seed derivation matching `deriveSingleRoundSeed`, turn/reaction deadlines, bot takeover, room codes
+and join tokens, network transport, the client multiplayer state layer, four-client E2E.
+
+PR #6 should be closed in favour of the fresh branch.
 
 ### Deferred / non-blocking
 
