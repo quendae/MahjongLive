@@ -9,6 +9,7 @@ import type {
   RoundEvent,
 } from '@mahjong-live/shared/rules';
 import type { MatchState } from '@mahjong-live/shared/match';
+import type { BotDifficulty } from '@mahjong-live/shared/bot';
 import type { Tile, Wind } from '@mahjong-live/shared/tile-types';
 import type {
   MatchHand,
@@ -20,10 +21,24 @@ import type {
 export type ClientId = string;
 export type RoomId = string;
 
+/**
+ * Recorded per seat rather than per event, because `MatchHistoryRecord` v2 carries a four-entry
+ * seat descriptor. `sinceVersion` is what makes it replayable: bot output is profile-dependent,
+ * so a future history entry has to say which profile played from which version on.
+ */
+export interface SeatBotControl {
+  profile: BotDifficulty;
+  sinceVersion: number;
+}
+
 export interface RoomMember {
   clientId: ClientId;
   displayName: string;
   ready: boolean;
+  /** Set when the room took the seat over on expiry or disconnect; cleared when the client returns. */
+  bot?: SeatBotControl | null;
+  /** Clock reading of the last disconnect the transport reported, null while connected. */
+  disconnectedAt?: number | null;
 }
 
 export type RoomSeats = readonly [
@@ -95,6 +110,8 @@ export interface LobbySeatView {
   displayName: string | null;
   ready: boolean;
   isHost: boolean;
+  /** Null while a human holds the seat; the profile playing it once the room took over. */
+  bot: BotDifficulty | null;
 }
 
 export interface PlayerView {
@@ -168,6 +185,15 @@ export interface MatchView {
   result: MatchResult | null;
 }
 
+/**
+ * Public: a wall-clock instant, never who is eligible to answer. Eligibility is derived from
+ * concealed hands, so naming the seats on the clock would leak a tenpai read to the table.
+ */
+export interface RoomDeadline {
+  kind: 'turn' | 'reaction';
+  expiresAt: number;
+}
+
 export interface RoomView {
   id: RoomId;
   status: RoomStatus;
@@ -176,6 +202,7 @@ export interface RoomView {
   seats: readonly [LobbySeatView, LobbySeatView, LobbySeatView, LobbySeatView];
   match: MatchView | null;
   round: RoundView | null;
+  deadline: RoomDeadline | null;
 }
 
 export interface ReactionBarrierCheckpoint {
@@ -198,6 +225,8 @@ export interface RoomCheckpoint {
 
 export interface RoomTransition {
   version: number;
+  /** Clock reading when the transition was committed, so the catch-up log can be trimmed by age. */
+  at: number;
   events: readonly RoundEvent[];
 }
 
