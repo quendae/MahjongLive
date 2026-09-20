@@ -80,6 +80,40 @@ describe('room deadlines', () => {
     expect(room.viewFor(null).deadline).toEqual({ kind: 'turn', expiresAt: 11_000 });
   });
 
+  it('never hands a seat to a bot for letting reaction windows lapse', () => {
+    // Ignoring a call prompt is ordinary play: the outcome is identical to pressing Pass, and a
+    // seat that simply does not want the call must not be treated as absent.
+    const room = startedRoom();
+    room.tick(0);
+
+    let reactionWindows = 0;
+    for (let step = 0; step < 400 && reactionWindows <= FAST.expiriesBeforeTakeover! * 4; step++) {
+      const deadline = room.currentDeadline;
+      if (!deadline) break;
+      if (deadline.kind === 'reaction') {
+        reactionWindows += 1;
+        room.tick(deadline.expiresAt);
+        continue;
+      }
+      // Keep every seat's turn alive by hand, so only reaction windows ever lapse.
+      const seat = turnSeat(room);
+      const phase = room.matchState!.round.phase;
+      const command =
+        phase.kind === 'awaiting-draw'
+          ? ({ type: 'draw', player: seat } as const)
+          : ({ type: 'discard', player: seat, tileId: drawnTileId(room) } as const);
+      const receipt = room.submit(CLIENTS[seat], {
+        commandId: `keep-alive-${step}`,
+        expectedVersion: room.publicVersion,
+        command: { type: 'round-action', action: command },
+      });
+      if (!receipt.ok) break;
+    }
+
+    expect(reactionWindows).toBeGreaterThan(FAST.expiriesBeforeTakeover!);
+    expect(room.viewFor(null).seats.map((seat) => seat.bot)).toEqual([null, null, null, null]);
+  });
+
   it('tsumogiris the drawn tile when a turn expires, and restarts the clock for the next seat', () => {
     const room = startedRoom();
     room.tick(0);

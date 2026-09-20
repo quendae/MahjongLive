@@ -586,7 +586,9 @@ export class AuthoritativeRoom {
       if (!barrier) return;
       for (const seat of barrier.eligibleSeats) {
         if (barrier.respondedSeats.has(seat)) continue;
-        this.countExpiry(seat);
+        // Deliberately NOT counted toward takeover. Letting a reaction window lapse is ordinary
+        // play -- a seat that does not want the call simply ignores the prompt, and the outcome
+        // is identical to pressing Pass. Only a lapsed turn means a seat has stopped playing.
         // Identical to a human pass: no engine action, the barrier just stops waiting.
         barrier.respondedSeats.add(seat);
       }
