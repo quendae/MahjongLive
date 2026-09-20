@@ -161,9 +161,12 @@ describe('room manager', () => {
   it('creates, lists, restores and removes rooms', () => {
     const manager = new RoomManager();
     const alpha = manager.create('alpha');
+    // Codes are held uppercase so a player typing one in either case still lands.
+    expect(alpha.id).toBe('ALPHA');
     expect(manager.get('alpha')).toBe(alpha);
-    expect(manager.list()).toEqual(['alpha']);
-    expect(() => manager.create('alpha')).toThrow();
+    expect(manager.get('ALPHA')).toBe(alpha);
+    expect(manager.list()).toEqual(['ALPHA']);
+    expect(() => manager.create('ALPHA')).toThrow();
     expect(manager.remove('alpha')).toBe(true);
     expect(manager.get('alpha')).toBeNull();
 
