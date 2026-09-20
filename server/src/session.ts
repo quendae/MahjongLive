@@ -221,12 +221,14 @@ export class RoomHub {
     let tail: TransitionTail | null = null;
     let trimmed = false;
     if (typeof frame.afterVersion === 'number' && frame.afterVersion < snapshot.version) {
-      const entries = room.publicEventsSince(auth, frame.afterVersion);
-      // Versions are contiguous, so a first entry past `afterVersion + 1` means the catch-up log
-      // was trimmed beyond the resume point. Section 6 makes the snapshot self-sufficient, so the
-      // tail is dropped rather than handed over with a hole in it.
-      if (entries.length > 0 && entries[0]!.version > frame.afterVersion + 1) trimmed = true;
-      else if (entries.length > 0) tail = entries;
+      // The room states how far its catch-up log reaches. Past that the tail would have a hole
+      // in it, so it is dropped: section 6 makes the snapshot self-sufficient precisely so a long
+      // absence costs the animation and nothing else.
+      trimmed = frame.afterVersion < room.oldestRetainedVersion - 1;
+      if (!trimmed) {
+        const entries = room.publicEventsSince(auth, frame.afterVersion);
+        if (entries.length > 0) tail = entries;
+      }
     }
     connection.lastSentVersion = snapshot.version;
     this.send(connection, {

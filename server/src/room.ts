@@ -466,6 +466,18 @@ export class AuthoritativeRoom {
   }
 
   /** Same rule as `viewFor`: an unproven claim is served the spectator tail, never the seat's. */
+  /**
+   * The oldest version the catch-up log still reaches back to. A caller resuming from anything
+   * older than this has a hole and must fall back to the snapshot.
+   *
+   * This is stated rather than inferred on purpose. `publicEventsSince` is a plain filter and
+   * cannot tell "nothing happened" apart from "it was trimmed", and deducing the difference from
+   * contiguous versions would break silently the day a transition stops bumping by exactly one.
+   */
+  get oldestRetainedVersion(): number {
+    return this.transitions[0]?.version ?? this.version;
+  }
+
   publicEventsSince(
     auth: SeatAuth | null,
     afterVersion: number,
