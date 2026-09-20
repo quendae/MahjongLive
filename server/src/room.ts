@@ -157,6 +157,8 @@ export class AuthoritativeRoom {
   /** `version:kind` of the wait the current deadline belongs to; a new wait resets the window. */
   private deadlineKey = '';
   private consecutiveExpiries: number[] = [0, 0, 0, 0];
+  /** Set once, with the invariant that failed. Non-null means the room is dead. */
+  private faultReason: string | null = null;
 
   /** The seed never leaves the server: a client that picked it could derive the whole wall. */
   constructor(
@@ -320,16 +322,42 @@ export class AuthoritativeRoom {
     return this.deadline;
   }
 
+  /** The invariant that killed this room, or null while it is healthy. */
+  get fault(): string | null {
+    return this.faultReason;
+  }
+
+  /**
+   * Turns a failed invariant into a dead room rather than a dead process. In-memory, throwing was
+   * the right instinct: nothing downstream can trust a room whose engine rejected a server action.
+   * Behind a socket the same throw unwinds through whatever is pumping every other room, so the
+   * blast radius has to stop at this object.
+   */
+  private fail(error: unknown): void {
+    if (this.faultReason === null) {
+      this.faultReason = error instanceof Error ? error.message : String(error);
+    }
+    this.status = 'faulted';
+    this.deadline = null;
+    this.deadlineKey = '';
+    this.reaction = null;
+  }
+
   /**
    * Advances injected time. Fires at most one expiry per call: an expiry restarts the window from
    * `now`, so the seat that inherits the turn gets a full one rather than an already-dead clock.
    */
   tick(now: number): void {
+    if (this.faultReason !== null) return;
     this.advanceClock(now);
-    if (this.takeOverDisconnectedSeats()) this.settle();
-    if (this.deadline !== null && this.clock! >= this.deadline.expiresAt) this.expireDeadline();
-    this.syncDeadline();
-    this.trimTransitions();
+    try {
+      if (this.takeOverDisconnectedSeats()) this.settle();
+      if (this.deadline !== null && this.clock! >= this.deadline.expiresAt) this.expireDeadline();
+      this.syncDeadline();
+      this.trimTransitions();
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
   /**
@@ -338,6 +366,7 @@ export class AuthoritativeRoom {
    * barrier, whose `phaseVersion` is what keeps all four seats answering the same question.
    */
   setConnected(auth: SeatAuth, connected: boolean, now: number): void {
+    if (this.faultReason !== null) return;
     this.advanceClock(now);
     // Presence moves a seat on and off the bot, so an unauthenticated report is a takeover lever.
     const seat = this.authenticate(auth);
@@ -354,6 +383,17 @@ export class AuthoritativeRoom {
   }
 
   submit(auth: SeatAuth, envelope: CommandEnvelope, now?: number): CommandReceipt {
+    if (this.faultReason === null) {
+      try {
+        return this.runCommand(auth, envelope, now);
+      } catch (error) {
+        this.fail(error);
+      }
+    }
+    return this.failure(envelope.commandId, 'ROOM_FAULTED', `Room is faulted: ${this.faultReason}`);
+  }
+
+  private runCommand(auth: SeatAuth, envelope: CommandEnvelope, now?: number): CommandReceipt {
     this.advanceClock(now);
     // Authenticated before the idempotency cache is consulted: a cached receipt is still a fact
     // about someone else's seat, and an unproven caller has no business reaching the map.

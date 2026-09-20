@@ -349,3 +349,66 @@ describe('room lifetime', () => {
     expect(manager.sweep(3_000)).toEqual(['DONE']);
   });
 });
+
+describe('room fault isolation', () => {
+  /** The invariant paths are unreachable by design, so the failure is forced. */
+  function breakSettle(room: AuthoritativeRoom): void {
+    (room as unknown as { settle: () => void }).settle = () => {
+      throw new Error('Server invariant: forced for test');
+    };
+  }
+
+  /** A legal discard, which is the shortest command that reaches the settle pass. */
+  function discard(room: AuthoritativeRoom, clients: readonly SeatAuth[], commandId: string) {
+    const auth = clients.find((client) => room.viewFor(client).round!.legalActions.length > 0)!;
+    const seat = room.viewFor(auth).viewerSeat!;
+    return room.submit(auth, {
+      commandId,
+      expectedVersion: room.publicVersion,
+      command: {
+        type: 'round-action',
+        action: { type: 'discard', player: seat, tileId: firstDiscardTileId(room, auth) },
+      },
+    });
+  }
+
+  it('answers with a receipt instead of throwing when an invariant fails', () => {
+    const { room, clients } = startedRoom();
+    breakSettle(room);
+
+    expect(discard(room, clients, 'boom')).toMatchObject({ ok: false, code: 'ROOM_FAULTED' });
+    expect(room.fault).toContain('forced for test');
+    expect(room.roomStatus).toBe('faulted');
+  });
+
+  it('stays dead, and stops holding a clock, once it has faulted', () => {
+    const { room, clients } = startedRoom();
+    breakSettle(room);
+    discard(room, clients, 'boom');
+    expect(room.roomStatus).toBe('faulted');
+
+    const after = room.submit(clients[1], {
+      commandId: 'after',
+      expectedVersion: room.publicVersion,
+      command: { type: 'pass' },
+    });
+    expect(after).toMatchObject({ ok: false, code: 'ROOM_FAULTED' });
+
+    expect(() => room.tick(1_000_000)).not.toThrow();
+    expect(room.currentDeadline).toBeNull();
+    // A faulted room is still readable, so a client can be told what happened.
+    expect(room.viewFor(clients[0]).status).toBe('faulted');
+  });
+
+  it('does not let one room fault another', () => {
+    const broken = startedRoom(1);
+    const healthy = startedRoom(2);
+    breakSettle(broken.room);
+    discard(broken.room, broken.clients, 'boom');
+
+    expect(broken.room.roomStatus).toBe('faulted');
+    expect(healthy.room.roomStatus).toBe('playing');
+    expect(healthy.room.fault).toBeNull();
+    expect(discard(healthy.room, healthy.clients, 'still-fine').ok).toBe(true);
+  });
+});

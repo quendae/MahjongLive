@@ -64,7 +64,12 @@ export type RoomSeats = readonly [
 ];
 
 /** 'finished' means the whole hanchan ended, not one hand. */
-export type RoomStatus = 'lobby' | 'playing' | 'finished';
+/**
+ * `faulted` is terminal. A room reaches it when a server invariant fails, and it exists so that
+ * one broken room answers its own clients with a receipt instead of taking down every other room
+ * the process is holding.
+ */
+export type RoomStatus = 'lobby' | 'playing' | 'finished' | 'faulted';
 
 export type PlayerRoundAction = Exclude<RoundAction, { type: 'resolve-reactions' }>;
 
@@ -86,6 +91,8 @@ export type CommandErrorCode =
   | 'UNKNOWN_CLIENT'
   /** The `clientId` holds a seat, but the join token presented for it is wrong or missing. */
   | 'INVALID_TOKEN'
+  /** A server invariant failed and this room is dead. Nothing the client sends will be accepted. */
+  | 'ROOM_FAULTED'
   | 'STALE_VERSION'
   | 'HOST_ONLY'
   | 'ROOM_FULL'
