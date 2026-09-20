@@ -42,6 +42,13 @@ The safety property is structural, not incidental: every state projection in the
 - Amend: the plan8 public `pendingRiichi` drops `tileId` while keeping `player` and `doubleRiichi`. That is harmless but now redundant — the same information reaches every client as `riichiDeclaration: true` on the public discard. Keep the omission; do not add a second path to the same fact.
 - Spectators are `viewerSeat: null`: all four hands null, no private state, no legal actions. This is already tested.
 
+Two classifications that read as contradictions on a first audit, both checked against the engine rather than assumed:
+
+- `RiichiDeclared` carries `tileId` and is projected to everyone, although this section forbids projecting `pendingRiichi.tileId`. Both are correct. The event is emitted only at the commit point, by which time the same tile is already in the public pond carrying `riichiDeclaration: true`; the prohibition covers the *phase* field during the reaction window, before the declaring discard is public. The resolution depends on emission timing, which is not visible in the types.
+- `HandWon` and `RoundEnded` carry `RoundEndResult`, the widest payload projected, and are passed through whole. Verified safe: `ScoredHand` holds yaku results, han/fu counts, base points and payments, and `DoraBreakdown` holds *counts only* (`dora`, `uraDora`, `akaDora`, `total`) — no indicator tiles. `RonClaim` is `{player, score}` with no hand. `exhaustive-draw` carries `tenpaiPlayers` as seat indices with no hands at all. No tile identity reaches a client through either event, including on multi-ron.
+
+The exhaustive event switch forces a decision about a new `RoundEvent`; it cannot force the right one. Classifying a new event as public stays a compile-clean one-line change, so a payload carrying tile identity is still a human call.
+
 ## 3. Server-authoritative validation vs client responsibility
 
 Status: **Realized**. Validation is entirely server-side.
