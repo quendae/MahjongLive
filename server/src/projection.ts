@@ -152,19 +152,39 @@ export function projectRoom(context: ProjectionContext): RoomView {
 /**
  * Converts an authoritative engine event into something safe to send to one viewer.
  * Claim events stay server-side until the reaction barrier resolves.
+ *
+ * Exhaustive by design: there is no default branch, so a new `RoundEvent` member
+ * makes the end of this function reachable and `tsc` fails (TS2366) instead of
+ * shipping the new payload to all four clients.
  */
 export function projectEngineEvent(
   event: RoundEvent,
   viewerSeat: PlayerIndex | null,
 ): PublicEngineEvent | null {
-  if (event.type === 'RonClaimed' || event.type === 'CallClaimed') return null;
-  if (event.type === 'TileDrawn' && viewerSeat !== event.player) {
-    return {
-      type: 'TileDrawn',
-      player: event.player,
-      wasLastLiveDraw: event.wasLastLiveDraw,
-      ...(event.isRinshan ? { isRinshan: true } : {}),
-    };
+  switch (event.type) {
+    // Per-seat: only the drawing seat learns which tile left the wall.
+    case 'TileDrawn':
+      return viewerSeat === event.player
+        ? event
+        : {
+            type: 'TileDrawn',
+            player: event.player,
+            wasLastLiveDraw: event.wasLastLiveDraw,
+            ...(event.isRinshan ? { isRinshan: true } : {}),
+          };
+    // In-flight claims: withheld from everyone until the barrier resolves.
+    case 'RonClaimed':
+    case 'CallClaimed':
+      return null;
+    // Public to every viewer, spectators included.
+    case 'TileDiscarded':
+    case 'RiichiDeclared':
+    case 'CallMade':
+    case 'KanDeclared':
+    case 'KanCompleted':
+    case 'DoraIndicatorRevealed':
+    case 'HandWon':
+    case 'RoundEnded':
+      return event;
   }
-  return event;
 }

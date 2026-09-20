@@ -159,6 +159,82 @@ describe('viewer-safe round projection', () => {
   });
 });
 
+/**
+ * The allowlist is safe in the leak direction and unsafe in the other: a new per-seat
+ * field silently missing from the view leads the client to guess it locally. These
+ * declared key sets turn "field dropped" into a failing test.
+ */
+describe('projected key sets are declared, not inferred', () => {
+  const ROUND_KEYS = [
+    'callsMade',
+    'currentPlayer',
+    'dealer',
+    'honba',
+    'legalActions',
+    'phase',
+    'players',
+    'riichiSticks',
+    'roundWind',
+    'wall',
+  ];
+  const PLAYER_KEYS = [
+    'concealed',
+    'concealedCount',
+    'discardCount',
+    'discards',
+    'drawCount',
+    'melds',
+    'points',
+    'riichi',
+    'seat',
+  ];
+  const WALL_KEYS = ['doraIndicators', 'remainingLiveTiles'];
+
+  const keys = (value: object): string[] => Object.keys(value).sort();
+
+  it('emits exactly the declared round, wall and player keys', () => {
+    const view = projectRound(createRound(createRNG(5)), 1);
+    expect(keys(view)).toEqual(ROUND_KEYS);
+    expect(keys(view.wall)).toEqual(WALL_KEYS);
+    for (const seat of SEATS) {
+      const expected = seat === 1 ? [...PLAYER_KEYS, 'privateState'].sort() : PLAYER_KEYS;
+      expect(keys(view.players[seat])).toEqual(expected);
+    }
+  });
+
+  it('emits exactly the declared keys for every phase a viewer can observe', () => {
+    const drawn = applyAction(createRound(createRNG(9)), { type: 'draw', player: 0 });
+    expect(drawn.ok).toBe(true);
+    if (!drawn.ok) return;
+    expect(keys(projectRound(drawn.state, 0).phase)).toEqual([
+      'drawnTileId',
+      'isRinshan',
+      'kind',
+      'pendingKanDora',
+      'player',
+      'wasLastLiveDraw',
+    ]);
+    expect(keys(projectRound(createRound(createRNG(9)), 0).phase)).toEqual(['kind', 'player']);
+
+    const discardable = getLegalActions(drawn.state, 0).find((action) => action.type === 'discard');
+    expect(discardable?.type).toBe('discard');
+    if (discardable?.type !== 'discard') return;
+    const discarded = applyAction(drawn.state, {
+      type: 'discard',
+      player: 0,
+      tileId: discardable.tileIds[0],
+    });
+    expect(discarded.ok).toBe(true);
+    if (!discarded.ok) return;
+    expect(discarded.state.phase.kind).toBe('reactions');
+    expect(keys(projectRound(discarded.state, 1).phase)).toEqual([
+      'discardIndex',
+      'discarder',
+      'kind',
+    ]);
+  });
+});
+
 describe('event projection', () => {
   it('reveals a draw tile only to the drawing seat', () => {
     const round = createRound(createRNG(13));
